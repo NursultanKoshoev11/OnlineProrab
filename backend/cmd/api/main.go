@@ -10,9 +10,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	server := &http.Server{
-		Addr: cfg.HTTPAddr,
-		Handler: httpapi.NewRouter(),
-	}
-	log.Printf("OnlineProrab API listening on %s", cfg.HTTPAddr)
-	if err := server.ListenAndServe(); err != nil {
+	handler := httpapi.NewRouter()
+	log.Println("OnlineProrab API listening", cfg.HTTPAddr)
+	log.Fatal(http.ListenAndServe(cfg.HTTPAddr, handler))
+}
