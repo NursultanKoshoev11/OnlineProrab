@@ -16,6 +16,4 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    defer db.Close()
-    log.Println("OnlineProrab API listening", cfg.HTTPAddr)
-    log.Fatal(http.ListenAndServe(cfg.HTTPAddr
+    defer db.Close
