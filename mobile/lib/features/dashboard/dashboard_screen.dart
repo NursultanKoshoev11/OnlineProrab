@@ -5,11 +5,8 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Online Prorab')),
-      body: const Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Projects
+    return const Scaffold(
+      body: Center(child: Text('Online Prorab MVP')),
+    );
+  }
+}
