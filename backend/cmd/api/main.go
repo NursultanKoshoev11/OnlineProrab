@@ -12,8 +12,7 @@ import (
 
 func main() {
     cfg := config.Load()
+
     db, err := database.Open(context.Background(), cfg.DatabaseURL)
     if err != nil {
-        log.Fatal(err)
-    }
-    defer db.Close
+        log
