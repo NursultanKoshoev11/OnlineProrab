@@ -9,14 +9,11 @@ type Config struct {
 }
 
 func Load() Config {
-	return Config{
-		Env: getEnv("APP_ENV", "development"),
-		HTTPAddr: getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL: getEnv("DATABASE_URL", ""),
-	}
+	cfg := Config{}
+	cfg.Env = os.Getenv("APP_ENV")
+	cfg.HTTPAddr = os.Getenv("HTTP_ADDR")
+	cfg.DatabaseURL = os.Getenv("DATABASE_URL")
+	if cfg.Env == "" { cfg.Env = "development" }
+	if cfg.HTTPAddr == "" { cfg.HTTPAddr = ":8080" }
+	return cfg
 }
-
-func getEnv(key string, fallback string) string {
-	value := os.Getenv(key)
-	if value == "" {
-	
