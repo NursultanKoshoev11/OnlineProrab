@@ -15,6 +15,8 @@ func Run() {
     db := bootstrap.OpenDatabase(context.Background(), cfg)
     defer db.Close()
 
+    httpapi.SetReadyCheck(func() bool { return true })
+
     log.Println("OnlineProrab API listening", cfg.HTTPAddr)
     log.Fatal(http.ListenAndServe(cfg.HTTPAddr, httpapi.NewRouter()))
 }
