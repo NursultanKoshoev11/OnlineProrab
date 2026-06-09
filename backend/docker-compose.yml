@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: onlineprorab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: onlineprorab
+      POSTGRES_PASSWORD: onlineprorab
+      POSTGRES_DB: onlineprorab
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onlineprorab -d onlineprorab"]
+      interval: 10
