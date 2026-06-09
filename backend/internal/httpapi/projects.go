@@ -5,13 +5,16 @@ import "net/http"
 type ProjectDTO struct {
 	ID string `json:"id"`
 	Name string `json:"name"`
-	Currency string `json:"currency"`
 }
 
 func Projects(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		JSON(w, http.StatusOK, []ProjectDTO{})
+		JSON(w, 200, []ProjectDTO{})
 		return
 	}
 	if r.Method == http.MethodPost {
-		JSON(w, http.StatusCreated, ProjectDTO{ID: "demo", Name: "Demo Project", Currency: "KGS"
+		JSON(w, 201, ProjectDTO{ID: "demo", Name: "Demo Project"})
+		return
+	}
+	Error(w, 405, "method not allowed")
+}
