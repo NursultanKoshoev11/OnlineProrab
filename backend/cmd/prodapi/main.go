@@ -13,7 +13,5 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", httpapi.Health)
 	mux.HandleFunc("/ready", httpapi.Ready)
-	mux.HandleFunc("/api/v1/projects", httpapi.Projects)
-	mux.HandleFunc("/api/v1/cost-items", httpapi.CostItems)
-	mux.HandleFunc("/api/v1/daily-reports", httpapi.DailyReports)
-	mux.HandleFunc("/api
+	log.Fatal(http.ListenAndServe(cfg.HTTPAddr, mux))
+}
