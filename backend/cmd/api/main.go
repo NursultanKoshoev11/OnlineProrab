@@ -1,16 +1,11 @@
 package main
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 )
-
-type healthResponse struct {
-	Status  string `json:"status"`
-	Service string `json:"service"`
-}
 
 func main() {
 	addr := os.Getenv("HTTP_ADDR")
@@ -18,7 +13,9 @@ func main() {
 		addr = ":8080"
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(healthResponse{Status: "ok",
+		_, _ = fmt.Fprint(w, `{"status":"ok","service":"onlineprorab-api"}`)
+	})
+
+	log.Printf("OnlineProrab
