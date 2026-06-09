@@ -11,9 +11,9 @@ import (
 func main() {
 	cfg := config.Load()
 	mux := http.NewServeMux()
-	api := "/api/v1/"
-
 	mux.HandleFunc("/health", httpapi.Health)
 	mux.HandleFunc("/ready", httpapi.Ready)
-	mux.HandleFunc(api+"projects", httpapi.Projects)
-	mux.HandleFunc
+	mux.HandleFunc("/api/v1/projects", httpapi.Projects)
+	mux.HandleFunc("/api/v1/cost-items", httpapi.CostItems)
+	mux.HandleFunc("/api/v1/daily-reports", httpapi.DailyReports)
+	mux.HandleFunc("/api
