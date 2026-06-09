@@ -12,5 +12,4 @@ CREATE TABLE IF NOT EXISTS users (
     CONSTRAINT users_phone_or_email CHECK (phone IS NOT NULL OR email IS NOT NULL)
 );
 
-CREATE TABLE IF NOT EXISTS projects (
-   
+CREATE TABLE IF NOT
