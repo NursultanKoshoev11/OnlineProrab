@@ -9,6 +9,3 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]string{"status": "verified"})
 }
-
-func TelegramLogin(w http.ResponseWriter, r *http.Request) {
-	JSON
