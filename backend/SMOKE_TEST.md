@@ -50,11 +50,23 @@ Set project id:
 export PROJECT_ID='PASTE_PROJECT_ID'
 ```
 
-List projects:
+List and read project:
 
 ```bash
 curl -s http://localhost:8080/api/v1/projects \
   -H "Authorization: Bearer $TOKEN"
+
+curl -s "http://localhost:8080/api/v1/projects/$PROJECT_ID" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Update project:
+
+```bash
+curl -s -X PATCH "http://localhost:8080/api/v1/projects/$PROJECT_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Demo house updated","address":"Bishkek","status":"active"}'
 ```
 
 Create expense:
@@ -66,6 +78,24 @@ curl -s -X POST http://localhost:8080/api/v1/cost-items \
   -d '{"project_id":"'$PROJECT_ID'","title":"Cement","amount":1200,"category":"materials","currency":"KGS","vendor":"Local supplier"}'
 ```
 
+Set cost item id:
+
+```bash
+export COST_ITEM_ID='PASTE_COST_ITEM_ID'
+```
+
+Read and update expense:
+
+```bash
+curl -s "http://localhost:8080/api/v1/cost-items/$COST_ITEM_ID" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -s -X PATCH "http://localhost:8080/api/v1/cost-items/$COST_ITEM_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Cement bags","amount":1300,"category":"materials","currency":"KGS","vendor":"Local supplier"}'
+```
+
 Create daily report:
 
 ```bash
@@ -73,6 +103,24 @@ curl -s -X POST http://localhost:8080/api/v1/daily-reports \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"project_id":"'$PROJECT_ID'","summary":"Foundation works completed","workers_count":4,"issues":""}'
+```
+
+Set daily report id:
+
+```bash
+export REPORT_ID='PASTE_REPORT_ID'
+```
+
+Read and update daily report:
+
+```bash
+curl -s "http://localhost:8080/api/v1/daily-reports/$REPORT_ID" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -s -X PATCH "http://localhost:8080/api/v1/daily-reports/$REPORT_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"summary":"Foundation works completed and cleaned","workers_count":5,"issues":""}'
 ```
 
 Create task:
@@ -84,11 +132,22 @@ curl -s -X POST http://localhost:8080/api/v1/tasks \
   -d '{"project_id":"'$PROJECT_ID'","title":"Buy cement","description":"Call supplier and confirm delivery","status":"open"}'
 ```
 
-List tasks:
+Set task id:
+
+```bash
+export TASK_ID='PASTE_TASK_ID'
+```
+
+List and update tasks:
 
 ```bash
 curl -s "http://localhost:8080/api/v1/tasks?project_id=$PROJECT_ID" \
   -H "Authorization: Bearer $TOKEN"
+
+curl -s -X PATCH "http://localhost:8080/api/v1/tasks/$TASK_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Buy cement","description":"Delivery confirmed","status":"done"}'
 ```
 
 Create file metadata:
