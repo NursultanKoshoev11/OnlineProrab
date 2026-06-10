@@ -20,6 +20,10 @@ func Run() {
 	db := bootstrap.OpenDatabase(context.Background(), cfg)
 	defer db.Close()
 
+	if err := db.EnsureSchema(context.Background()); err != nil {
+		log.Fatalf("failed to ensure database schema: %v", err)
+	}
+
 	httpapi.SetState(cfg, db)
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
