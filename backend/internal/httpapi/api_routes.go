@@ -8,6 +8,8 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/cost-items", requireAuth(CostItems))
 	mux.HandleFunc(api+"/daily-reports", requireAuth(DailyReports))
 	mux.HandleFunc(api+"/files", requireAuth(Files))
+	mux.HandleFunc(api+"/tasks", requireAuth(Tasks))
+	mux.HandleFunc(api+"/audit-logs", requireAuth(AuditLogs))
 	mux.HandleFunc(api+"/auth/sms/request", RequestSMSCode)
 	mux.HandleFunc(api+"/auth/sms/verify", VerifySMSCode)
 	mux.HandleFunc(api+"/subscriptions/plans", ListPlans)
