@@ -35,6 +35,21 @@ func CostItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	costItemID := resourceIDFromPath(r.URL.Path, "/api/v1/cost-items/")
+	if costItemID != "" {
+		switch r.Method {
+		case http.MethodGet:
+			getCostItem(w, r, costItemID)
+		case http.MethodPatch:
+			updateCostItem(w, r, costItemID)
+		case http.MethodDelete:
+			deleteCostItem(w, r, costItemID)
+		default:
+			Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		listCostItems(w, r)
@@ -84,6 +99,29 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, items)
 }
 
+func getCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
+	userID := userIDFromContext(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	projectID, ok := costItemProjectID(ctx, costItemID)
+	if !ok || !canAccessProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project access denied")
+		return
+	}
+
+	var item CostItemDTO
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT id::text, project_id::text, title, category, amount::float8, currency, COALESCE(vendor, ''), spent_at::text, created_at::text
+		FROM cost_items
+		WHERE id = $1
+	`, costItemID).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
+	if err != nil {
+		Error(w, http.StatusNotFound, "cost item not found")
+		return
+	}
+	JSON(w, http.StatusOK, item)
+}
+
 func createCostItem(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r.Context())
 	var req createCostItemRequest
@@ -91,18 +129,10 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	normalizeCostItemRequest(&req)
 	if req.ProjectID == "" || req.Title == "" || req.Amount < 0 {
 		Error(w, http.StatusBadRequest, "project_id, title and non-negative amount are required")
 		return
-	}
-	if req.Category == "" {
-		req.Category = "other"
-	}
-	if req.Currency == "" {
-		req.Currency = "KGS"
-	}
-	if req.SpentAt == "" {
-		req.SpentAt = time.Now().UTC().Format("2006-01-02")
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
@@ -131,6 +161,69 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, item)
 }
 
+func updateCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
+	userID := userIDFromContext(r.Context())
+	var req createCostItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	normalizeCostItemRequest(&req)
+	if req.Title == "" || req.Amount < 0 {
+		Error(w, http.StatusBadRequest, "title and non-negative amount are required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	projectID, ok := costItemProjectID(ctx, costItemID)
+	if !ok || !canAccessProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project access denied")
+		return
+	}
+
+	var item CostItemDTO
+	err := appState.DB.Pool.QueryRow(ctx, `
+		UPDATE cost_items
+		SET title = $2, category = $3, amount = $4, currency = $5, vendor = NULLIF($6, ''), spent_at = $7, updated_at = now()
+		WHERE id = $1
+		RETURNING id::text, project_id::text, title, category, amount::float8, currency, COALESCE(vendor, ''), spent_at::text, created_at::text
+	`, costItemID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
+	if err != nil {
+		Error(w, http.StatusNotFound, "cost item not found")
+		return
+	}
+
+	_, _ = appState.DB.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
+		VALUES ($1, $2, 'update', 'cost_item', $3)
+	`, userID, projectID, costItemID)
+
+	JSON(w, http.StatusOK, item)
+}
+
+func deleteCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
+	userID := userIDFromContext(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	projectID, ok := costItemProjectID(ctx, costItemID)
+	if !ok || !canAccessProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project access denied")
+		return
+	}
+
+	result, err := appState.DB.Pool.Exec(ctx, `DELETE FROM cost_items WHERE id = $1`, costItemID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to delete cost item")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "cost item not found")
+		return
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func canAccessProject(ctx context.Context, userID, projectID string) bool {
 	var exists bool
 	err := appState.DB.Pool.QueryRow(ctx, `
@@ -140,4 +233,22 @@ func canAccessProject(ctx context.Context, userID, projectID string) bool {
 		)
 	`, userID, projectID).Scan(&exists)
 	return err == nil && exists
+}
+
+func costItemProjectID(ctx context.Context, costItemID string) (string, bool) {
+	var projectID string
+	err := appState.DB.Pool.QueryRow(ctx, `SELECT project_id::text FROM cost_items WHERE id = $1`, costItemID).Scan(&projectID)
+	return projectID, err == nil
+}
+
+func normalizeCostItemRequest(req *createCostItemRequest) {
+	if req.Category == "" {
+		req.Category = "other"
+	}
+	if req.Currency == "" {
+		req.Currency = "KGS"
+	}
+	if req.SpentAt == "" {
+		req.SpentAt = time.Now().UTC().Format("2006-01-02")
+	}
 }
