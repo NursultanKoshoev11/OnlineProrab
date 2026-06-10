@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: onlineprorab
+      POSTGRES_USER: onlineprorab
+      POSTGRES_PASSWORD: onlineprorab
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onlineprorab -d onlineprorab"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://onlineprorab:onlineprorab@postgres:5432/onlineprorab?sslmode=disable
+      JWT_SECRET: dev-only-change-me
+      ACCESS_TOKEN_TTL_MINUTES: 60
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_MB: 10
+    ports:
+      - "8080:8080"
+    volumes:
+      - api_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  api_uploads:
