@@ -7,5 +7,5 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("/health", Health)
 	mux.HandleFunc("/ready", Ready)
 	registerAPIRoutes(mux)
-	return mux
+	return withMiddleware(mux)
 }
