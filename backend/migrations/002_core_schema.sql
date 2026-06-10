@@ -64,9 +64,18 @@ CREATE TABLE IF NOT EXISTS files (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE cost_items
-    ADD CONSTRAINT cost_items_receipt_file_fk
-    FOREIGN KEY (receipt_file_id) REFERENCES files(id) ON DELETE SET NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'cost_items_receipt_file_fk'
+    ) THEN
+        ALTER TABLE cost_items
+            ADD CONSTRAINT cost_items_receipt_file_fk
+            FOREIGN KEY (receipt_file_id) REFERENCES files(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
