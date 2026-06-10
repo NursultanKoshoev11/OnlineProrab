@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:online_prorab/app/backend_project_dashboard.dart';
+import 'package:online_prorab/features/projects/project_data_repositories.dart';
 import 'package:online_prorab/features/projects/project_repository.dart';
 import 'package:online_prorab/services/api_client.dart';
 import 'package:online_prorab/services/auth_repository.dart';
@@ -15,6 +17,9 @@ class _BackendOnlineProrabAppV2State extends State<BackendOnlineProrabAppV2> {
   late final ApiClient apiClient;
   late final AuthRepository authRepository;
   late final ProjectRepository projectRepository;
+  late final CostItemRepository costItemRepository;
+  late final DailyReportRepository dailyReportRepository;
+  late final TaskRepository taskRepository;
 
   @override
   void initState() {
@@ -22,6 +27,9 @@ class _BackendOnlineProrabAppV2State extends State<BackendOnlineProrabAppV2> {
     apiClient = ApiClient();
     authRepository = AuthRepository(apiClient: apiClient, sessionStore: SessionStore());
     projectRepository = ProjectRepository(apiClient: apiClient);
+    costItemRepository = CostItemRepository(apiClient: apiClient);
+    dailyReportRepository = DailyReportRepository(apiClient: apiClient);
+    taskRepository = TaskRepository(apiClient: apiClient);
   }
 
   @override
@@ -36,16 +44,32 @@ class _BackendOnlineProrabAppV2State extends State<BackendOnlineProrabAppV2> {
       debugShowCheckedModeBanner: false,
       title: 'Online Prorab',
       theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey)),
-      home: BackendAuthGateV2(authRepository: authRepository, projectRepository: projectRepository),
+      home: BackendAuthGateV2(
+        authRepository: authRepository,
+        projectRepository: projectRepository,
+        costItemRepository: costItemRepository,
+        dailyReportRepository: dailyReportRepository,
+        taskRepository: taskRepository,
+      ),
     );
   }
 }
 
 class BackendAuthGateV2 extends StatefulWidget {
-  const BackendAuthGateV2({required this.authRepository, required this.projectRepository, super.key});
+  const BackendAuthGateV2({
+    required this.authRepository,
+    required this.projectRepository,
+    required this.costItemRepository,
+    required this.dailyReportRepository,
+    required this.taskRepository,
+    super.key,
+  });
 
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
+  final CostItemRepository costItemRepository;
+  final DailyReportRepository dailyReportRepository;
+  final TaskRepository taskRepository;
 
   @override
   State<BackendAuthGateV2> createState() => _BackendAuthGateV2State();
@@ -67,18 +91,43 @@ class _BackendAuthGateV2State extends State<BackendAuthGateV2> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) return const Scaffold(body: Center(child: CircularProgressIndicator()));
         final session = snapshot.data;
-        if (session != null) return BackendProjectsScreenV2(session: session, authRepository: widget.authRepository, projectRepository: widget.projectRepository);
-        return BackendLoginScreenV2(authRepository: widget.authRepository, projectRepository: widget.projectRepository);
+        if (session != null) {
+          return BackendProjectsScreenV2(
+            session: session,
+            authRepository: widget.authRepository,
+            projectRepository: widget.projectRepository,
+            costItemRepository: widget.costItemRepository,
+            dailyReportRepository: widget.dailyReportRepository,
+            taskRepository: widget.taskRepository,
+          );
+        }
+        return BackendLoginScreenV2(
+          authRepository: widget.authRepository,
+          projectRepository: widget.projectRepository,
+          costItemRepository: widget.costItemRepository,
+          dailyReportRepository: widget.dailyReportRepository,
+          taskRepository: widget.taskRepository,
+        );
       },
     );
   }
 }
 
 class BackendLoginScreenV2 extends StatefulWidget {
-  const BackendLoginScreenV2({required this.authRepository, required this.projectRepository, super.key});
+  const BackendLoginScreenV2({
+    required this.authRepository,
+    required this.projectRepository,
+    required this.costItemRepository,
+    required this.dailyReportRepository,
+    required this.taskRepository,
+    super.key,
+  });
 
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
+  final CostItemRepository costItemRepository;
+  final DailyReportRepository dailyReportRepository;
+  final TaskRepository taskRepository;
 
   @override
   State<BackendLoginScreenV2> createState() => _BackendLoginScreenV2State();
@@ -145,7 +194,16 @@ class _BackendLoginScreenV2State extends State<BackendLoginScreenV2> {
       }
       final session = await widget.authRepository.verifyCode(phone, code);
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => BackendProjectsScreenV2(session: session, authRepository: widget.authRepository, projectRepository: widget.projectRepository)));
+      Navigator.of(context).pushReplacement(MaterialPageRoute(
+        builder: (_) => BackendProjectsScreenV2(
+          session: session,
+          authRepository: widget.authRepository,
+          projectRepository: widget.projectRepository,
+          costItemRepository: widget.costItemRepository,
+          dailyReportRepository: widget.dailyReportRepository,
+          taskRepository: widget.taskRepository,
+        ),
+      ));
     } catch (e) {
       setState(() => error = _friendlyError(e));
     } finally {
@@ -155,11 +213,22 @@ class _BackendLoginScreenV2State extends State<BackendLoginScreenV2> {
 }
 
 class BackendProjectsScreenV2 extends StatefulWidget {
-  const BackendProjectsScreenV2({required this.session, required this.authRepository, required this.projectRepository, super.key});
+  const BackendProjectsScreenV2({
+    required this.session,
+    required this.authRepository,
+    required this.projectRepository,
+    required this.costItemRepository,
+    required this.dailyReportRepository,
+    required this.taskRepository,
+    super.key,
+  });
 
   final SessionData session;
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
+  final CostItemRepository costItemRepository;
+  final DailyReportRepository dailyReportRepository;
+  final TaskRepository taskRepository;
 
   @override
   State<BackendProjectsScreenV2> createState() => _BackendProjectsScreenV2State();
@@ -204,7 +273,14 @@ class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final project = projects[index];
-                return Card(child: ListTile(title: Text(project.name.isEmpty ? 'Untitled project' : project.name), subtitle: Text(project.address.isEmpty ? project.status : '${project.address} • ${project.status}'), trailing: const Icon(Icons.chevron_right)));
+                return Card(
+                  child: ListTile(
+                    title: Text(project.name.isEmpty ? 'Untitled project' : project.name),
+                    subtitle: Text(project.address.isEmpty ? project.status : '${project.address} • ${project.status}'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _openProject(project),
+                  ),
+                );
               },
             ),
           );
@@ -212,6 +288,17 @@ class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
       ),
       floatingActionButton: FloatingActionButton.extended(onPressed: _createProject, icon: const Icon(Icons.add), label: const Text('Project')),
     );
+  }
+
+  void _openProject(RemoteProject project) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => BackendProjectDashboardScreen(
+        project: project,
+        costItemRepository: widget.costItemRepository,
+        dailyReportRepository: widget.dailyReportRepository,
+        taskRepository: widget.taskRepository,
+      ),
+    ));
   }
 
   Future<void> _createProject() async {
@@ -222,7 +309,18 @@ class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
   Future<void> _signOut() async {
     await widget.authRepository.signOut();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => BackendLoginScreenV2(authRepository: widget.authRepository, projectRepository: widget.projectRepository)), (_) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => BackendLoginScreenV2(
+          authRepository: widget.authRepository,
+          projectRepository: widget.projectRepository,
+          costItemRepository: widget.costItemRepository,
+          dailyReportRepository: widget.dailyReportRepository,
+          taskRepository: widget.taskRepository,
+        ),
+      ),
+      (_) => false,
+    );
   }
 }
 
