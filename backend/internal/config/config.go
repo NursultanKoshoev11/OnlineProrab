@@ -16,15 +16,17 @@ const (
 	ProductionEnv  = "production"
 )
 
+const minProductionSigningKeyLength = 32
+
 type Config struct {
-	Env                   string
-	HTTPAddr              string
-	DatabaseURL           string
-	JWTSecret             string
-	AccessTokenTTL        time.Duration
-	CORSAllowedOrigins    []string
-	UploadDir             string
-	MaxUploadBytes        int64
+	Env                string
+	HTTPAddr           string
+	DatabaseURL        string
+	JWTSecret          string
+	AccessTokenTTL     time.Duration
+	CORSAllowedOrigins []string
+	UploadDir          string
+	MaxUploadBytes     int64
 }
 
 func Load() Config {
@@ -55,6 +57,9 @@ func (cfg Config) Validate() error {
 	if strings.TrimSpace(cfg.DatabaseURL) == "" {
 		problems = append(problems, "DATABASE_URL is required")
 	}
+	if strings.TrimSpace(cfg.UploadDir) == "" {
+		problems = append(problems, "UPLOAD_DIR is required")
+	}
 	if cfg.AccessTokenTTL <= 0 {
 		problems = append(problems, "ACCESS_TOKEN_TTL_MINUTES must be greater than 0")
 	}
@@ -65,11 +70,17 @@ func (cfg Config) Validate() error {
 		if strings.TrimSpace(cfg.JWTSecret) == "" {
 			problems = append(problems, "JWT_SECRET is required in production")
 		}
-		if cfg.JWTSecret == "change-this-secret-before-production" {
-			problems = append(problems, "JWT_SECRET must be changed before production")
+		if isUnsafeSigningKey(cfg.JWTSecret) {
+			problems = append(problems, "JWT_SECRET must be replaced before production")
 		}
 		if len(cfg.CORSAllowedOrigins) == 0 {
 			problems = append(problems, "CORS_ALLOWED_ORIGINS is required in production")
+		}
+		for _, origin := range cfg.CORSAllowedOrigins {
+			if isUnsafeProductionOrigin(origin) {
+				problems = append(problems, "CORS_ALLOWED_ORIGINS contains a non-production origin")
+				break
+			}
 		}
 	}
 
@@ -77,6 +88,20 @@ func (cfg Config) Validate() error {
 		return errors.New(strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+func isUnsafeSigningKey(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) < minProductionSigningKeyLength {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	return strings.Contains(lower, "change-this") || strings.Contains(lower, "dev-only") || strings.Contains(lower, "secret")
+}
+
+func isUnsafeProductionOrigin(origin string) bool {
+	value := strings.ToLower(strings.TrimSpace(origin))
+	return value == "*" || strings.Contains(value, "localhost") || strings.Contains(value, "127.0.0.1") || strings.Contains(value, "0.0.0.0")
 }
 
 func getEnv(key, fallback string) string {
