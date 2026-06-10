@@ -35,7 +35,7 @@ class RemoteDailyReport {
         id: json['id']?.toString() ?? '',
         projectId: json['project_id']?.toString() ?? '',
         summary: json['summary']?.toString() ?? '',
-        workersCount: json['workers_count'] as int? ?? 0,
+        workersCount: (json['workers_count'] as num?)?.toInt() ?? 0,
         issues: json['issues']?.toString() ?? '',
       );
 }
