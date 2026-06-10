@@ -58,6 +58,39 @@ class RemoteTask {
       );
 }
 
+class RemoteProjectFile {
+  const RemoteProjectFile({
+    required this.id,
+    required this.projectId,
+    required this.kind,
+    required this.originalName,
+    required this.storagePath,
+    required this.contentType,
+    required this.sizeBytes,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String projectId;
+  final String kind;
+  final String originalName;
+  final String storagePath;
+  final String contentType;
+  final int sizeBytes;
+  final String createdAt;
+
+  factory RemoteProjectFile.fromJson(Map<String, dynamic> json) => RemoteProjectFile(
+        id: json['id']?.toString() ?? '',
+        projectId: json['project_id']?.toString() ?? '',
+        kind: json['kind']?.toString() ?? 'document',
+        originalName: json['original_name']?.toString() ?? '',
+        storagePath: json['storage_path']?.toString() ?? '',
+        contentType: json['content_type']?.toString() ?? '',
+        sizeBytes: (json['size_bytes'] as num?)?.toInt() ?? 0,
+        createdAt: json['created_at']?.toString() ?? '',
+      );
+}
+
 class CostItemRepository {
   const CostItemRepository({required ApiClient apiClient}) : _apiClient = apiClient;
 
@@ -108,5 +141,35 @@ class TaskRepository {
   Future<RemoteTask> markDone(RemoteTask task) async {
     final data = await _apiClient.updateTask(taskId: task.id, title: task.title, description: task.description, status: 'done');
     return RemoteTask.fromJson(data);
+  }
+}
+
+class ProjectFileRepository {
+  const ProjectFileRepository({required ApiClient apiClient}) : _apiClient = apiClient;
+
+  final ApiClient _apiClient;
+
+  Future<List<RemoteProjectFile>> list(String projectId) async {
+    final items = await _apiClient.listFiles(projectId);
+    return items.whereType<Map<String, dynamic>>().map(RemoteProjectFile.fromJson).where((item) => item.id.isNotEmpty).toList();
+  }
+
+  Future<RemoteProjectFile> createMetadata({
+    required String projectId,
+    required String kind,
+    required String originalName,
+    required String storagePath,
+    required String contentType,
+    required int sizeBytes,
+  }) async {
+    final data = await _apiClient.createFileMetadata(
+      projectId: projectId,
+      kind: kind,
+      originalName: originalName,
+      storagePath: storagePath,
+      contentType: contentType,
+      sizeBytes: sizeBytes,
+    );
+    return RemoteProjectFile.fromJson(data);
   }
 }
