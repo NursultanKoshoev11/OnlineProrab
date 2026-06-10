@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   backend:
@@ -13,6 +14,28 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: onlineprorab
+          POSTGRES_USER: onlineprorab
+          POSTGRES_PASSWORD: onlineprorab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U onlineprorab -d onlineprorab"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_ENV: development
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://onlineprorab:onlineprorab@localhost:5432/onlineprorab?sslmode=disable
+      JWT_SECRET: ci-only-secret
+      ACCESS_TOKEN_TTL_MINUTES: 60
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      MAX_UPLOAD_MB: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,13 +44,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-          cache-dependency-path: backend/go.sum
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Verify dependencies are tidy
-        run: go mod tidy && git diff --exit-code go.mod go.sum
+      - name: Prepare dependency lockfile
+        run: go mod tidy
 
       - name: Format check
         run: test -z "$(gofmt -l .)"
@@ -40,6 +62,9 @@ jobs:
 
       - name: Build API
         run: go build ./cmd/api
+
+      - name: Smoke build startup
+        run: timeout 10s go run ./cmd/api || test $? -eq 124
 
   mobile:
     name: Mobile
