@@ -17,8 +17,24 @@ class OnlineProrabApp extends StatelessWidget {
   }
 }
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final phoneController = TextEditingController(text: '+996');
+  final codeController = TextEditingController();
+  bool codeRequested = false;
+
+  @override
+  void dispose() {
+    phoneController.dispose();
+    codeController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,20 +52,41 @@ class LoginScreen extends StatelessWidget {
             const SizedBox(height: 12),
             const Text('Track projects, expenses, receipts, daily reports, photos and tasks.'),
             const SizedBox(height: 24),
-            const TextField(
+            TextField(
+              controller: phoneController,
               keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 labelText: 'Phone number',
                 hintText: '+996...',
               ),
             ),
             const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProjectsScreen()),
+            if (codeRequested) ...[
+              TextField(
+                controller: codeController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'SMS code',
+                ),
               ),
-              child: const Text('Continue'),
+              const SizedBox(height: 12),
+            ],
+            FilledButton(
+              onPressed: () {
+                if (!codeRequested) {
+                  setState(() => codeRequested = true);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Code requested. Connect API client for real SMS.')),
+                  );
+                  return;
+                }
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const ProjectsScreen()),
+                );
+              },
+              child: Text(codeRequested ? 'Verify and continue' : 'Request code'),
             ),
           ],
         ),
@@ -70,7 +107,7 @@ class ProjectsScreen extends StatelessWidget {
         children: [
           ProjectCard(
             title: 'Demo house project',
-            subtitle: 'Expenses, reports and files',
+            subtitle: 'Expenses, reports, tasks and files',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ProjectDashboardScreen()),
             ),
@@ -78,7 +115,17 @@ class ProjectsScreen extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          showDragHandle: true,
+          builder: (_) => const Padding(
+            padding: EdgeInsets.all(16),
+            child: DataFormContent(
+              fields: ['Project name', 'Address'],
+              submitText: 'Create project',
+            ),
+          ),
+        ),
         icon: const Icon(Icons.add),
         label: const Text('Project'),
       ),
@@ -99,6 +146,8 @@ class ProjectDashboardScreen extends StatelessWidget {
           const SummaryCard(title: 'Total spent', value: '0 KGS'),
           const SizedBox(height: 12),
           const SummaryCard(title: 'Daily reports', value: '0'),
+          const SizedBox(height: 12),
+          const SummaryCard(title: 'Open tasks', value: '0'),
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: () => Navigator.of(context).push(
@@ -114,6 +163,14 @@ class ProjectDashboardScreen extends StatelessWidget {
             ),
             icon: const Icon(Icons.assignment),
             label: const Text('Add daily report'),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+            ),
+            icon: const Icon(Icons.task_alt),
+            label: const Text('Add task'),
           ),
         ],
       ),
@@ -147,6 +204,19 @@ class AddDailyReportScreen extends StatelessWidget {
   }
 }
 
+class AddTaskScreen extends StatelessWidget {
+  const AddTaskScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const DataFormScreen(
+      title: 'Add task',
+      fields: ['Title', 'Description', 'Due date'],
+      submitText: 'Save task',
+    );
+  }
+}
+
 class DataFormScreen extends StatelessWidget {
   const DataFormScreen({
     required this.title,
@@ -163,24 +233,39 @@ class DataFormScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: ListView(
+      body: Padding(
         padding: const EdgeInsets.all(16),
-        children: [
-          for (final field in fields) ...[
-            TextField(
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                labelText: field,
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(submitText),
-          ),
-        ],
+        child: DataFormContent(fields: fields, submitText: submitText),
       ),
+    );
+  }
+}
+
+class DataFormContent extends StatelessWidget {
+  const DataFormContent({required this.fields, required this.submitText, super.key});
+
+  final List<String> fields;
+  final String submitText;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      shrinkWrap: true,
+      children: [
+        for (final field in fields) ...[
+          TextField(
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: field,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(submitText),
+        ),
+      ],
     );
   }
 }
