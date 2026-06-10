@@ -20,6 +20,7 @@ func Run() {
 	db := bootstrap.OpenDatabase(context.Background(), cfg)
 	defer db.Close()
 
+	httpapi.SetState(cfg, db)
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
