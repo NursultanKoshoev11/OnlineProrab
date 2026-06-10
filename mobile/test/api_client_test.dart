@@ -41,6 +41,34 @@ void main() {
     expect(data['id'], 'project-1');
   });
 
+  test('listProjects supports wrapped items response', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/v1/projects');
+        return http.Response(jsonEncode({'items': [{'id': 'project-1'}]}), 200);
+      }),
+    );
+
+    final items = await client.listProjects();
+
+    expect(items.length, 1);
+    expect((items.first as Map<String, dynamic>)['id'], 'project-1');
+  });
+
+  test('listTasks supports tasks wrapper response', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/v1/tasks');
+        return http.Response(jsonEncode({'tasks': [{'id': 'task-1'}]}), 200);
+      }),
+    );
+
+    final items = await client.listTasks('project-1');
+
+    expect(items.length, 1);
+    expect((items.first as Map<String, dynamic>)['id'], 'task-1');
+  });
+
   test('ApiClient throws ApiException on backend error', () async {
     final client = ApiClient(
       httpClient: MockClient((request) async {
