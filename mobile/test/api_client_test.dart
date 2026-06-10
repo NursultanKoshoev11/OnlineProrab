@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -21,12 +22,13 @@ void main() {
     expect(client.accessToken, 'token-123');
   });
 
-  test('createProject sends bearer token and JSON body', () async {
+  test('createProject sends bearer token, accept header and JSON body', () async {
     final client = ApiClient(
       httpClient: MockClient((request) async {
         expect(request.method, 'POST');
         expect(request.url.path, '/api/v1/projects');
         expect(request.headers['Authorization'], 'Bearer token-123');
+        expect(request.headers['Accept'], 'application/json');
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         expect(body['name'], 'Demo');
         expect(body['address'], 'Bishkek');
@@ -48,7 +50,48 @@ void main() {
 
     expect(
       () => client.listProjects(),
-      throwsA(isA<ApiException>().having((error) => error.statusCode, 'statusCode', 401)),
+      throwsA(isA<ApiException>().having((error) => error.statusCode, 'statusCode', 401).having((error) => error.isUnauthorized, 'isUnauthorized', isTrue)),
+    );
+  });
+
+  test('ApiClient throws ApiException on invalid JSON', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        return http.Response('<html>bad gateway</html>', 502);
+      }),
+    );
+
+    expect(
+      () => client.listProjects(),
+      throwsA(isA<ApiException>().having((error) => error.message, 'message', 'Backend returned invalid JSON')),
+    );
+  });
+
+  test('ApiClient throws timeout ApiException', () async {
+    final client = ApiClient(
+      timeout: const Duration(milliseconds: 1),
+      httpClient: MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        return http.Response(jsonEncode([]), 200);
+      }),
+    );
+
+    expect(
+      () => client.listProjects(),
+      throwsA(isA<ApiException>().having((error) => error.statusCode, 'statusCode', 408).having((error) => error.isNetworkError, 'isNetworkError', isTrue)),
+    );
+  });
+
+  test('ApiClient converts http client errors to network ApiException', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        throw http.ClientException('Connection refused');
+      }),
+    );
+
+    expect(
+      () => client.listProjects(),
+      throwsA(isA<ApiException>().having((error) => error.statusCode, 'statusCode', 0).having((error) => error.isNetworkError, 'isNetworkError', isTrue)),
     );
   });
 }
