@@ -15,7 +15,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  http/testing: ^1.2.0
 
 flutter:
   uses-material-design: true
