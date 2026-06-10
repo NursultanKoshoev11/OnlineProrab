@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,7 +23,7 @@ func Open(ctx context.Context, url string) (*DB, error) {
 
 func (db *DB) Ping(ctx context.Context) error {
 	if db == nil || db.Pool == nil {
-		return pgxpool.ErrClosed
+		return errors.New("database pool is not initialized")
 	}
 	return db.Pool.Ping(ctx)
 }
