@@ -30,10 +30,7 @@ class ApiClient {
     return data;
   }
 
-  Future<List<dynamic>> listProjects() async {
-    final data = await getJson('/api/v1/projects');
-    return data is List<dynamic> ? data : <dynamic>[];
-  }
+  Future<List<dynamic>> listProjects() async => _asList(await getJson('/api/v1/projects'));
 
   Future<Map<String, dynamic>> createProject(String name, String address) async {
     return postJson('/api/v1/projects', {'name': name, 'address': address});
@@ -47,10 +44,7 @@ class ApiClient {
     await deleteJson('/api/v1/projects/$projectId');
   }
 
-  Future<List<dynamic>> listCostItems(String projectId) async {
-    final data = await getJson('/api/v1/cost-items', {'project_id': projectId});
-    return data is List<dynamic> ? data : <dynamic>[];
-  }
+  Future<List<dynamic>> listCostItems(String projectId) async => _asList(await getJson('/api/v1/cost-items', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> createCostItem({
     required String projectId,
@@ -91,10 +85,7 @@ class ApiClient {
     await deleteJson('/api/v1/cost-items/$costItemId');
   }
 
-  Future<List<dynamic>> listDailyReports(String projectId) async {
-    final data = await getJson('/api/v1/daily-reports', {'project_id': projectId});
-    return data is List<dynamic> ? data : <dynamic>[];
-  }
+  Future<List<dynamic>> listDailyReports(String projectId) async => _asList(await getJson('/api/v1/daily-reports', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> createDailyReport({
     required String projectId,
@@ -127,10 +118,7 @@ class ApiClient {
     await deleteJson('/api/v1/daily-reports/$reportId');
   }
 
-  Future<List<dynamic>> listTasks(String projectId) async {
-    final data = await getJson('/api/v1/tasks', {'project_id': projectId});
-    return data is List<dynamic> ? data : <dynamic>[];
-  }
+  Future<List<dynamic>> listTasks(String projectId) async => _asList(await getJson('/api/v1/tasks', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> createTask({
     required String projectId,
@@ -163,10 +151,7 @@ class ApiClient {
     await deleteJson('/api/v1/tasks/$taskId');
   }
 
-  Future<List<dynamic>> listFiles(String projectId) async {
-    final data = await getJson('/api/v1/files', {'project_id': projectId});
-    return data is List<dynamic> ? data : <dynamic>[];
-  }
+  Future<List<dynamic>> listFiles(String projectId) async => _asList(await getJson('/api/v1/files', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> createFileMetadata({
     required String projectId,
@@ -186,10 +171,7 @@ class ApiClient {
     });
   }
 
-  Future<List<dynamic>> listAuditLogs(String projectId) async {
-    final data = await getJson('/api/v1/audit-logs', {'project_id': projectId});
-    return data is List<dynamic> ? data : <dynamic>[];
-  }
+  Future<List<dynamic>> listAuditLogs(String projectId) async => _asList(await getJson('/api/v1/audit-logs', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) async {
     final response = await _send(() => _httpClient.post(ApiConfig.endpoint(path), headers: _headers(), body: jsonEncode(body)));
@@ -251,6 +233,17 @@ class ApiClient {
       throw ApiException(response.statusCode, message ?? 'Request failed');
     }
     return data;
+  }
+
+  List<dynamic> _asList(dynamic data) {
+    if (data is List<dynamic>) return data;
+    if (data is Map<String, dynamic>) {
+      for (final key in const ['items', 'data', 'results', 'projects', 'cost_items', 'daily_reports', 'tasks', 'files', 'audit_logs']) {
+        final value = data[key];
+        if (value is List<dynamic>) return value;
+      }
+    }
+    return const <dynamic>[];
   }
 
   void close() {
