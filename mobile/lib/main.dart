@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:online_prorab/app/backend_app_v2.dart';
+import 'package:online_prorab/app/backend_app_v3.dart';
 
 void main() {
-  runApp(const BackendOnlineProrabAppV2());
+  runApp(const BackendOnlineProrabAppV3());
 }
