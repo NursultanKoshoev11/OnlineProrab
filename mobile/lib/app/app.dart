@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class OnlineProrabApp extends StatefulWidget {
   const OnlineProrabApp({super.key});
@@ -9,6 +12,12 @@ class OnlineProrabApp extends StatefulWidget {
 
 class _OnlineProrabAppState extends State<OnlineProrabApp> {
   final appState = AppState();
+
+  @override
+  void initState() {
+    super.initState();
+    appState.loadFromDevice();
+  }
 
   @override
   void dispose() {
@@ -44,6 +53,9 @@ class AppScope extends InheritedNotifier<AppState> {
 }
 
 class AppState extends ChangeNotifier {
+  static const _storageKey = 'online_prorab_state_v1';
+
+  bool isLoaded = false;
   bool isSignedIn = false;
   String phone = '';
   final List<ProjectItem> projects = [];
@@ -51,10 +63,58 @@ class AppState extends ChangeNotifier {
   final List<DailyReportItem> reports = [];
   final List<TaskItem> tasks = [];
 
+  Future<void> loadFromDevice() async {
+    final preferences = await SharedPreferences.getInstance();
+    final raw = preferences.getString(_storageKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final data = jsonDecode(raw) as Map<String, dynamic>;
+        isSignedIn = data['isSignedIn'] as bool? ?? false;
+        phone = data['phone'] as String? ?? '';
+        projects
+          ..clear()
+          ..addAll((data['projects'] as List<dynamic>? ?? []).map((item) => ProjectItem.fromJson(item as Map<String, dynamic>)));
+        expenses
+          ..clear()
+          ..addAll((data['expenses'] as List<dynamic>? ?? []).map((item) => ExpenseItem.fromJson(item as Map<String, dynamic>)));
+        reports
+          ..clear()
+          ..addAll((data['reports'] as List<dynamic>? ?? []).map((item) => DailyReportItem.fromJson(item as Map<String, dynamic>)));
+        tasks
+          ..clear()
+          ..addAll((data['tasks'] as List<dynamic>? ?? []).map((item) => TaskItem.fromJson(item as Map<String, dynamic>)));
+      } catch (_) {
+        // Keep a clean state if the local cache is corrupted.
+      }
+    }
+    isLoaded = true;
+    notifyListeners();
+  }
+
+  Future<void> saveToDevice() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_storageKey, jsonEncode(toJson()));
+  }
+
+  Map<String, dynamic> toJson() => {
+        'isSignedIn': isSignedIn,
+        'phone': phone,
+        'projects': projects.map((item) => item.toJson()).toList(),
+        'expenses': expenses.map((item) => item.toJson()).toList(),
+        'reports': reports.map((item) => item.toJson()).toList(),
+        'tasks': tasks.map((item) => item.toJson()).toList(),
+      };
+
   void signIn(String phoneNumber) {
     phone = phoneNumber.trim();
     isSignedIn = true;
-    notifyListeners();
+    _changed();
+  }
+
+  void signOut() {
+    isSignedIn = false;
+    phone = '';
+    _changed();
   }
 
   ProjectItem addProject({required String name, required String address}) {
@@ -66,14 +126,14 @@ class AppState extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     projects.insert(0, item);
-    notifyListeners();
+    _changed();
     return item;
   }
 
   void updateProject(ProjectItem project, {required String name, required String address}) {
     project.name = name.trim();
     project.address = address.trim();
-    notifyListeners();
+    _changed();
   }
 
   void deleteProject(String projectId) {
@@ -81,7 +141,7 @@ class AppState extends ChangeNotifier {
     expenses.removeWhere((item) => item.projectId == projectId);
     reports.removeWhere((item) => item.projectId == projectId);
     tasks.removeWhere((item) => item.projectId == projectId);
-    notifyListeners();
+    _changed();
   }
 
   ExpenseItem addExpense({
@@ -101,7 +161,7 @@ class AppState extends ChangeNotifier {
       spentAt: DateTime.now(),
     );
     expenses.insert(0, item);
-    notifyListeners();
+    _changed();
     return item;
   }
 
@@ -120,15 +180,11 @@ class AppState extends ChangeNotifier {
       reportDate: DateTime.now(),
     );
     reports.insert(0, item);
-    notifyListeners();
+    _changed();
     return item;
   }
 
-  TaskItem addTask({
-    required String projectId,
-    required String title,
-    required String description,
-  }) {
+  TaskItem addTask({required String projectId, required String title, required String description}) {
     final item = TaskItem(
       id: _newId('task'),
       projectId: projectId,
@@ -138,7 +194,7 @@ class AppState extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     tasks.insert(0, item);
-    notifyListeners();
+    _changed();
     return item;
   }
 
@@ -149,7 +205,7 @@ class AppState extends ChangeNotifier {
         break;
       }
     }
-    notifyListeners();
+    _changed();
   }
 
   ProjectItem? projectById(String projectId) {
@@ -165,12 +221,12 @@ class AppState extends ChangeNotifier {
   List<DailyReportItem> reportsFor(String projectId) => reports.where((item) => item.projectId == projectId).toList();
   List<TaskItem> tasksFor(String projectId) => tasks.where((item) => item.projectId == projectId).toList();
 
-  double totalSpent(String projectId) {
-    return expensesFor(projectId).fold<double>(0, (sum, item) => sum + item.amount);
-  }
+  double totalSpent(String projectId) => expensesFor(projectId).fold<double>(0, (sum, item) => sum + item.amount);
+  int openTasksCount(String projectId) => tasksFor(projectId).where((item) => item.status != 'done').length;
 
-  int openTasksCount(String projectId) {
-    return tasksFor(projectId).where((item) => item.status != 'done').length;
+  void _changed() {
+    notifyListeners();
+    saveToDevice();
   }
 
   String _newId(String prefix) => '$prefix-${DateTime.now().microsecondsSinceEpoch}';
@@ -184,6 +240,22 @@ class ProjectItem {
   String address;
   String status;
   final DateTime createdAt;
+
+  factory ProjectItem.fromJson(Map<String, dynamic> json) => ProjectItem(
+        id: json['id'] as String,
+        name: json['name'] as String? ?? '',
+        address: json['address'] as String? ?? '',
+        status: json['status'] as String? ?? 'active',
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'address': address,
+        'status': status,
+        'createdAt': createdAt.toIso8601String(),
+      };
 }
 
 class ExpenseItem {
@@ -196,6 +268,26 @@ class ExpenseItem {
   final String category;
   final String vendor;
   final DateTime spentAt;
+
+  factory ExpenseItem.fromJson(Map<String, dynamic> json) => ExpenseItem(
+        id: json['id'] as String,
+        projectId: json['projectId'] as String,
+        title: json['title'] as String? ?? '',
+        amount: (json['amount'] as num?)?.toDouble() ?? 0,
+        category: json['category'] as String? ?? 'other',
+        vendor: json['vendor'] as String? ?? '',
+        spentAt: DateTime.tryParse(json['spentAt'] as String? ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'projectId': projectId,
+        'title': title,
+        'amount': amount,
+        'category': category,
+        'vendor': vendor,
+        'spentAt': spentAt.toIso8601String(),
+      };
 }
 
 class DailyReportItem {
@@ -207,6 +299,24 @@ class DailyReportItem {
   final int workersCount;
   final String issues;
   final DateTime reportDate;
+
+  factory DailyReportItem.fromJson(Map<String, dynamic> json) => DailyReportItem(
+        id: json['id'] as String,
+        projectId: json['projectId'] as String,
+        summary: json['summary'] as String? ?? '',
+        workersCount: json['workersCount'] as int? ?? 0,
+        issues: json['issues'] as String? ?? '',
+        reportDate: DateTime.tryParse(json['reportDate'] as String? ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'projectId': projectId,
+        'summary': summary,
+        'workersCount': workersCount,
+        'issues': issues,
+        'reportDate': reportDate.toIso8601String(),
+      };
 }
 
 class TaskItem {
@@ -218,6 +328,24 @@ class TaskItem {
   final String description;
   String status;
   final DateTime createdAt;
+
+  factory TaskItem.fromJson(Map<String, dynamic> json) => TaskItem(
+        id: json['id'] as String,
+        projectId: json['projectId'] as String,
+        title: json['title'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        status: json['status'] as String? ?? 'open',
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'projectId': projectId,
+        'title': title,
+        'description': description,
+        'status': status,
+        'createdAt': createdAt.toIso8601String(),
+      };
 }
 
 class LoginScreen extends StatefulWidget {
@@ -241,6 +369,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    if (!state.isLoaded) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (state.isSignedIn) {
+      return const ProjectsScreen();
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('Online Prorab')),
       body: SafeArea(
@@ -249,39 +384,25 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Construction control from your phone',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
+              const Text('Construction control from your phone', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               const Text('Track projects, expenses, receipts, daily reports, photos and tasks.'),
               const SizedBox(height: 24),
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Phone number',
-                  hintText: '+996...',
-                ),
+                decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Phone number', hintText: '+996...'),
               ),
               const SizedBox(height: 12),
               if (codeRequested) ...[
                 TextField(
                   controller: codeController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'SMS code',
-                    helperText: 'MVP mode: enter any 6 digits',
-                  ),
+                  decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'SMS code', helperText: 'MVP mode: enter any 6 digits'),
                 ),
                 const SizedBox(height: 12),
               ],
-              FilledButton(
-                onPressed: () => _submit(context),
-                child: Text(codeRequested ? 'Verify and continue' : 'Request code'),
-              ),
+              FilledButton(onPressed: () => _submit(context), child: Text(codeRequested ? 'Verify and continue' : 'Request code')),
             ],
           ),
         ),
@@ -305,7 +426,6 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     AppScope.of(context).signIn(phone);
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const ProjectsScreen()));
   }
 }
 
@@ -320,31 +440,19 @@ class ProjectsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Projects'),
         actions: [
-          IconButton(
-            tooltip: 'Signed in phone',
-            onPressed: () => _showMessage(context, 'Signed in as ${state.phone}'),
-            icon: const Icon(Icons.account_circle),
-          ),
+          IconButton(tooltip: 'Signed in phone', onPressed: () => _showMessage(context, 'Signed in as ${state.phone}'), icon: const Icon(Icons.account_circle)),
+          IconButton(tooltip: 'Sign out', onPressed: state.signOut, icon: const Icon(Icons.logout)),
         ],
       ),
       body: projects.isEmpty
-          ? const EmptyState(
-              icon: Icons.home_work_outlined,
-              title: 'No projects yet',
-              message: 'Create your first house project to start tracking expenses, reports and tasks.',
-            )
+          ? const EmptyState(icon: Icons.home_work_outlined, title: 'No projects yet', message: 'Create your first house project to start tracking expenses, reports and tasks.')
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: projects.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final project = projects[index];
-                return ProjectCard(
-                  project: project,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => ProjectDashboardScreen(projectId: project.id)),
-                  ),
-                );
+                return ProjectCard(project: project, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProjectDashboardScreen(projectId: project.id))));
               },
             ),
       floatingActionButton: FloatingActionButton.extended(
@@ -391,15 +499,9 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: nameController,
-            decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Project name'),
-          ),
+          TextField(controller: nameController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Project name')),
           const SizedBox(height: 12),
-          TextField(
-            controller: addressController,
-            decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Address'),
-          ),
+          TextField(controller: addressController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Address')),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () {
@@ -434,10 +536,7 @@ class ProjectDashboardScreen extends StatelessWidget {
     final state = AppScope.of(context);
     final project = state.projectById(projectId);
     if (project == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Project not found')),
-        body: const EmptyState(icon: Icons.error_outline, title: 'Project not found', message: 'This project was deleted or is unavailable.'),
-      );
+      return Scaffold(appBar: AppBar(title: const Text('Project not found')), body: const EmptyState(icon: Icons.error_outline, title: 'Project not found', message: 'This project was deleted or is unavailable.'));
     }
 
     final expenses = state.expensesFor(projectId);
@@ -447,48 +546,29 @@ class ProjectDashboardScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(project.name),
-        actions: [
-          IconButton(
-            tooltip: 'Edit project',
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProjectFormScreen(project: project))),
-            icon: const Icon(Icons.edit),
-          ),
-        ],
+        actions: [IconButton(tooltip: 'Edit project', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProjectFormScreen(project: project))), icon: const Icon(Icons.edit))],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(project.address.isEmpty ? 'No address' : project.address, style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              SummaryCard(title: 'Total spent', value: '${state.totalSpent(projectId).toStringAsFixed(0)} KGS'),
-              SummaryCard(title: 'Reports', value: '${reports.length}'),
-              SummaryCard(title: 'Open tasks', value: '${state.openTasksCount(projectId)}'),
-            ],
-          ),
+          Wrap(spacing: 12, runSpacing: 12, children: [
+            SummaryCard(title: 'Total spent', value: '${state.totalSpent(projectId).toStringAsFixed(0)} KGS'),
+            SummaryCard(title: 'Reports', value: '${reports.length}'),
+            SummaryCard(title: 'Open tasks', value: '${state.openTasksCount(projectId)}'),
+          ]),
           const SizedBox(height: 20),
           ActionGrid(projectId: projectId),
           const SizedBox(height: 24),
           SectionHeader(title: 'Recent expenses', actionText: expenses.isEmpty ? null : '${expenses.length} total'),
-          if (expenses.isEmpty)
-            const SmallEmptyState(message: 'No expenses yet')
-          else
-            ...expenses.take(5).map((item) => ExpenseTile(item: item)),
+          if (expenses.isEmpty) const SmallEmptyState(message: 'No expenses yet') else ...expenses.take(5).map((item) => ExpenseTile(item: item)),
           const SizedBox(height: 20),
           SectionHeader(title: 'Daily reports', actionText: reports.isEmpty ? null : '${reports.length} total'),
-          if (reports.isEmpty)
-            const SmallEmptyState(message: 'No daily reports yet')
-          else
-            ...reports.take(5).map((item) => ReportTile(item: item)),
+          if (reports.isEmpty) const SmallEmptyState(message: 'No daily reports yet') else ...reports.take(5).map((item) => ReportTile(item: item)),
           const SizedBox(height: 20),
           SectionHeader(title: 'Tasks', actionText: tasks.isEmpty ? null : '${tasks.length} total'),
-          if (tasks.isEmpty)
-            const SmallEmptyState(message: 'No tasks yet')
-          else
-            ...tasks.map((item) => TaskTile(item: item)),
+          if (tasks.isEmpty) const SmallEmptyState(message: 'No tasks yet') else ...tasks.map((item) => TaskTile(item: item)),
         ],
       ),
     );
@@ -502,27 +582,11 @@ class ActionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        FilledButton.icon(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExpenseFormScreen(projectId: projectId))),
-          icon: const Icon(Icons.receipt_long),
-          label: const Text('Expense'),
-        ),
-        FilledButton.icon(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DailyReportFormScreen(projectId: projectId))),
-          icon: const Icon(Icons.assignment),
-          label: const Text('Report'),
-        ),
-        FilledButton.icon(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskFormScreen(projectId: projectId))),
-          icon: const Icon(Icons.task_alt),
-          label: const Text('Task'),
-        ),
-      ],
-    );
+    return Wrap(spacing: 8, runSpacing: 8, children: [
+      FilledButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExpenseFormScreen(projectId: projectId))), icon: const Icon(Icons.receipt_long), label: const Text('Expense')),
+      FilledButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DailyReportFormScreen(projectId: projectId))), icon: const Icon(Icons.assignment), label: const Text('Report')),
+      FilledButton.icon(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskFormScreen(projectId: projectId))), icon: const Icon(Icons.task_alt), label: const Text('Task')),
+    ]);
   }
 }
 
@@ -552,23 +616,17 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add expense')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(controller: titleController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Title')),
-          const SizedBox(height: 12),
-          TextField(controller: amountController, keyboardType: TextInputType.number, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Amount, KGS')),
-          const SizedBox(height: 12),
-          TextField(controller: categoryController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Category')),
-          const SizedBox(height: 12),
-          TextField(controller: vendorController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Vendor')),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: _save, child: const Text('Save expense')),
-        ],
-      ),
-    );
+    return Scaffold(appBar: AppBar(title: const Text('Add expense')), body: ListView(padding: const EdgeInsets.all(16), children: [
+      TextField(controller: titleController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Title')),
+      const SizedBox(height: 12),
+      TextField(controller: amountController, keyboardType: TextInputType.number, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Amount, KGS')),
+      const SizedBox(height: 12),
+      TextField(controller: categoryController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Category')),
+      const SizedBox(height: 12),
+      TextField(controller: vendorController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Vendor')),
+      const SizedBox(height: 16),
+      FilledButton(onPressed: _save, child: const Text('Save expense')),
+    ]));
   }
 
   void _save() {
@@ -578,13 +636,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
       _showMessage(context, 'Enter valid title and amount');
       return;
     }
-    AppScope.of(context).addExpense(
-      projectId: widget.projectId,
-      title: title,
-      amount: amount,
-      category: categoryController.text,
-      vendor: vendorController.text,
-    );
+    AppScope.of(context).addExpense(projectId: widget.projectId, title: title, amount: amount, category: categoryController.text, vendor: vendorController.text);
     Navigator.of(context).pop();
   }
 }
@@ -613,21 +665,15 @@ class _DailyReportFormScreenState extends State<DailyReportFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add daily report')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(controller: summaryController, minLines: 3, maxLines: 5, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Work summary')),
-          const SizedBox(height: 12),
-          TextField(controller: workersController, keyboardType: TextInputType.number, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Workers count')),
-          const SizedBox(height: 12),
-          TextField(controller: issuesController, minLines: 2, maxLines: 4, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Issues / delays')),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: _save, child: const Text('Save report')),
-        ],
-      ),
-    );
+    return Scaffold(appBar: AppBar(title: const Text('Add daily report')), body: ListView(padding: const EdgeInsets.all(16), children: [
+      TextField(controller: summaryController, minLines: 3, maxLines: 5, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Work summary')),
+      const SizedBox(height: 12),
+      TextField(controller: workersController, keyboardType: TextInputType.number, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Workers count')),
+      const SizedBox(height: 12),
+      TextField(controller: issuesController, minLines: 2, maxLines: 4, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Issues / delays')),
+      const SizedBox(height: 16),
+      FilledButton(onPressed: _save, child: const Text('Save report')),
+    ]));
   }
 
   void _save() {
@@ -664,19 +710,13 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add task')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(controller: titleController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Title')),
-          const SizedBox(height: 12),
-          TextField(controller: descriptionController, minLines: 3, maxLines: 5, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Description')),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: _save, child: const Text('Save task')),
-        ],
-      ),
-    );
+    return Scaffold(appBar: AppBar(title: const Text('Add task')), body: ListView(padding: const EdgeInsets.all(16), children: [
+      TextField(controller: titleController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Title')),
+      const SizedBox(height: 12),
+      TextField(controller: descriptionController, minLines: 3, maxLines: 5, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Description')),
+      const SizedBox(height: 16),
+      FilledButton(onPressed: _save, child: const Text('Save task')),
+    ]));
   }
 
   void _save() {
@@ -699,14 +739,7 @@ class ProjectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    return Card(
-      child: ListTile(
-        title: Text(project.name),
-        subtitle: Text('${project.address.isEmpty ? 'No address' : project.address} • ${state.expensesFor(project.id).length} expenses'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
-    );
+    return Card(child: ListTile(title: Text(project.name), subtitle: Text('${project.address.isEmpty ? 'No address' : project.address} • ${state.expensesFor(project.id).length} expenses'), trailing: const Icon(Icons.chevron_right), onTap: onTap));
   }
 }
 
@@ -717,14 +750,7 @@ class ExpenseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.receipt_long),
-        title: Text(item.title),
-        subtitle: Text('${item.category}${item.vendor.isEmpty ? '' : ' • ${item.vendor}'}'),
-        trailing: Text('${item.amount.toStringAsFixed(0)} KGS'),
-      ),
-    );
+    return Card(child: ListTile(leading: const Icon(Icons.receipt_long), title: Text(item.title), subtitle: Text('${item.category}${item.vendor.isEmpty ? '' : ' • ${item.vendor}'}'), trailing: Text('${item.amount.toStringAsFixed(0)} KGS')));
   }
 }
 
@@ -735,13 +761,7 @@ class ReportTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.assignment),
-        title: Text(item.summary),
-        subtitle: Text('${_formatDate(item.reportDate)} • ${item.workersCount} workers${item.issues.isEmpty ? '' : ' • Issues: ${item.issues}'}'),
-      ),
-    );
+    return Card(child: ListTile(leading: const Icon(Icons.assignment), title: Text(item.summary), subtitle: Text('${_formatDate(item.reportDate)} • ${item.workersCount} workers${item.issues.isEmpty ? '' : ' • Issues: ${item.issues}'}')));
   }
 }
 
@@ -752,19 +772,7 @@ class TaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: Icon(item.status == 'done' ? Icons.check_circle : Icons.radio_button_unchecked),
-        title: Text(item.title),
-        subtitle: Text(item.description.isEmpty ? item.status : '${item.description} • ${item.status}'),
-        trailing: item.status == 'done'
-            ? null
-            : TextButton(
-                onPressed: () => AppScope.of(context).markTaskDone(item.id),
-                child: const Text('Done'),
-              ),
-      ),
-    );
+    return Card(child: ListTile(leading: Icon(item.status == 'done' ? Icons.check_circle : Icons.radio_button_unchecked), title: Text(item.title), subtitle: Text(item.description.isEmpty ? item.status : '${item.description} • ${item.status}'), trailing: item.status == 'done' ? null : TextButton(onPressed: () => AppScope.of(context).markTaskDone(item.id), child: const Text('Done'))));
   }
 }
 
@@ -776,22 +784,7 @@ class SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Text(value, style: Theme.of(context).textTheme.headlineSmall),
-            ],
-          ),
-        ),
-      ),
-    );
+    return SizedBox(width: 160, child: Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: Theme.of(context).textTheme.titleSmall), const SizedBox(height: 8), Text(value, style: Theme.of(context).textTheme.headlineSmall)]))));
   }
 }
 
@@ -803,12 +796,7 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
-        if (actionText != null) Text(actionText!, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    );
+    return Row(children: [Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)), if (actionText != null) Text(actionText!, style: Theme.of(context).textTheme.bodySmall)]);
   }
 }
 
@@ -821,21 +809,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56),
-            const SizedBox(height: 16),
-            Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
+    return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 56), const SizedBox(height: 16), Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center), const SizedBox(height: 8), Text(message, textAlign: TextAlign.center)])));
   }
 }
 
@@ -846,10 +820,7 @@ class SmallEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
-    );
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(message, style: Theme.of(context).textTheme.bodyMedium));
   }
 }
 
