@@ -1,12 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:online_prorab/services/api_config.dart';
 
 class ApiClient {
-  ApiClient({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
+  ApiClient({http.Client? httpClient, Duration timeout = const Duration(seconds: 15)})
+      : _httpClient = httpClient ?? http.Client(),
+        _timeout = timeout;
 
   final http.Client _httpClient;
+  final Duration _timeout;
   String? accessToken;
 
   void setAccessToken(String? token) {
@@ -188,28 +192,39 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) async {
-    final response = await _httpClient.post(ApiConfig.endpoint(path), headers: _headers(), body: jsonEncode(body));
+    final response = await _send(() => _httpClient.post(ApiConfig.endpoint(path), headers: _headers(), body: jsonEncode(body)));
     return _decodeObject(response);
   }
 
   Future<Map<String, dynamic>> patchJson(String path, Map<String, dynamic> body) async {
-    final response = await _httpClient.patch(ApiConfig.endpoint(path), headers: _headers(), body: jsonEncode(body));
+    final response = await _send(() => _httpClient.patch(ApiConfig.endpoint(path), headers: _headers(), body: jsonEncode(body)));
     return _decodeObject(response);
   }
 
   Future<dynamic> getJson(String path, [Map<String, String>? query]) async {
-    final response = await _httpClient.get(ApiConfig.endpoint(path, query), headers: _headers());
+    final response = await _send(() => _httpClient.get(ApiConfig.endpoint(path, query), headers: _headers()));
     return _decodeAny(response);
   }
 
   Future<dynamic> deleteJson(String path) async {
-    final response = await _httpClient.delete(ApiConfig.endpoint(path), headers: _headers());
+    final response = await _send(() => _httpClient.delete(ApiConfig.endpoint(path), headers: _headers()));
     return _decodeAny(response);
+  }
+
+  Future<http.Response> _send(Future<http.Response> Function() request) async {
+    try {
+      return await request().timeout(_timeout);
+    } on TimeoutException {
+      throw ApiException(408, 'Request timed out. Check your internet connection and backend status.');
+    } on http.ClientException catch (error) {
+      throw ApiException(0, error.message);
+    }
   }
 
   Map<String, String> _headers() {
     return {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       if (accessToken != null && accessToken!.isNotEmpty) 'Authorization': 'Bearer $accessToken',
     };
   }
@@ -223,8 +238,14 @@ class ApiClient {
   }
 
   dynamic _decodeAny(http.Response response) {
-    final body = response.body.isEmpty ? '{}' : response.body;
-    final data = jsonDecode(body);
+    final body = response.body.trim().isEmpty ? '{}' : response.body;
+    late final dynamic data;
+    try {
+      data = jsonDecode(body);
+    } on FormatException {
+      throw ApiException(response.statusCode, 'Backend returned invalid JSON');
+    }
+
     if (response.statusCode >= 400) {
       final message = data is Map<String, dynamic> ? data['error']?.toString() : null;
       throw ApiException(response.statusCode, message ?? 'Request failed');
@@ -242,6 +263,9 @@ class ApiException implements Exception {
 
   final int statusCode;
   final String message;
+
+  bool get isNetworkError => statusCode == 0 || statusCode == 408;
+  bool get isUnauthorized => statusCode == 401;
 
   @override
   String toString() => 'ApiException($statusCode): $message';
