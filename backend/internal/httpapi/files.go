@@ -35,6 +35,17 @@ func Files(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fileID := resourceIDFromPath(r.URL.Path, "/api/v1/files/")
+	if fileID != "" {
+		switch r.Method {
+		case http.MethodDelete:
+			deleteFileMetadata(w, r, fileID)
+		default:
+			Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		}
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		listFiles(w, r)
@@ -61,9 +72,10 @@ func listFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := appState.DB.Pool.Query(ctx, `
-		SELECT id::text, COALESCE(project_id::text, ''), kind, original_name, storage_path, content_type, size_bytes, created_at::text
+		SELECT id::text, COALESCE(project_id::text, ''), kind, original_name,
+		       storage_path, content_type, size_bytes, created_at::text
 		FROM files
-		WHERE project_id = $1
+		WHERE project_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT 500
 	`, projectID)
@@ -133,7 +145,8 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 	err := appState.DB.Pool.QueryRow(ctx, `
 		INSERT INTO files (project_id, uploaded_by, kind, original_name, storage_path, content_type, size_bytes)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id::text, COALESCE(project_id::text, ''), kind, original_name, storage_path, content_type, size_bytes, created_at::text
+		RETURNING id::text, COALESCE(project_id::text, ''), kind, original_name,
+		          storage_path, content_type, size_bytes, created_at::text
 	`, req.ProjectID, userID, req.Kind, req.OriginalName, req.StoragePath, req.ContentType, req.SizeBytes).Scan(&item.ID, &item.ProjectID, &item.Kind, &item.OriginalName, &item.StoragePath, &item.ContentType, &item.SizeBytes, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to save file metadata")
@@ -146,6 +159,47 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 	`, userID, req.ProjectID, item.ID)
 
 	JSON(w, http.StatusCreated, item)
+}
+
+func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
+	userID := userIDFromContext(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	projectID, ok := fileProjectID(ctx, fileID)
+	if !ok || !canManageProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project management permission required")
+		return
+	}
+
+	result, err := appState.DB.Pool.Exec(ctx, `
+		UPDATE files
+		SET deleted_at = now()
+		WHERE id = $1 AND deleted_at IS NULL
+	`, fileID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to delete file metadata")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "file not found")
+		return
+	}
+	_, _ = appState.DB.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
+		VALUES ($1, $2, 'delete', 'file', $3)
+	`, userID, projectID, fileID)
+	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func fileProjectID(ctx context.Context, fileID string) (string, bool) {
+	var projectID string
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT project_id::text
+		FROM files
+		WHERE id = $1 AND deleted_at IS NULL
+	`, fileID).Scan(&projectID)
+	return projectID, err == nil
 }
 
 func normalizeFileRequest(req *createFileRequest) {
