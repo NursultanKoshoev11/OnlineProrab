@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -90,6 +91,10 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to read tasks")
+		return
+	}
 	JSON(w, http.StatusOK, items)
 }
 
@@ -100,12 +105,10 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	normalizeTaskRequest(&req)
 	if req.ProjectID == "" || req.Title == "" {
 		Error(w, http.StatusBadRequest, "project_id and title are required")
 		return
-	}
-	if req.Status == "" {
-		req.Status = "open"
 	}
 	if !isValidTaskStatus(req.Status) {
 		Error(w, http.StatusBadRequest, "invalid task status")
@@ -114,8 +117,8 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	if !canAccessProject(ctx, userID, req.ProjectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !canContributeToProject(ctx, userID, req.ProjectID) {
+		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
 	}
 
@@ -145,12 +148,10 @@ func updateTask(w http.ResponseWriter, r *http.Request, taskID string) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	normalizeTaskRequest(&req)
 	if req.Title == "" {
 		Error(w, http.StatusBadRequest, "title is required")
 		return
-	}
-	if req.Status == "" {
-		req.Status = "open"
 	}
 	if !isValidTaskStatus(req.Status) {
 		Error(w, http.StatusBadRequest, "invalid task status")
@@ -160,8 +161,8 @@ func updateTask(w http.ResponseWriter, r *http.Request, taskID string) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	projectID, ok := taskProjectID(ctx, taskID)
-	if !ok || !canAccessProject(ctx, userID, projectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !ok || !canContributeToProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
 	}
 
@@ -190,8 +191,8 @@ func deleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	projectID, ok := taskProjectID(ctx, taskID)
-	if !ok || !canAccessProject(ctx, userID, projectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !ok || !canManageProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project management permission required")
 		return
 	}
 
@@ -204,6 +205,10 @@ func deleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
 		Error(w, http.StatusNotFound, "task not found")
 		return
 	}
+	_, _ = appState.DB.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
+		VALUES ($1, $2, 'delete', 'task', $3)
+	`, userID, projectID, taskID)
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -214,5 +219,16 @@ func taskProjectID(ctx context.Context, taskID string) (string, bool) {
 }
 
 func isValidTaskStatus(status string) bool {
-	return status == "open" || status == "in_progress" || status == "done"
+	return status == "open" || status == "in_progress" || status == "done" || status == "cancelled"
+}
+
+func normalizeTaskRequest(req *createTaskRequest) {
+	req.ProjectID = strings.TrimSpace(req.ProjectID)
+	req.Title = strings.TrimSpace(req.Title)
+	req.Description = strings.TrimSpace(req.Description)
+	req.Status = strings.TrimSpace(req.Status)
+	req.DueDate = strings.TrimSpace(req.DueDate)
+	if req.Status == "" {
+		req.Status = "open"
+	}
 }
