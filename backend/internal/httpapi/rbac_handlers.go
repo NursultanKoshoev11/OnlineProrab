@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 )
 
 type entityProjectResolver func(context.Context, string) (string, bool)
@@ -17,7 +19,11 @@ func withProjectMutationRBAC(next http.HandlerFunc, itemPathPrefix string, resol
 			return
 		}
 
-		userID := userIDFromContext(r.Context())
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		r = r.WithContext(ctx)
+
+		userID := userIDFromContext(ctx)
 		projectID, ok := mutationProjectID(r, itemPathPrefix, resolver)
 		if !ok || projectID == "" {
 			Error(w, http.StatusBadRequest, "project_id is required")
@@ -25,11 +31,11 @@ func withProjectMutationRBAC(next http.HandlerFunc, itemPathPrefix string, resol
 		}
 
 		if r.Method == http.MethodDelete {
-			if !canManageProject(r.Context(), userID, projectID) {
+			if !canManageProject(ctx, userID, projectID) {
 				Error(w, http.StatusForbidden, "project management permission required")
 				return
 			}
-		} else if !canContributeToProject(r.Context(), userID, projectID) {
+		} else if !canContributeToProject(ctx, userID, projectID) {
 			Error(w, http.StatusForbidden, "project contribution permission required")
 			return
 		}
@@ -51,6 +57,7 @@ func mutationProjectID(r *http.Request, itemPathPrefix string, resolver entityPr
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return "", false
 		}
+		payload.ProjectID = strings.TrimSpace(payload.ProjectID)
 		return payload.ProjectID, payload.ProjectID != ""
 	}
 
