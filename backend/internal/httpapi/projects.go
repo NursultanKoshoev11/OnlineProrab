@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -84,6 +85,10 @@ func listProjects(w http.ResponseWriter, r *http.Request) {
 		}
 		projects = append(projects, item)
 	}
+	if err := rows.Err(); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to read projects")
+		return
+	}
 	JSON(w, http.StatusOK, projects)
 }
 
@@ -116,6 +121,8 @@ func createProject(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.Address = strings.TrimSpace(req.Address)
 	if req.Name == "" {
 		Error(w, http.StatusBadRequest, "project name is required")
 		return
@@ -171,6 +178,9 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.Address = strings.TrimSpace(req.Address)
+	req.Status = strings.TrimSpace(req.Status)
 	if req.Name == "" {
 		Error(w, http.StatusBadRequest, "project name is required")
 		return
@@ -178,11 +188,15 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	if req.Status == "" {
 		req.Status = "active"
 	}
+	if req.Status != "active" && req.Status != "archived" {
+		Error(w, http.StatusBadRequest, "invalid project status")
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	if !canAccessProject(ctx, userID, projectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !canManageProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project management permission required")
 		return
 	}
 
@@ -210,19 +224,27 @@ func deleteProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	userID := userIDFromContext(r.Context())
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	if !canAccessProject(ctx, userID, projectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !canManageProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project management permission required")
 		return
 	}
 
-	result, err := appState.DB.Pool.Exec(ctx, `DELETE FROM projects WHERE id = $1`, projectID)
+	result, err := appState.DB.Pool.Exec(ctx, `
+		UPDATE projects
+		SET status = 'archived', updated_at = now()
+		WHERE id = $1 AND status <> 'archived'
+	`, projectID)
 	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to delete project")
+		Error(w, http.StatusInternalServerError, "failed to archive project")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		Error(w, http.StatusNotFound, "project not found")
+		Error(w, http.StatusNotFound, "project not found or already archived")
 		return
 	}
-	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	_, _ = appState.DB.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
+		VALUES ($1, $2, 'archive', 'project', $2)
+	`, userID, projectID)
+	JSON(w, http.StatusOK, map[string]string{"status": "archived"})
 }
