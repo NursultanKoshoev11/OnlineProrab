@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -60,6 +61,7 @@ func Projects(w http.ResponseWriter, r *http.Request) {
 
 func listProjects(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r.Context())
+	includeArchived, _ := strconv.ParseBool(r.URL.Query().Get("include_archived"))
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 
@@ -68,8 +70,10 @@ func listProjects(w http.ResponseWriter, r *http.Request) {
 		FROM projects p
 		JOIN project_members pm ON pm.project_id = p.id
 		WHERE pm.user_id = $1
+		  AND p.deleted_at IS NULL
+		  AND ($2 OR p.status = 'active')
 		ORDER BY p.created_at DESC
-	`, userID)
+	`, userID, includeArchived)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to load projects")
 		return
@@ -105,7 +109,7 @@ func getProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	err := appState.DB.Pool.QueryRow(ctx, `
 		SELECT id::text, name, COALESCE(address, ''), status, created_at::text
 		FROM projects
-		WHERE id = $1
+		WHERE id = $1 AND deleted_at IS NULL
 	`, projectID).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "project not found")
@@ -204,7 +208,7 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	err := appState.DB.Pool.QueryRow(ctx, `
 		UPDATE projects
 		SET name = $2, address = NULLIF($3, ''), status = $4, updated_at = now()
-		WHERE id = $1
+		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id::text, name, COALESCE(address, ''), status, created_at::text
 	`, projectID, req.Name, req.Address, req.Status).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CreatedAt)
 	if err != nil {
@@ -232,7 +236,7 @@ func deleteProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	result, err := appState.DB.Pool.Exec(ctx, `
 		UPDATE projects
 		SET status = 'archived', updated_at = now()
-		WHERE id = $1 AND status <> 'archived'
+		WHERE id = $1 AND deleted_at IS NULL AND status <> 'archived'
 	`, projectID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to archive project")
