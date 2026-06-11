@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -96,6 +97,10 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to read cost items")
+		return
+	}
 	JSON(w, http.StatusOK, items)
 }
 
@@ -137,8 +142,8 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	if !canAccessProject(ctx, userID, req.ProjectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !canContributeToProject(ctx, userID, req.ProjectID) {
+		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
 	}
 
@@ -177,8 +182,8 @@ func updateCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	projectID, ok := costItemProjectID(ctx, costItemID)
-	if !ok || !canAccessProject(ctx, userID, projectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !ok || !canContributeToProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
 	}
 
@@ -207,8 +212,8 @@ func deleteCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	projectID, ok := costItemProjectID(ctx, costItemID)
-	if !ok || !canAccessProject(ctx, userID, projectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !ok || !canManageProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project management permission required")
 		return
 	}
 
@@ -221,18 +226,15 @@ func deleteCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 		Error(w, http.StatusNotFound, "cost item not found")
 		return
 	}
+	_, _ = appState.DB.Pool.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
+		VALUES ($1, $2, 'delete', 'cost_item', $3)
+	`, userID, projectID, costItemID)
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func canAccessProject(ctx context.Context, userID, projectID string) bool {
-	var exists bool
-	err := appState.DB.Pool.QueryRow(ctx, `
-		SELECT EXISTS (
-			SELECT 1 FROM project_members
-			WHERE user_id = $1 AND project_id = $2
-		)
-	`, userID, projectID).Scan(&exists)
-	return err == nil && exists
+	return hasProjectPermission(ctx, userID, projectID, PermissionRead)
 }
 
 func costItemProjectID(ctx context.Context, costItemID string) (string, bool) {
@@ -242,6 +244,12 @@ func costItemProjectID(ctx context.Context, costItemID string) (string, bool) {
 }
 
 func normalizeCostItemRequest(req *createCostItemRequest) {
+	req.ProjectID = strings.TrimSpace(req.ProjectID)
+	req.Title = strings.TrimSpace(req.Title)
+	req.Category = strings.TrimSpace(req.Category)
+	req.Currency = strings.ToUpper(strings.TrimSpace(req.Currency))
+	req.Vendor = strings.TrimSpace(req.Vendor)
+	req.SpentAt = strings.TrimSpace(req.SpentAt)
 	if req.Category == "" {
 		req.Category = "other"
 	}
