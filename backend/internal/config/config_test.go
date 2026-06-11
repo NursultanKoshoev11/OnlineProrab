@@ -37,6 +37,24 @@ func TestValidateRejectsLocalhostCORSInProduction(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsTooShortProductionAccessTokenTTL(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.AccessTokenTTL = 4 * time.Minute
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected short production access token TTL to be rejected")
+	}
+}
+
+func TestValidateRejectsTooLongProductionAccessTokenTTL(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.AccessTokenTTL = 61 * time.Minute
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected long production access token TTL to be rejected")
+	}
+}
+
 func TestValidateAcceptsSafeProductionConfig(t *testing.T) {
 	cfg := validProductionConfig()
 
@@ -61,7 +79,7 @@ func validProductionConfig() Config {
 		HTTPAddr:           ":8080",
 		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app",
 		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
-		AccessTokenTTL:     time.Hour,
+		AccessTokenTTL:     15 * time.Minute,
 		CORSAllowedOrigins: []string{"https://app.example.com"},
 		UploadDir:          "/var/lib/onlineprorab/uploads",
 		MaxUploadBytes:     10 * 1024 * 1024,
