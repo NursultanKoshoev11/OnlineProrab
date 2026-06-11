@@ -6,6 +6,10 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	api := "/api/v1"
 	mux.HandleFunc(api+"/projects", requireAuth(Projects))
 	mux.HandleFunc(api+"/projects/", requireAuth(Projects))
+	mux.HandleFunc(api+"/project-members", requireAuth(ProjectMembers))
+	mux.HandleFunc(api+"/project-members/", requireAuth(ProjectMember))
+	mux.HandleFunc(api+"/project-invites", requireAuth(CreateProjectInvite))
+	mux.HandleFunc(api+"/project-invites/accept", requireAuth(AcceptProjectInvite))
 	mux.HandleFunc(api+"/cost-items", requireAuth(CostItems))
 	mux.HandleFunc(api+"/cost-items/", requireAuth(CostItems))
 	mux.HandleFunc(api+"/daily-reports", requireAuth(withProjectMutationRBAC(DailyReports, "", nil)))
