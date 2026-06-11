@@ -5,16 +5,24 @@ class AuthRepository {
   AuthRepository({required ApiClient apiClient, required SessionStore sessionStore})
       : _apiClient = apiClient,
         _sessionStore = sessionStore {
-    _apiClient.setUnauthorizedHandler(_clearExpiredSession);
+    _apiClient.setSessionHandlers(
+      onTokensUpdated: _saveRotatedTokens,
+      onSessionExpired: _clearLocalSession,
+    );
   }
 
   final ApiClient _apiClient;
   final SessionStore _sessionStore;
+  SessionData? _currentSession;
 
   Future<SessionData?> loadSession() async {
     final session = await _sessionStore.load();
+    _currentSession = session;
     if (session != null) {
-      _apiClient.setAccessToken(session.accessToken);
+      _apiClient.setTokens(
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      );
     }
     return session;
   }
@@ -29,18 +37,44 @@ class AuthRepository {
     if (accessToken.isEmpty) {
       throw const AuthException('Backend did not return an access token');
     }
-    final session = SessionData(phone: phone, accessToken: accessToken);
-    await _sessionStore.save(session);
+
     _apiClient.setAccessToken(accessToken);
+    final refreshToken = await _apiClient.createRefreshSession();
+    final session = SessionData(
+      phone: phone,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
+    _currentSession = session;
+    await _sessionStore.save(session);
     return session;
   }
 
   Future<void> signOut() async {
-    await _clearExpiredSession();
+    await _apiClient.logoutSession();
+    await _clearLocalSession();
   }
 
-  Future<void> _clearExpiredSession() async {
-    _apiClient.setAccessToken(null);
+  Future<void> _saveRotatedTokens(
+    String accessToken,
+    String refreshToken,
+  ) async {
+    final current = _currentSession;
+    if (current == null) {
+      await _clearLocalSession();
+      return;
+    }
+    final updated = current.copyWith(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
+    _currentSession = updated;
+    await _sessionStore.save(updated);
+  }
+
+  Future<void> _clearLocalSession() async {
+    _currentSession = null;
+    _apiClient.setTokens(accessToken: null, refreshToken: null);
     await _sessionStore.clear();
   }
 }
