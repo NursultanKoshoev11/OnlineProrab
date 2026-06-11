@@ -45,13 +45,21 @@ def configure_main_manifest() -> None:
         raise RuntimeError("Android main manifest was not generated")
 
     text = manifest.read_text(encoding="utf-8")
+    manifest_tag = "<manifest"
+    manifest_index = text.find(manifest_tag)
+    if manifest_index < 0:
+        raise RuntimeError("Android manifest root tag is invalid")
+    manifest_close = text.find(">", manifest_index)
+    if manifest_close < 0:
+        raise RuntimeError("Android manifest root tag is not closed")
+
     permission = '<uses-permission android:name="android.permission.INTERNET" />'
     if permission not in text:
-        marker = ">"
-        marker_index = text.find(marker)
-        if marker_index < 0:
-            raise RuntimeError("Android manifest root tag is invalid")
-        text = text[: marker_index + 1] + f"\n    {permission}" + text[marker_index + 1 :]
+        text = (
+            text[: manifest_close + 1]
+            + f"\n    {permission}"
+            + text[manifest_close + 1 :]
+        )
 
     application_tag = "<application"
     if application_tag not in text:
