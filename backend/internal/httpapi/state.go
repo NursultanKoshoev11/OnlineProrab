@@ -9,7 +9,7 @@ import (
 
 var appState = State{
 	JWTSecret:      "dev-only-change-me",
-	AccessTokenTTL: time.Hour,
+	AccessTokenTTL: 15 * time.Minute,
 }
 
 type State struct {
@@ -18,6 +18,7 @@ type State struct {
 	AccessTokenTTL time.Duration
 	UploadDir      string
 	MaxUploadBytes int64
+	IsProduction   bool
 }
 
 func SetState(cfg config.Config, db *database.DB) {
@@ -27,11 +28,12 @@ func SetState(cfg config.Config, db *database.DB) {
 		AccessTokenTTL: cfg.AccessTokenTTL,
 		UploadDir:      cfg.UploadDir,
 		MaxUploadBytes: cfg.MaxUploadBytes,
+		IsProduction:   cfg.IsProduction(),
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"
 	}
 	if appState.AccessTokenTTL <= 0 {
-		appState.AccessTokenTTL = time.Hour
+		appState.AccessTokenTTL = 15 * time.Minute
 	}
 }
