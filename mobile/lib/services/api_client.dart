@@ -12,9 +12,14 @@ class ApiClient {
   final http.Client _httpClient;
   final Duration _timeout;
   String? accessToken;
+  Future<void> Function()? _onUnauthorized;
 
   void setAccessToken(String? token) {
     accessToken = token;
+  }
+
+  void setUnauthorizedHandler(Future<void> Function()? handler) {
+    _onUnauthorized = handler;
   }
 
   Future<Map<String, dynamic>> requestSMSCode(String phone) async {
@@ -229,6 +234,13 @@ class ApiClient {
     }
 
     if (response.statusCode >= 400) {
+      if (response.statusCode == 401) {
+        accessToken = null;
+        final handler = _onUnauthorized;
+        if (handler != null) {
+          unawaited(handler());
+        }
+      }
       final message = data is Map<String, dynamic> ? data['error']?.toString() : null;
       throw ApiException(response.statusCode, message ?? 'Request failed');
     }
