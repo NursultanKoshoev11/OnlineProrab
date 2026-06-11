@@ -15,6 +15,8 @@ const (
 	verifyAttemptWindow      = 15 * time.Minute
 	maxVerifyAttemptsPhone  = 10
 	maxVerifyAttemptsRemote = 30
+	authAttemptRetention    = 7 * 24 * time.Hour
+	smsCodeRetention        = 24 * time.Hour
 )
 
 func withSMSVerifyRateLimit(next http.HandlerFunc) http.HandlerFunc {
@@ -45,6 +47,15 @@ func withSMSVerifyRateLimit(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
+
+		_, _ = appState.DB.Pool.Exec(ctx, `
+			DELETE FROM auth_attempts
+			WHERE created_at < now() - make_interval(secs => $1)
+		`, int(authAttemptRetention.Seconds()))
+		_, _ = appState.DB.Pool.Exec(ctx, `
+			DELETE FROM sms_login_codes
+			WHERE created_at < now() - make_interval(secs => $1)
+		`, int(smsCodeRetention.Seconds()))
 
 		var phoneFailures int
 		var remoteFailures int
@@ -77,7 +88,9 @@ func withSMSVerifyRateLimit(next http.HandlerFunc) http.HandlerFunc {
 		recorder := &authStatusRecorder{ResponseWriter: w}
 		next(recorder, r)
 		succeeded := recorder.status >= 200 && recorder.status < 300
-		_, _ = appState.DB.Pool.Exec(context.Background(), `
+		writeCtx, writeCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer writeCancel()
+		_, _ = appState.DB.Pool.Exec(writeCtx, `
 			INSERT INTO auth_attempts (phone, remote_key, action, succeeded)
 			VALUES (NULLIF($1, ''), $2, 'sms_verify', $3)
 		`, phone, remoteKey, succeeded)
@@ -105,12 +118,6 @@ func (w *authStatusRecorder) Write(body []byte) (int, error) {
 }
 
 func requestRemoteKey(r *http.Request) string {
-	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
-		first, _, _ := strings.Cut(forwarded, ",")
-		if value := strings.TrimSpace(first); value != "" {
-			return value
-		}
-	}
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
 	if err == nil && host != "" {
 		return host
