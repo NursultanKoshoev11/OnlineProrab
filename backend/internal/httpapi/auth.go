@@ -75,7 +75,6 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The code is returned only in non-production/dev foundation mode until an SMS provider is connected.
 	response := map[string]any{"status": "code_requested", "expires_in": 300}
 	if appState.JWTSecret == "dev-only-change-me" {
 		response["dev_code"] = code
@@ -188,12 +187,16 @@ func signAccessToken(userID string) (string, error) {
 }
 
 func parseAccessToken(rawToken string) (string, error) {
-	token, err := jwt.Parse(rawToken, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
-		return []byte(appState.JWTSecret), nil
-	})
+	token, err := jwt.Parse(
+		rawToken,
+		func(token *jwt.Token) (any, error) {
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return []byte(appState.JWTSecret), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
 	if err != nil || !token.Valid {
 		return "", fmt.Errorf("invalid token")
 	}
