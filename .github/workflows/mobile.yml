@@ -38,8 +38,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Format sources for verification build
-        run: dart format lib test
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         run: flutter analyze
@@ -49,3 +49,6 @@ jobs:
 
       - name: Build debug APK
         run: flutter build apk --debug --dart-define=API_BASE_URL=http://127.0.0.1:8080
+
+      - name: Build release APK
+        run: flutter build apk --release --dart-define=API_BASE_URL=https://api.example.invalid
