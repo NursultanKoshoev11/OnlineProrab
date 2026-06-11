@@ -5,8 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:online_prorab/services/api_config.dart';
 
 class ApiClient {
-  ApiClient({http.Client? httpClient, Duration timeout = const Duration(seconds: 15)})
-      : _httpClient = httpClient ?? http.Client(),
+  ApiClient({
+    http.Client? httpClient,
+    Duration timeout = const Duration(seconds: 15),
+  })  : _httpClient = httpClient ?? http.Client(),
         _timeout = timeout;
 
   final http.Client _httpClient;
@@ -226,6 +228,43 @@ class ApiClient {
         'content_type': contentType,
         'size_bytes': sizeBytes,
       });
+
+  Future<Map<String, dynamic>> uploadProjectFile({
+    required String projectId,
+    required String kind,
+    required String filePath,
+    required String fileName,
+  }) async {
+    Future<http.Response> sendUpload() async {
+      final request = http.MultipartRequest(
+        'POST',
+        ApiConfig.endpoint('/api/v1/files/upload'),
+      );
+      request.headers['Accept'] = 'application/json';
+      final token = accessToken;
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.fields['project_id'] = projectId;
+      request.fields['kind'] = kind;
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file',
+          filePath,
+          filename: fileName,
+        ),
+      );
+      final streamed = await _httpClient.send(request).timeout(_timeout);
+      return http.Response.fromStream(streamed);
+    }
+
+    final response = await _send(sendUpload);
+    return _decodeObject(response);
+  }
+
+  Future<void> deleteFile(String fileId) async {
+    await deleteJson('/api/v1/files/$fileId');
+  }
 
   Future<List<dynamic>> listAuditLogs(String projectId) async => _asList(
         await getJson('/api/v1/audit-logs', {'project_id': projectId}),
