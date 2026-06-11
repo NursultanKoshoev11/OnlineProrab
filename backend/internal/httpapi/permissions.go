@@ -27,12 +27,19 @@ func canManageProject(ctx context.Context, userID, projectID string) bool {
 
 func hasProjectPermission(ctx context.Context, userID, projectID string, required ProjectPermission) bool {
 	var role string
+	var status string
 	err := appState.DB.Pool.QueryRow(ctx, `
-		SELECT role
-		FROM project_members
-		WHERE user_id = $1 AND project_id = $2
-	`, userID, projectID).Scan(&role)
+		SELECT pm.role, p.status
+		FROM project_members pm
+		JOIN projects p ON p.id = pm.project_id
+		WHERE pm.user_id = $1
+		  AND pm.project_id = $2
+		  AND p.deleted_at IS NULL
+	`, userID, projectID).Scan(&role, &status)
 	if err != nil {
+		return false
+	}
+	if required != PermissionRead && status != "active" {
 		return false
 	}
 	return roleAllows(role, required)
