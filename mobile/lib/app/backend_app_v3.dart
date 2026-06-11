@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:online_prorab/app/backend_project_dashboard_v2.dart';
+import 'package:online_prorab/app/backend_project_dashboard_v3.dart';
 import 'package:online_prorab/features/projects/project_data_repositories.dart';
 import 'package:online_prorab/features/projects/project_repository.dart';
 import 'package:online_prorab/services/api_client.dart';
@@ -11,39 +11,40 @@ class BackendOnlineProrabAppV3 extends StatefulWidget {
   const BackendOnlineProrabAppV3({super.key});
 
   @override
-  State<BackendOnlineProrabAppV3> createState() => _BackendOnlineProrabAppV3State();
+  State<BackendOnlineProrabAppV3> createState() =>
+      _BackendOnlineProrabAppV3State();
 }
 
 class _BackendOnlineProrabAppV3State extends State<BackendOnlineProrabAppV3> {
-  late final ApiClient apiClient;
-  late final AuthRepository authRepository;
-  late final ProjectRepository projectRepository;
-  late final CostItemRepository costItemRepository;
-  late final DailyReportRepository dailyReportRepository;
-  late final TaskRepository taskRepository;
-  late final ProjectFileRepository fileRepository;
-  late final ProjectFileDownloadService fileDownloadService;
+  late final ApiClient _apiClient;
+  late final AuthRepository _authRepository;
+  late final ProjectRepository _projectRepository;
+  late final CostItemRepository _costItemRepository;
+  late final DailyReportRepository _dailyReportRepository;
+  late final TaskRepository _taskRepository;
+  late final ProjectFileRepository _fileRepository;
+  late final ProjectFileDownloadService _fileDownloadService;
 
   @override
   void initState() {
     super.initState();
-    apiClient = ApiClient();
-    authRepository = AuthRepository(
-      apiClient: apiClient,
+    _apiClient = ApiClient();
+    _authRepository = AuthRepository(
+      apiClient: _apiClient,
       sessionStore: SessionStore(),
     );
-    projectRepository = ProjectRepository(apiClient: apiClient);
-    costItemRepository = CostItemRepository(apiClient: apiClient);
-    dailyReportRepository = DailyReportRepository(apiClient: apiClient);
-    taskRepository = TaskRepository(apiClient: apiClient);
-    fileRepository = ProjectFileRepository(apiClient: apiClient);
-    fileDownloadService = ProjectFileDownloadService(apiClient: apiClient);
+    _projectRepository = ProjectRepository(apiClient: _apiClient);
+    _costItemRepository = CostItemRepository(apiClient: _apiClient);
+    _dailyReportRepository = DailyReportRepository(apiClient: _apiClient);
+    _taskRepository = TaskRepository(apiClient: _apiClient);
+    _fileRepository = ProjectFileRepository(apiClient: _apiClient);
+    _fileDownloadService = ProjectFileDownloadService(apiClient: _apiClient);
   }
 
   @override
   void dispose() {
-    fileDownloadService.close();
-    apiClient.close();
+    _fileDownloadService.close();
+    _apiClient.close();
     super.dispose();
   }
 
@@ -56,21 +57,21 @@ class _BackendOnlineProrabAppV3State extends State<BackendOnlineProrabAppV3> {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
       ),
-      home: BackendAuthGateV3(
-        authRepository: authRepository,
-        projectRepository: projectRepository,
-        costItemRepository: costItemRepository,
-        dailyReportRepository: dailyReportRepository,
-        taskRepository: taskRepository,
-        fileRepository: fileRepository,
-        fileDownloadService: fileDownloadService,
+      home: _AuthGate(
+        authRepository: _authRepository,
+        projectRepository: _projectRepository,
+        costItemRepository: _costItemRepository,
+        dailyReportRepository: _dailyReportRepository,
+        taskRepository: _taskRepository,
+        fileRepository: _fileRepository,
+        fileDownloadService: _fileDownloadService,
       ),
     );
   }
 }
 
-class BackendAuthGateV3 extends StatefulWidget {
-  const BackendAuthGateV3({
+class _AppDependencies {
+  const _AppDependencies({
     required this.authRepository,
     required this.projectRepository,
     required this.costItemRepository,
@@ -78,7 +79,26 @@ class BackendAuthGateV3 extends StatefulWidget {
     required this.taskRepository,
     required this.fileRepository,
     required this.fileDownloadService,
-    super.key,
+  });
+
+  final AuthRepository authRepository;
+  final ProjectRepository projectRepository;
+  final CostItemRepository costItemRepository;
+  final DailyReportRepository dailyReportRepository;
+  final TaskRepository taskRepository;
+  final ProjectFileRepository fileRepository;
+  final ProjectFileDownloadService fileDownloadService;
+}
+
+class _AuthGate extends StatefulWidget {
+  const _AuthGate({
+    required this.authRepository,
+    required this.projectRepository,
+    required this.costItemRepository,
+    required this.dailyReportRepository,
+    required this.taskRepository,
+    required this.fileRepository,
+    required this.fileDownloadService,
   });
 
   final AuthRepository authRepository;
@@ -90,22 +110,32 @@ class BackendAuthGateV3 extends StatefulWidget {
   final ProjectFileDownloadService fileDownloadService;
 
   @override
-  State<BackendAuthGateV3> createState() => _BackendAuthGateV3State();
+  State<_AuthGate> createState() => _AuthGateState();
 }
 
-class _BackendAuthGateV3State extends State<BackendAuthGateV3> {
-  late final Future<SessionData?> sessionFuture;
+class _AuthGateState extends State<_AuthGate> {
+  late final Future<SessionData?> _sessionFuture;
+
+  _AppDependencies get _dependencies => _AppDependencies(
+        authRepository: widget.authRepository,
+        projectRepository: widget.projectRepository,
+        costItemRepository: widget.costItemRepository,
+        dailyReportRepository: widget.dailyReportRepository,
+        taskRepository: widget.taskRepository,
+        fileRepository: widget.fileRepository,
+        fileDownloadService: widget.fileDownloadService,
+      );
 
   @override
   void initState() {
     super.initState();
-    sessionFuture = widget.authRepository.loadSession();
+    _sessionFuture = widget.authRepository.loadSession();
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<SessionData?>(
-      future: sessionFuture,
+      future: _sessionFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
@@ -113,54 +143,38 @@ class _BackendAuthGateV3State extends State<BackendAuthGateV3> {
           );
         }
         final session = snapshot.data;
-        if (session != null) return _projectsScreen(session);
-        return BackendLoginScreenV3(
-          onSignedIn: _projectsScreen,
-          authRepository: widget.authRepository,
-        );
+        if (session != null) {
+          return _ProjectsScreen(
+            session: session,
+            dependencies: _dependencies,
+          );
+        }
+        return _LoginScreen(dependencies: _dependencies);
       },
     );
   }
-
-  Widget _projectsScreen(SessionData session) {
-    return BackendProjectsScreenV3(
-      session: session,
-      authRepository: widget.authRepository,
-      projectRepository: widget.projectRepository,
-      costItemRepository: widget.costItemRepository,
-      dailyReportRepository: widget.dailyReportRepository,
-      taskRepository: widget.taskRepository,
-      fileRepository: widget.fileRepository,
-      fileDownloadService: widget.fileDownloadService,
-    );
-  }
 }
 
-class BackendLoginScreenV3 extends StatefulWidget {
-  const BackendLoginScreenV3({
-    required this.onSignedIn,
-    required this.authRepository,
-    super.key,
-  });
+class _LoginScreen extends StatefulWidget {
+  const _LoginScreen({required this.dependencies});
 
-  final Widget Function(SessionData session) onSignedIn;
-  final AuthRepository authRepository;
+  final _AppDependencies dependencies;
 
   @override
-  State<BackendLoginScreenV3> createState() => _BackendLoginScreenV3State();
+  State<_LoginScreen> createState() => _LoginScreenState();
 }
 
-class _BackendLoginScreenV3State extends State<BackendLoginScreenV3> {
-  final phoneController = TextEditingController(text: '+996');
-  final codeController = TextEditingController();
-  bool codeRequested = false;
-  bool busy = false;
-  String? error;
+class _LoginScreenState extends State<_LoginScreen> {
+  final _phoneController = TextEditingController(text: '+996');
+  final _codeController = TextEditingController();
+  bool _codeRequested = false;
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
-    phoneController.dispose();
-    codeController.dispose();
+    _phoneController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
@@ -168,134 +182,137 @@ class _BackendLoginScreenV3State extends State<BackendLoginScreenV3> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Online Prorab')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const Text(
-            'Construction control from your phone',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Sign in to sync projects, reports, tasks and files with backend.',
-          ),
-          const SizedBox(height: 24),
-          TextField(
-            controller: phoneController,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Phone number',
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (codeRequested)
-            TextField(
-              controller: codeController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'SMS code',
-              ),
-            ),
-          if (codeRequested) const SizedBox(height: 12),
-          if (error != null) ...[
-            Text(
-              error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const Text(
+              'Construction control from your phone',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
+            const Text(
+              'Sign in to sync projects, reports, tasks and files.',
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _phoneController,
+              enabled: !_busy,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Phone number',
+              ),
+            ),
+            if (_codeRequested) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _codeController,
+                enabled: !_busy,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'SMS code',
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _busy ? null : _submit,
+              child: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      _codeRequested ? 'Verify and continue' : 'Request code',
+                    ),
+            ),
           ],
-          FilledButton(
-            onPressed: busy ? null : _submit,
-            child: busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(codeRequested ? 'Verify and continue' : 'Request code'),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Future<void> _submit() async {
-    final phone = phoneController.text.trim();
+    final phone = _phoneController.text.trim();
     if (phone.length < 9) {
-      setState(() => error = 'Enter a valid phone number');
+      setState(() => _error = 'Enter a valid phone number');
       return;
     }
+
     setState(() {
-      busy = true;
-      error = null;
+      _busy = true;
+      _error = null;
     });
     try {
-      if (!codeRequested) {
-        await widget.authRepository.requestCode(phone);
-        setState(() => codeRequested = true);
+      if (!_codeRequested) {
+        await widget.dependencies.authRepository.requestCode(phone);
+        if (!mounted) return;
+        setState(() => _codeRequested = true);
         _showMessage(context, 'SMS code requested');
         return;
       }
-      final code = codeController.text.trim();
+
+      final code = _codeController.text.trim();
       if (code.length != 6) {
-        setState(() => error = 'Enter 6-digit SMS code');
+        setState(() => _error = 'Enter 6-digit SMS code');
         return;
       }
-      final session = await widget.authRepository.verifyCode(phone, code);
+
+      final session =
+          await widget.dependencies.authRepository.verifyCode(phone, code);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => widget.onSignedIn(session)),
+        MaterialPageRoute(
+          builder: (_) => _ProjectsScreen(
+            session: session,
+            dependencies: widget.dependencies,
+          ),
+        ),
       );
-    } catch (submitError) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => error = _friendlyError(submitError));
+      setState(() => _error = _friendlyError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 }
 
-class BackendProjectsScreenV3 extends StatefulWidget {
-  const BackendProjectsScreenV3({
+class _ProjectsScreen extends StatefulWidget {
+  const _ProjectsScreen({
     required this.session,
-    required this.authRepository,
-    required this.projectRepository,
-    required this.costItemRepository,
-    required this.dailyReportRepository,
-    required this.taskRepository,
-    required this.fileRepository,
-    required this.fileDownloadService,
-    super.key,
+    required this.dependencies,
   });
 
   final SessionData session;
-  final AuthRepository authRepository;
-  final ProjectRepository projectRepository;
-  final CostItemRepository costItemRepository;
-  final DailyReportRepository dailyReportRepository;
-  final TaskRepository taskRepository;
-  final ProjectFileRepository fileRepository;
-  final ProjectFileDownloadService fileDownloadService;
+  final _AppDependencies dependencies;
 
   @override
-  State<BackendProjectsScreenV3> createState() =>
-      _BackendProjectsScreenV3State();
+  State<_ProjectsScreen> createState() => _ProjectsScreenState();
 }
 
-class _BackendProjectsScreenV3State extends State<BackendProjectsScreenV3> {
-  late Future<List<RemoteProject>> projectsFuture;
+class _ProjectsScreenState extends State<_ProjectsScreen> {
+  late Future<List<RemoteProject>> _projectsFuture;
 
   @override
   void initState() {
     super.initState();
-    projectsFuture = widget.projectRepository.listProjects();
+    _projectsFuture = widget.dependencies.projectRepository.listProjects();
   }
 
   Future<void> _refresh() async {
-    final future = widget.projectRepository.listProjects();
-    setState(() => projectsFuture = future);
+    final future = widget.dependencies.projectRepository.listProjects();
+    setState(() => _projectsFuture = future);
     await future;
   }
 
@@ -305,6 +322,14 @@ class _BackendProjectsScreenV3State extends State<BackendProjectsScreenV3> {
       appBar: AppBar(
         title: const Text('Projects'),
         actions: [
+          IconButton(
+            tooltip: 'Account',
+            onPressed: () => _showMessage(
+              context,
+              'Signed in as ${widget.session.phone}',
+            ),
+            icon: const Icon(Icons.account_circle),
+          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: _refresh,
@@ -318,20 +343,20 @@ class _BackendProjectsScreenV3State extends State<BackendProjectsScreenV3> {
         ],
       ),
       body: FutureBuilder<List<RemoteProject>>(
-        future: projectsFuture,
+        future: _projectsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return ErrorStateV3(
+            return _ErrorState(
               message: _friendlyError(snapshot.error),
               onRetry: _refresh,
             );
           }
           final projects = snapshot.data ?? const <RemoteProject>[];
           if (projects.isEmpty) {
-            return const EmptyStateV3(
+            return const _EmptyState(
               icon: Icons.home_work_outlined,
               title: 'No projects yet',
               message: 'Create your first project to start tracking work.',
@@ -375,13 +400,13 @@ class _BackendProjectsScreenV3State extends State<BackendProjectsScreenV3> {
   void _openProject(RemoteProject project) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => BackendProjectDashboardScreenV2(
+        builder: (_) => BackendProjectDashboardScreenV3(
           project: project,
-          costItemRepository: widget.costItemRepository,
-          dailyReportRepository: widget.dailyReportRepository,
-          taskRepository: widget.taskRepository,
-          fileRepository: widget.fileRepository,
-          fileDownloadService: widget.fileDownloadService,
+          costItemRepository: widget.dependencies.costItemRepository,
+          dailyReportRepository: widget.dependencies.dailyReportRepository,
+          taskRepository: widget.dependencies.taskRepository,
+          fileRepository: widget.dependencies.fileRepository,
+          fileDownloadService: widget.dependencies.fileDownloadService,
         ),
       ),
     );
@@ -390,8 +415,8 @@ class _BackendProjectsScreenV3State extends State<BackendProjectsScreenV3> {
   Future<void> _createProject() async {
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => BackendProjectFormScreenV3(
-          projectRepository: widget.projectRepository,
+        builder: (_) => _ProjectFormScreen(
+          repository: widget.dependencies.projectRepository,
         ),
       ),
     );
@@ -399,53 +424,36 @@ class _BackendProjectsScreenV3State extends State<BackendProjectsScreenV3> {
   }
 
   Future<void> _signOut() async {
-    await widget.authRepository.signOut();
+    await widget.dependencies.authRepository.signOut();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => BackendLoginScreenV3(
-          authRepository: widget.authRepository,
-          onSignedIn: (session) => BackendProjectsScreenV3(
-            session: session,
-            authRepository: widget.authRepository,
-            projectRepository: widget.projectRepository,
-            costItemRepository: widget.costItemRepository,
-            dailyReportRepository: widget.dailyReportRepository,
-            taskRepository: widget.taskRepository,
-            fileRepository: widget.fileRepository,
-            fileDownloadService: widget.fileDownloadService,
-          ),
-        ),
+        builder: (_) => _LoginScreen(dependencies: widget.dependencies),
       ),
       (_) => false,
     );
   }
 }
 
-class BackendProjectFormScreenV3 extends StatefulWidget {
-  const BackendProjectFormScreenV3({
-    required this.projectRepository,
-    super.key,
-  });
+class _ProjectFormScreen extends StatefulWidget {
+  const _ProjectFormScreen({required this.repository});
 
-  final ProjectRepository projectRepository;
+  final ProjectRepository repository;
 
   @override
-  State<BackendProjectFormScreenV3> createState() =>
-      _BackendProjectFormScreenV3State();
+  State<_ProjectFormScreen> createState() => _ProjectFormScreenState();
 }
 
-class _BackendProjectFormScreenV3State
-    extends State<BackendProjectFormScreenV3> {
-  final nameController = TextEditingController();
-  final addressController = TextEditingController();
-  bool busy = false;
-  String? error;
+class _ProjectFormScreenState extends State<_ProjectFormScreen> {
+  final _nameController = TextEditingController();
+  final _addressController = TextEditingController();
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
-    nameController.dispose();
-    addressController.dispose();
+    _nameController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -457,7 +465,8 @@ class _BackendProjectFormScreenV3State
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
-            controller: nameController,
+            controller: _nameController,
+            enabled: !_busy,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               labelText: 'Project name',
@@ -465,23 +474,24 @@ class _BackendProjectFormScreenV3State
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: addressController,
+            controller: _addressController,
+            enabled: !_busy,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               labelText: 'Address',
             ),
           ),
-          const SizedBox(height: 16),
-          if (error != null) ...[
+          if (_error != null) ...[
+            const SizedBox(height: 12),
             Text(
-              error!,
+              _error!,
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
-            const SizedBox(height: 12),
           ],
+          const SizedBox(height: 16),
           FilledButton(
-            onPressed: busy ? null : _save,
-            child: busy
+            onPressed: _busy ? null : _save,
+            child: _busy
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -495,36 +505,33 @@ class _BackendProjectFormScreenV3State
   }
 
   Future<void> _save() async {
-    final name = nameController.text.trim();
+    final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => error = 'Project name is required');
+      setState(() => _error = 'Project name is required');
       return;
     }
+
     setState(() {
-      busy = true;
-      error = null;
+      _busy = true;
+      _error = null;
     });
     try {
-      await widget.projectRepository.createProject(
+      await widget.repository.createProject(
         name: name,
-        address: addressController.text.trim(),
+        address: _addressController.text.trim(),
       );
       if (mounted) Navigator.of(context).pop(true);
-    } catch (saveError) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => error = _friendlyError(saveError));
+      setState(() => _error = _friendlyError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 }
 
-class ErrorStateV3 extends StatelessWidget {
-  const ErrorStateV3({
-    required this.message,
-    required this.onRetry,
-    super.key,
-  });
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -558,12 +565,11 @@ class ErrorStateV3 extends StatelessWidget {
   }
 }
 
-class EmptyStateV3 extends StatelessWidget {
-  const EmptyStateV3({
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
     required this.icon,
     required this.title,
     required this.message,
-    super.key,
   });
 
   final IconData icon;
