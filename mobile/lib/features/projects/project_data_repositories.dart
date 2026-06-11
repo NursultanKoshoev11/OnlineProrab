@@ -154,6 +154,23 @@ class ProjectFileRepository {
     return items.whereType<Map<String, dynamic>>().map(RemoteProjectFile.fromJson).where((item) => item.id.isNotEmpty).toList();
   }
 
+  Future<RemoteProjectFile> upload({
+    required String projectId,
+    required String kind,
+    required String filePath,
+    required String fileName,
+  }) async {
+    final data = await _apiClient.uploadProjectFile(
+      projectId: projectId,
+      kind: kind,
+      filePath: filePath,
+      fileName: fileName,
+    );
+    return RemoteProjectFile.fromJson(data);
+  }
+
+  Future<void> delete(String fileId) => _apiClient.deleteFile(fileId);
+
   Future<RemoteProjectFile> createMetadata({
     required String projectId,
     required String kind,
