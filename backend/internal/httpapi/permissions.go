@@ -17,10 +17,6 @@ const (
 	PermissionManage
 )
 
-func canAccessProject(ctx context.Context, userID, projectID string) bool {
-	return hasProjectPermission(ctx, userID, projectID, PermissionRead)
-}
-
 func canContributeToProject(ctx context.Context, userID, projectID string) bool {
 	return hasProjectPermission(ctx, userID, projectID, PermissionContribute)
 }
