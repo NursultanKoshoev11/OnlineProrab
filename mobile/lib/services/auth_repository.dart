@@ -4,7 +4,9 @@ import 'package:online_prorab/services/session_store.dart';
 class AuthRepository {
   AuthRepository({required ApiClient apiClient, required SessionStore sessionStore})
       : _apiClient = apiClient,
-        _sessionStore = sessionStore;
+        _sessionStore = sessionStore {
+    _apiClient.setUnauthorizedHandler(_clearExpiredSession);
+  }
 
   final ApiClient _apiClient;
   final SessionStore _sessionStore;
@@ -34,6 +36,10 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    await _clearExpiredSession();
+  }
+
+  Future<void> _clearExpiredSession() async {
     _apiClient.setAccessToken(null);
     await _sessionStore.clear();
   }
