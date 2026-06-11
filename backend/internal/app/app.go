@@ -20,8 +20,13 @@ func Run() {
 	db := bootstrap.OpenDatabase(context.Background(), cfg)
 	defer db.Close()
 
-	if err := db.EnsureSchema(context.Background()); err != nil {
+	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer migrationCancel()
+	if err := db.EnsureSchema(migrationCtx); err != nil {
 		log.Fatalf("failed to ensure database schema: %v", err)
+	}
+	if err := db.EnsureSessionSchema(migrationCtx); err != nil {
+		log.Fatalf("failed to ensure refresh session schema: %v", err)
 	}
 
 	httpapi.SetState(cfg, db)
