@@ -12,7 +12,11 @@ import (
 	"time"
 )
 
-const refreshTokenTTL = 60 * 24 * time.Hour
+const (
+	refreshTokenTTL         = 60 * 24 * time.Hour
+	maxActiveUserSessions   = 10
+	refreshSessionRetention = 30 * 24 * time.Hour
+)
 
 type createSessionRequest struct {
 	DeviceName string `json:"device_name"`
@@ -56,14 +60,48 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	_, err = appState.DB.Pool.Exec(ctx, `
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to start session creation")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	_, _ = tx.Exec(ctx, `
+		DELETE FROM refresh_sessions
+		WHERE (expires_at < now() - $1::interval)
+		   OR (revoked_at IS NOT NULL AND revoked_at < now() - $1::interval)
+	`, refreshSessionRetention.String())
+
+	_, err = tx.Exec(ctx, `
+		WITH sessions_to_revoke AS (
+			SELECT id
+			FROM refresh_sessions
+			WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+			ORDER BY COALESCE(last_used_at, created_at) DESC
+			OFFSET $2
+		)
+		UPDATE refresh_sessions
+		SET revoked_at = now()
+		WHERE id IN (SELECT id FROM sessions_to_revoke)
+	`, userID, maxActiveUserSessions-1)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to enforce session limit")
+		return
+	}
+
+	_, err = tx.Exec(ctx, `
 		INSERT INTO refresh_sessions (user_id, token_hash, device_name, expires_at)
 		VALUES ($1, $2, NULLIF($3, ''), $4)
 	`, userID, hashRefreshToken(refreshToken), req.DeviceName, time.Now().UTC().Add(refreshTokenTTL))
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to save session")
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to commit session")
 		return
 	}
 
