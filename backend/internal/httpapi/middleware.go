@@ -21,7 +21,7 @@ func SetCORSAllowedOrigins(origins []string) {
 }
 
 func withMiddleware(next http.Handler) http.Handler {
-	return recoverer(requestLogger(requestID(securityHeaders(cors(limitBody(next))))))
+	return requestID(recoverer(requestLogger(securityHeaders(cors(limitBody(next))))))
 }
 
 func limitBody(next http.Handler) http.Handler {
