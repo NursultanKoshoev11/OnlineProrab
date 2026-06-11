@@ -14,7 +14,7 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/tasks", requireAuth(withProjectMutationRBAC(Tasks, "", nil)))
 	mux.HandleFunc(api+"/tasks/", requireAuth(withProjectMutationRBAC(Tasks, api+"/tasks/", taskProjectID)))
 	mux.HandleFunc(api+"/audit-logs", requireAuth(AuditLogs))
-	mux.HandleFunc(api+"/auth/sms/request", RequestSMSCode)
+	mux.HandleFunc(api+"/auth/sms/request", withSMSRequestRateLimit(RequestSMSCode))
 	mux.HandleFunc(api+"/auth/sms/verify", VerifySMSCode)
 	mux.HandleFunc(api+"/subscriptions/plans", ListPlans)
 	mux.HandleFunc(api+"/subscriptions/status", requireAuth(SubscriptionStatus))
