@@ -25,12 +25,6 @@ func Run() {
 	if err := db.ApplyMigrations(migrationCtx); err != nil {
 		log.Fatalf("failed to apply database migrations: %v", err)
 	}
-	if err := db.EnsureSessionSchema(migrationCtx); err != nil {
-		log.Fatalf("failed to apply refresh session migration: %v", err)
-	}
-	if err := db.EnsureTeamSchema(migrationCtx); err != nil {
-		log.Fatalf("failed to apply project team migration: %v", err)
-	}
 
 	httpapi.SetState(cfg, db)
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
