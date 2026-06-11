@@ -25,12 +25,17 @@ class MemorySecureStore implements SecureKeyValueStore {
 }
 
 void main() {
-  test('AuthRepository verifies code, saves session and sets API token', () async {
+  test('AuthRepository verifies code and creates refresh session', () async {
     final apiClient = ApiClient(
       httpClient: MockClient((request) async {
-        expect(request.method, 'POST');
-        expect(request.url.path, '/api/v1/auth/sms/verify');
-        return http.Response(jsonEncode({'access_token': 'token-123'}), 200);
+        if (request.url.path == '/api/v1/auth/sms/verify') {
+          return http.Response(jsonEncode({'access_token': 'token-123'}), 200);
+        }
+        if (request.url.path == '/api/v1/auth/session') {
+          expect(request.headers['Authorization'], 'Bearer token-123');
+          return http.Response(jsonEncode({'refresh_token': 'refresh-123'}), 201);
+        }
+        return http.Response(jsonEncode({'error': 'not found'}), 404);
       }),
     );
     final storage = MemorySecureStore();
@@ -41,55 +46,100 @@ void main() {
 
     expect(session.phone, '+996700000000');
     expect(session.accessToken, 'token-123');
+    expect(session.refreshToken, 'refresh-123');
     expect(apiClient.accessToken, 'token-123');
+    expect(apiClient.refreshToken, 'refresh-123');
 
     final restored = await SessionStore(storage: storage).load();
     expect(restored, isNotNull);
     expect(restored!.accessToken, 'token-123');
+    expect(restored.refreshToken, 'refresh-123');
   });
 
-  test('AuthRepository restores saved session into API client', () async {
+  test('AuthRepository restores saved access and refresh tokens', () async {
     final store = SessionStore(storage: MemorySecureStore());
-    await store.save(const SessionData(phone: '+996700000000', accessToken: 'token-abc'));
+    await store.save(const SessionData(
+      phone: '+996700000000',
+      accessToken: 'token-abc',
+      refreshToken: 'refresh-abc',
+    ));
 
-    final apiClient = ApiClient(httpClient: MockClient((request) async => http.Response('{}', 200)));
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async => http.Response('{}', 200)),
+    );
     final repository = AuthRepository(apiClient: apiClient, sessionStore: store);
 
     final session = await repository.loadSession();
 
     expect(session, isNotNull);
-    expect(session!.phone, '+996700000000');
     expect(apiClient.accessToken, 'token-abc');
+    expect(apiClient.refreshToken, 'refresh-abc');
   });
 
-  test('AuthRepository signOut clears session and API token', () async {
+  test('AuthRepository signOut revokes session and clears secure storage', () async {
     final store = SessionStore(storage: MemorySecureStore());
-    await store.save(const SessionData(phone: '+996700000000', accessToken: 'token-abc'));
-    final apiClient = ApiClient(httpClient: MockClient((request) async => http.Response('{}', 200)))..setAccessToken('token-abc');
+    await store.save(const SessionData(
+      phone: '+996700000000',
+      accessToken: 'token-abc',
+      refreshToken: 'refresh-abc',
+    ));
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/v1/auth/session/logout');
+        return http.Response(jsonEncode({'status': 'logged_out'}), 200);
+      }),
+    )..setTokens(accessToken: 'token-abc', refreshToken: 'refresh-abc');
     final repository = AuthRepository(apiClient: apiClient, sessionStore: store);
+    await repository.loadSession();
 
     await repository.signOut();
 
     expect(apiClient.accessToken, isNull);
+    expect(apiClient.refreshToken, isNull);
     expect(await store.load(), isNull);
   });
 
-  test('AuthRepository clears secure session after unauthorized response', () async {
+  test('401 refreshes tokens and retries request once', () async {
+    var projectRequests = 0;
     final storage = MemorySecureStore();
     final store = SessionStore(storage: storage);
-    await store.save(const SessionData(phone: '+996700000000', accessToken: 'expired-token'));
+    await store.save(const SessionData(
+      phone: '+996700000000',
+      accessToken: 'expired-access',
+      refreshToken: 'refresh-old',
+    ));
     final apiClient = ApiClient(
       httpClient: MockClient((request) async {
-        return http.Response(jsonEncode({'error': 'invalid token'}), 401);
+        if (request.url.path == '/api/v1/projects') {
+          projectRequests++;
+          if (projectRequests == 1) {
+            expect(request.headers['Authorization'], 'Bearer expired-access');
+            return http.Response(jsonEncode({'error': 'invalid token'}), 401);
+          }
+          expect(request.headers['Authorization'], 'Bearer access-new');
+          return http.Response(jsonEncode([]), 200);
+        }
+        if (request.url.path == '/api/v1/auth/session/refresh') {
+          return http.Response(jsonEncode({
+            'access_token': 'access-new',
+            'refresh_token': 'refresh-new',
+          }), 200);
+        }
+        return http.Response(jsonEncode({'error': 'not found'}), 404);
       }),
-    )..setAccessToken('expired-token');
-    AuthRepository(apiClient: apiClient, sessionStore: store);
+    );
+    final repository = AuthRepository(apiClient: apiClient, sessionStore: store);
+    await repository.loadSession();
 
-    await expectLater(apiClient.listProjects(), throwsA(isA<ApiException>()));
-    await Future<void>.delayed(Duration.zero);
+    final projects = await apiClient.listProjects();
 
-    expect(apiClient.accessToken, isNull);
-    expect(await store.load(), isNull);
+    expect(projects, isEmpty);
+    expect(projectRequests, 2);
+    expect(apiClient.accessToken, 'access-new');
+    expect(apiClient.refreshToken, 'refresh-new');
+    final saved = await store.load();
+    expect(saved!.accessToken, 'access-new');
+    expect(saved.refreshToken, 'refresh-new');
   });
 
   test('AuthRepository throws AuthException when access token is missing', () async {
