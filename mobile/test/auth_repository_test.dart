@@ -74,6 +74,24 @@ void main() {
     expect(await store.load(), isNull);
   });
 
+  test('AuthRepository clears secure session after unauthorized response', () async {
+    final storage = MemorySecureStore();
+    final store = SessionStore(storage: storage);
+    await store.save(const SessionData(phone: '+996700000000', accessToken: 'expired-token'));
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        return http.Response(jsonEncode({'error': 'invalid token'}), 401);
+      }),
+    )..setAccessToken('expired-token');
+    AuthRepository(apiClient: apiClient, sessionStore: store);
+
+    await expectLater(apiClient.listProjects(), throwsA(isA<ApiException>()));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(apiClient.accessToken, isNull);
+    expect(await store.load(), isNull);
+  });
+
   test('AuthRepository throws AuthException when access token is missing', () async {
     final apiClient = ApiClient(
       httpClient: MockClient((request) async {
