@@ -49,10 +49,11 @@ func withSMSRequestRateLimit(next http.HandlerFunc) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 
-		var latestCreatedAt *time.Time
+		var latestCreatedAt time.Time
 		var hourlyCount int
 		err = appState.DB.Pool.QueryRow(ctx, `
-			SELECT MAX(created_at), COUNT(*) FILTER (WHERE created_at > now() - interval '1 hour')
+			SELECT COALESCE(MAX(created_at), to_timestamp(0)),
+			       COUNT(*) FILTER (WHERE created_at > now() - interval '1 hour')
 			FROM sms_login_codes
 			WHERE phone = $1
 		`, phone).Scan(&latestCreatedAt, &hourlyCount)
@@ -60,7 +61,7 @@ func withSMSRequestRateLimit(next http.HandlerFunc) http.HandlerFunc {
 			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
 			return
 		}
-		if latestCreatedAt != nil && time.Since(*latestCreatedAt) < smsRequestCooldown {
+		if latestCreatedAt.Unix() > 0 && time.Since(latestCreatedAt) < smsRequestCooldown {
 			w.Header().Set("Retry-After", "45")
 			Error(w, http.StatusTooManyRequests, "please wait before requesting another code")
 			return
