@@ -77,9 +77,10 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := appState.DB.Pool.Query(ctx, `
-		SELECT id::text, project_id::text, title, category, amount::float8, currency, COALESCE(vendor, ''), spent_at::text, created_at::text
+		SELECT id::text, project_id::text, title, category, amount::float8, currency,
+		       COALESCE(vendor, ''), spent_at::text, created_at::text
 		FROM cost_items
-		WHERE project_id = $1
+		WHERE project_id = $1 AND deleted_at IS NULL
 		ORDER BY spent_at DESC, created_at DESC
 	`, projectID)
 	if err != nil {
@@ -116,9 +117,10 @@ func getCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
-		SELECT id::text, project_id::text, title, category, amount::float8, currency, COALESCE(vendor, ''), spent_at::text, created_at::text
+		SELECT id::text, project_id::text, title, category, amount::float8, currency,
+		       COALESCE(vendor, ''), spent_at::text, created_at::text
 		FROM cost_items
-		WHERE id = $1
+		WHERE id = $1 AND deleted_at IS NULL
 	`, costItemID).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "cost item not found")
@@ -151,7 +153,8 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 	err := appState.DB.Pool.QueryRow(ctx, `
 		INSERT INTO cost_items (project_id, created_by, title, category, amount, currency, vendor, spent_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8)
-		RETURNING id::text, project_id::text, title, category, amount::float8, currency, COALESCE(vendor, ''), spent_at::text, created_at::text
+		RETURNING id::text, project_id::text, title, category, amount::float8, currency,
+		          COALESCE(vendor, ''), spent_at::text, created_at::text
 	`, req.ProjectID, userID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create cost item")
@@ -190,9 +193,11 @@ func updateCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
 		UPDATE cost_items
-		SET title = $2, category = $3, amount = $4, currency = $5, vendor = NULLIF($6, ''), spent_at = $7, updated_at = now()
-		WHERE id = $1
-		RETURNING id::text, project_id::text, title, category, amount::float8, currency, COALESCE(vendor, ''), spent_at::text, created_at::text
+		SET title = $2, category = $3, amount = $4, currency = $5,
+		    vendor = NULLIF($6, ''), spent_at = $7, updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id::text, project_id::text, title, category, amount::float8, currency,
+		          COALESCE(vendor, ''), spent_at::text, created_at::text
 	`, costItemID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "cost item not found")
@@ -217,7 +222,11 @@ func deleteCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 		return
 	}
 
-	result, err := appState.DB.Pool.Exec(ctx, `DELETE FROM cost_items WHERE id = $1`, costItemID)
+	result, err := appState.DB.Pool.Exec(ctx, `
+		UPDATE cost_items
+		SET deleted_at = now(), updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL
+	`, costItemID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to delete cost item")
 		return
@@ -239,7 +248,11 @@ func canAccessProject(ctx context.Context, userID, projectID string) bool {
 
 func costItemProjectID(ctx context.Context, costItemID string) (string, bool) {
 	var projectID string
-	err := appState.DB.Pool.QueryRow(ctx, `SELECT project_id::text FROM cost_items WHERE id = $1`, costItemID).Scan(&projectID)
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT project_id::text
+		FROM cost_items
+		WHERE id = $1 AND deleted_at IS NULL
+	`, costItemID).Scan(&projectID)
 	return projectID, err == nil
 }
 
