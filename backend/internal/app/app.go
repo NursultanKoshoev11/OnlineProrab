@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/bootstrap"
@@ -17,14 +20,18 @@ func Run() {
 		log.Fatalf("invalid configuration: %v", err)
 	}
 
-	db := bootstrap.OpenDatabase(context.Background(), cfg)
+	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	db := bootstrap.OpenDatabase(rootCtx, cfg)
 	defer db.Close()
 
-	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer migrationCancel()
+	migrationCtx, migrationCancel := context.WithTimeout(rootCtx, 60*time.Second)
 	if err := db.ApplyMigrations(migrationCtx); err != nil {
+		migrationCancel()
 		log.Fatalf("failed to apply database migrations: %v", err)
 	}
+	migrationCancel()
 
 	httpapi.SetState(cfg, db)
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
@@ -43,6 +50,27 @@ func Run() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	log.Printf("onlineprorab api starting env=%s addr=%s", cfg.Env, cfg.HTTPAddr)
-	log.Fatal(server.ListenAndServe())
+	serverErrors := make(chan error, 1)
+	go func() {
+		log.Printf("onlineprorab api starting env=%s addr=%s", cfg.Env, cfg.HTTPAddr)
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	select {
+	case <-rootCtx.Done():
+		log.Printf("shutdown signal received")
+	case err := <-serverErrors:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("http server stopped unexpectedly: %v", err)
+		}
+		stop()
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+		_ = server.Close()
+	}
+	log.Printf("onlineprorab api stopped")
 }
