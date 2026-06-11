@@ -1,6 +1,7 @@
 name: Backend Production Checks
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -14,6 +15,22 @@ on:
 jobs:
   backend-checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: onlineprorab_test
+          POSTGRES_USER: onlineprorab
+          POSTGRES_PASSWORD: onlineprorab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U onlineprorab -d onlineprorab_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://onlineprorab:onlineprorab@127.0.0.1:5432/onlineprorab_test?sslmode=disable
     defaults:
       run:
         working-directory: backend
@@ -27,6 +44,8 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Download dependencies
         run: go mod download
+      - name: Format check
+        run: test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
       - name: Race tests
