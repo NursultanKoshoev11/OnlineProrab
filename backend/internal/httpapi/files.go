@@ -3,7 +3,9 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -102,6 +104,11 @@ func listFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func createFileMetadata(w http.ResponseWriter, r *http.Request) {
+	if appState.IsProduction {
+		Error(w, http.StatusForbidden, "direct file metadata creation is disabled; use the upload endpoint")
+		return
+	}
+
 	userID := userIDFromContext(r.Context())
 	var req createFileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -163,16 +170,33 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 
 func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 	userID := userIDFromContext(r.Context())
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	projectID, ok := fileProjectID(ctx, fileID)
-	if !ok || !canManageProject(ctx, userID, projectID) {
+	var projectID string
+	var storagePath string
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT project_id::text, storage_path
+		FROM files
+		WHERE id = $1 AND deleted_at IS NULL
+	`, fileID).Scan(&projectID, &storagePath)
+	if err != nil {
+		Error(w, http.StatusNotFound, "file not found")
+		return
+	}
+	if !canManageProject(ctx, userID, projectID) {
 		Error(w, http.StatusForbidden, "project management permission required")
 		return
 	}
 
-	result, err := appState.DB.Pool.Exec(ctx, `
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to start file deletion")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	result, err := tx.Exec(ctx, `
 		UPDATE files
 		SET deleted_at = now()
 		WHERE id = $1 AND deleted_at IS NULL
@@ -185,11 +209,44 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 		Error(w, http.StatusNotFound, "file not found")
 		return
 	}
-	_, _ = appState.DB.Pool.Exec(ctx, `
-		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
-		VALUES ($1, $2, 'delete', 'file', $3)
-	`, userID, projectID, fileID)
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
+		VALUES ($1, $2, 'delete', 'file', $3, jsonb_build_object('storage_path', $4))
+	`, userID, projectID, fileID, storagePath); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to record file deletion")
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to commit file deletion")
+		return
+	}
+
+	if err := removeStoredFile(storagePath); err != nil && !os.IsNotExist(err) {
+		log.Printf("request_id=%s failed_to_remove_file=%q error=%v", requestIDFromContext(r.Context()), storagePath, err)
+	}
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func removeStoredFile(storagePath string) error {
+	absolutePath, ok := resolveStoredFilePath(appState.UploadDir, storagePath)
+	if !ok {
+		return os.ErrPermission
+	}
+	return os.Remove(absolutePath)
+}
+
+func resolveStoredFilePath(root, storagePath string) (string, bool) {
+	root = filepath.Clean(strings.TrimSpace(root))
+	storagePath = filepath.ToSlash(strings.TrimSpace(storagePath))
+	if root == "" || root == "." || !isSafeStoragePath(storagePath) {
+		return "", false
+	}
+	absolutePath := filepath.Clean(filepath.Join(root, filepath.FromSlash(storagePath)))
+	relative, err := filepath.Rel(root, absolutePath)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return absolutePath, true
 }
 
 func fileProjectID(ctx context.Context, fileID string) (string, bool) {
