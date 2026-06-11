@@ -33,11 +33,11 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 	}
 
 	var applied int
-	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version BETWEEN 1 AND 4`).Scan(&applied); err != nil {
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version BETWEEN 1 AND 5`).Scan(&applied); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if applied != 4 {
-		t.Fatalf("expected 4 applied migrations, got %d", applied)
+	if applied != 5 {
+		t.Fatalf("expected 5 applied migrations, got %d", applied)
 	}
 
 	for _, table := range []string{
@@ -52,6 +52,7 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 		"sms_login_codes",
 		"refresh_sessions",
 		"project_invites",
+		"auth_attempts",
 	} {
 		var exists bool
 		if err := db.Pool.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+table).Scan(&exists); err != nil {
