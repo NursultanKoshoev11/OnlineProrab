@@ -57,7 +57,7 @@ func Tasks(w http.ResponseWriter, r *http.Request) {
 
 func listTasks(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r.Context())
-	projectID := r.URL.Query().Get("project_id")
+	projectID := strings.TrimSpace(r.URL.Query().Get("project_id"))
 	if projectID == "" {
 		Error(w, http.StatusBadRequest, "project_id is required")
 		return
@@ -71,9 +71,10 @@ func listTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := appState.DB.Pool.Query(ctx, `
-		SELECT id::text, project_id::text, title, COALESCE(description, ''), status, COALESCE(due_date::text, ''), created_at::text
+		SELECT id::text, project_id::text, title, COALESCE(description, ''), status,
+		       COALESCE(due_date::text, ''), created_at::text
 		FROM tasks
-		WHERE project_id = $1
+		WHERE project_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 	`, projectID)
 	if err != nil {
@@ -126,7 +127,8 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 	err := appState.DB.Pool.QueryRow(ctx, `
 		INSERT INTO tasks (project_id, created_by, title, description, status, due_date)
 		VALUES ($1, $2, $3, NULLIF($4, ''), $5, NULLIF($6, '')::date)
-		RETURNING id::text, project_id::text, title, COALESCE(description, ''), status, COALESCE(due_date::text, ''), created_at::text
+		RETURNING id::text, project_id::text, title, COALESCE(description, ''), status,
+		          COALESCE(due_date::text, ''), created_at::text
 	`, req.ProjectID, userID, req.Title, req.Description, req.Status, req.DueDate).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Status, &item.DueDate, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create task")
@@ -169,9 +171,11 @@ func updateTask(w http.ResponseWriter, r *http.Request, taskID string) {
 	var item TaskDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
 		UPDATE tasks
-		SET title = $2, description = NULLIF($3, ''), status = $4, due_date = NULLIF($5, '')::date, updated_at = now()
-		WHERE id = $1
-		RETURNING id::text, project_id::text, title, COALESCE(description, ''), status, COALESCE(due_date::text, ''), created_at::text
+		SET title = $2, description = NULLIF($3, ''), status = $4,
+		    due_date = NULLIF($5, '')::date, updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL
+		RETURNING id::text, project_id::text, title, COALESCE(description, ''), status,
+		          COALESCE(due_date::text, ''), created_at::text
 	`, taskID, req.Title, req.Description, req.Status, req.DueDate).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Status, &item.DueDate, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "task not found")
@@ -196,7 +200,11 @@ func deleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
 		return
 	}
 
-	result, err := appState.DB.Pool.Exec(ctx, `DELETE FROM tasks WHERE id = $1`, taskID)
+	result, err := appState.DB.Pool.Exec(ctx, `
+		UPDATE tasks
+		SET deleted_at = now(), updated_at = now()
+		WHERE id = $1 AND deleted_at IS NULL
+	`, taskID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to delete task")
 		return
@@ -214,7 +222,11 @@ func deleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
 
 func taskProjectID(ctx context.Context, taskID string) (string, bool) {
 	var projectID string
-	err := appState.DB.Pool.QueryRow(ctx, `SELECT project_id::text FROM tasks WHERE id = $1`, taskID).Scan(&projectID)
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT project_id::text
+		FROM tasks
+		WHERE id = $1 AND deleted_at IS NULL
+	`, taskID).Scan(&projectID)
 	return projectID, err == nil
 }
 
