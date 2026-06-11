@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -45,7 +47,7 @@ func Files(w http.ResponseWriter, r *http.Request) {
 
 func listFiles(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r.Context())
-	projectID := r.URL.Query().Get("project_id")
+	projectID := strings.TrimSpace(r.URL.Query().Get("project_id"))
 	if projectID == "" {
 		Error(w, http.StatusBadRequest, "project_id is required")
 		return
@@ -63,6 +65,7 @@ func listFiles(w http.ResponseWriter, r *http.Request) {
 		FROM files
 		WHERE project_id = $1
 		ORDER BY created_at DESC
+		LIMIT 500
 	`, projectID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to load files")
@@ -79,6 +82,10 @@ func listFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to read files")
+		return
+	}
 	JSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
@@ -89,12 +96,22 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	normalizeFileRequest(&req)
 	if req.ProjectID == "" || req.OriginalName == "" || req.StoragePath == "" || req.ContentType == "" || req.SizeBytes < 0 {
 		Error(w, http.StatusBadRequest, "project_id, original_name, storage_path, content_type and non-negative size_bytes are required")
 		return
 	}
-	if req.Kind == "" {
-		req.Kind = "document"
+	if len(req.OriginalName) > 255 || len(req.StoragePath) > 512 {
+		Error(w, http.StatusBadRequest, "file name or storage path is too long")
+		return
+	}
+	if !isValidFileKind(req.Kind) {
+		Error(w, http.StatusBadRequest, "invalid file kind")
+		return
+	}
+	if !isSafeStoragePath(req.StoragePath) {
+		Error(w, http.StatusBadRequest, "invalid storage path")
+		return
 	}
 	if !isAllowedFileType(req.ContentType) {
 		Error(w, http.StatusBadRequest, "unsupported file type")
@@ -107,8 +124,8 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	if !canAccessProject(ctx, userID, req.ProjectID) {
-		Error(w, http.StatusForbidden, "project access denied")
+	if !canContributeToProject(ctx, userID, req.ProjectID) {
+		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
 	}
 
@@ -129,6 +146,29 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 	`, userID, req.ProjectID, item.ID)
 
 	JSON(w, http.StatusCreated, item)
+}
+
+func normalizeFileRequest(req *createFileRequest) {
+	req.ProjectID = strings.TrimSpace(req.ProjectID)
+	req.Kind = strings.ToLower(strings.TrimSpace(req.Kind))
+	req.OriginalName = strings.TrimSpace(req.OriginalName)
+	req.StoragePath = strings.TrimSpace(strings.ReplaceAll(req.StoragePath, "\\", "/"))
+	req.ContentType = strings.ToLower(strings.TrimSpace(req.ContentType))
+	if req.Kind == "" {
+		req.Kind = "document"
+	}
+}
+
+func isValidFileKind(kind string) bool {
+	return kind == "receipt" || kind == "photo" || kind == "document"
+}
+
+func isSafeStoragePath(value string) bool {
+	if value == "" || strings.HasPrefix(value, "/") || filepath.IsAbs(value) {
+		return false
+	}
+	cleaned := filepath.ToSlash(filepath.Clean(value))
+	return cleaned != "." && cleaned != ".." && !strings.HasPrefix(cleaned, "../") && !strings.Contains(cleaned, "/../")
 }
 
 func isAllowedFileType(contentType string) bool {
