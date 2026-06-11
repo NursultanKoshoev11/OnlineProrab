@@ -86,6 +86,25 @@ func TestAccessTokenRejectsTokenSignedWithDifferentKey(t *testing.T) {
 	}
 }
 
+func TestAccessTokenRejectsDifferentHMACAlgorithm(t *testing.T) {
+	oldState := appState
+	appState.JWTSecret = "unit-test-signing-key-1234567890"
+	defer func() { appState = oldState }()
+
+	claims := jwt.MapClaims{
+		"sub": "user-1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"iat": time.Now().Unix(),
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS384, claims).SignedString([]byte(appState.JWTSecret))
+	if err != nil {
+		t.Fatalf("failed to sign HS384 token: %v", err)
+	}
+	if _, err := parseAccessToken(token); err == nil {
+		t.Fatal("expected HS384 token to be rejected")
+	}
+}
+
 func TestHashLoginCodeDependsOnPhoneAndCode(t *testing.T) {
 	oldState := appState
 	appState.JWTSecret = "unit-test-signing-key-1234567890"
