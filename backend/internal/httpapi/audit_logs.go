@@ -61,5 +61,9 @@ func AuditLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to read audit logs")
+		return
+	}
 	JSON(w, http.StatusOK, items)
 }
