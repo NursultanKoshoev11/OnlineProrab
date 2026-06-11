@@ -31,8 +31,14 @@ jobs:
       - name: Show Flutter version
         run: flutter --version
 
+      - name: Prepare Android platform
+        run: python3 tool/prepare_android.py
+
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         run: flutter analyze
