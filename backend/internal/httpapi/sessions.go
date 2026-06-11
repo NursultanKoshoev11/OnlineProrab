@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	refreshTokenTTL         = 60 * 24 * time.Hour
-	maxActiveUserSessions   = 10
-	refreshSessionRetention = 30 * 24 * time.Hour
+	refreshTokenTTL            = 60 * 24 * time.Hour
+	maxActiveUserSessions      = 10
+	refreshSessionRetentionDays = 30
 )
 
 type createSessionRequest struct {
@@ -71,9 +71,9 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = tx.Exec(ctx, `
 		DELETE FROM refresh_sessions
-		WHERE (expires_at < now() - $1::interval)
-		   OR (revoked_at IS NOT NULL AND revoked_at < now() - $1::interval)
-	`, refreshSessionRetention.String())
+		WHERE expires_at < now() - make_interval(days => $1)
+		   OR (revoked_at IS NOT NULL AND revoked_at < now() - make_interval(days => $1))
+	`, refreshSessionRetentionDays)
 
 	_, err = tx.Exec(ctx, `
 		WITH sessions_to_revoke AS (
