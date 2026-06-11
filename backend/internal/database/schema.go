@@ -194,6 +194,26 @@ CREATE INDEX IF NOT EXISTS idx_sms_login_codes_expires_at ON sms_login_codes(exp
 `
 
 const productionConstraintsSQL = `
+UPDATE users
+SET role = 'owner'
+WHERE role NOT IN ('owner', 'manager', 'worker', 'viewer');
+
+UPDATE project_members
+SET role = 'viewer'
+WHERE role NOT IN ('owner', 'manager', 'worker', 'viewer');
+
+UPDATE projects
+SET status = 'active'
+WHERE status NOT IN ('active', 'archived');
+
+UPDATE tasks
+SET status = 'open'
+WHERE status NOT IN ('open', 'in_progress', 'done', 'cancelled');
+
+UPDATE files
+SET kind = 'document'
+WHERE kind NOT IN ('receipt', 'photo', 'document');
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
