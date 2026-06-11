@@ -16,6 +16,7 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/daily-reports/", requireAuth(withProjectMutationRBAC(DailyReports, api+"/daily-reports/", dailyReportProjectID)))
 	mux.HandleFunc(api+"/files", requireAuth(withProjectMutationRBAC(Files, "", nil)))
 	mux.HandleFunc(api+"/files/upload", requireAuth(UploadFile))
+	mux.HandleFunc(api+"/files/download", requireAuth(DownloadFile))
 	mux.HandleFunc(api+"/files/", requireAuth(withProjectMutationRBAC(Files, api+"/files/", fileProjectID)))
 	mux.HandleFunc(api+"/tasks", requireAuth(withProjectMutationRBAC(Tasks, "", nil)))
 	mux.HandleFunc(api+"/tasks/", requireAuth(withProjectMutationRBAC(Tasks, api+"/tasks/", taskProjectID)))
