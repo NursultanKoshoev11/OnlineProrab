@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -26,11 +27,25 @@ func withMiddleware(next http.Handler) http.Handler {
 
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Body != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if shouldLimitJSONBody(r) {
 			r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func shouldLimitJSONBody(r *http.Request) bool {
+	if r.Body == nil || r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return false
+	}
+	if r.URL.Path == "/api/v1/files/upload" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return true
+	}
+	return mediaType != "multipart/form-data"
 }
 
 func requestID(next http.Handler) http.Handler {
