@@ -28,6 +28,9 @@ func Run() {
 	if err := db.EnsureSessionSchema(migrationCtx); err != nil {
 		log.Fatalf("failed to ensure refresh session schema: %v", err)
 	}
+	if err := db.EnsureTeamSchema(migrationCtx); err != nil {
+		log.Fatalf("failed to ensure project team schema: %v", err)
+	}
 
 	httpapi.SetState(cfg, db)
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
