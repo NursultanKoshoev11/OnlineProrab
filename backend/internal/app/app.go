@@ -22,14 +22,14 @@ func Run() {
 
 	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer migrationCancel()
-	if err := db.EnsureSchema(migrationCtx); err != nil {
-		log.Fatalf("failed to ensure database schema: %v", err)
+	if err := db.ApplyMigrations(migrationCtx); err != nil {
+		log.Fatalf("failed to apply database migrations: %v", err)
 	}
 	if err := db.EnsureSessionSchema(migrationCtx); err != nil {
-		log.Fatalf("failed to ensure refresh session schema: %v", err)
+		log.Fatalf("failed to apply refresh session migration: %v", err)
 	}
 	if err := db.EnsureTeamSchema(migrationCtx); err != nil {
-		log.Fatalf("failed to ensure project team schema: %v", err)
+		log.Fatalf("failed to apply project team migration: %v", err)
 	}
 
 	httpapi.SetState(cfg, db)
