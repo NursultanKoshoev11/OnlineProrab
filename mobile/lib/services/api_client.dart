@@ -11,45 +11,99 @@ class ApiClient {
 
   final http.Client _httpClient;
   final Duration _timeout;
+
   String? accessToken;
-  Future<void> Function()? _onUnauthorized;
+  String? refreshToken;
+  Future<void> Function(String accessToken, String refreshToken)?
+      _onTokensUpdated;
+  Future<void> Function()? _onSessionExpired;
+  Future<bool>? _refreshInFlight;
 
-  void setAccessToken(String? token) {
-    accessToken = token;
+  void setAccessToken(String? token) => accessToken = token;
+
+  void setTokens({String? accessToken, String? refreshToken}) {
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken;
   }
 
-  void setUnauthorizedHandler(Future<void> Function()? handler) {
-    _onUnauthorized = handler;
+  void setSessionHandlers({
+    Future<void> Function(String accessToken, String refreshToken)?
+        onTokensUpdated,
+    Future<void> Function()? onSessionExpired,
+  }) {
+    _onTokensUpdated = onTokensUpdated;
+    _onSessionExpired = onSessionExpired;
   }
 
-  Future<Map<String, dynamic>> requestSMSCode(String phone) async {
-    return postJson('/api/v1/auth/sms/request', {'phone': phone});
-  }
+  Future<Map<String, dynamic>> requestSMSCode(String phone) =>
+      _postJson('/api/v1/auth/sms/request', {'phone': phone}, retry: false);
 
   Future<Map<String, dynamic>> verifySMSCode(String phone, String code) async {
-    final data = await postJson('/api/v1/auth/sms/verify', {'phone': phone, 'code': code});
-    final token = data['access_token']?.toString();
-    if (token != null && token.isNotEmpty) {
-      setAccessToken(token);
-    }
+    final data = await _postJson(
+      '/api/v1/auth/sms/verify',
+      {'phone': phone, 'code': code},
+      retry: false,
+    );
+    final token = data['access_token']?.toString() ?? '';
+    if (token.isNotEmpty) accessToken = token;
     return data;
   }
 
-  Future<List<dynamic>> listProjects() async => _asList(await getJson('/api/v1/projects'));
-
-  Future<Map<String, dynamic>> createProject(String name, String address) async {
-    return postJson('/api/v1/projects', {'name': name, 'address': address});
+  Future<String> createRefreshSession({String deviceName = 'mobile'}) async {
+    final data = await _postJson(
+      '/api/v1/auth/session',
+      {'device_name': deviceName},
+      retry: false,
+    );
+    final token = data['refresh_token']?.toString() ?? '';
+    if (token.isEmpty) {
+      throw const ApiException(500, 'Backend did not return a refresh token');
+    }
+    refreshToken = token;
+    return token;
   }
 
-  Future<Map<String, dynamic>> updateProject(String projectId, String name, String address, {String status = 'active'}) async {
-    return patchJson('/api/v1/projects/$projectId', {'name': name, 'address': address, 'status': status});
+  Future<void> logoutSession() async {
+    final token = refreshToken;
+    if (token != null && token.isNotEmpty) {
+      try {
+        await _postJson(
+          '/api/v1/auth/session/logout',
+          {'refresh_token': token},
+          retry: false,
+          includeBearer: false,
+        );
+      } catch (_) {
+        // Local logout must still complete when the server is unavailable.
+      }
+    }
+    await _expireSession();
   }
+
+  Future<List<dynamic>> listProjects() async =>
+      _asList(await getJson('/api/v1/projects'));
+
+  Future<Map<String, dynamic>> createProject(String name, String address) =>
+      postJson('/api/v1/projects', {'name': name, 'address': address});
+
+  Future<Map<String, dynamic>> updateProject(
+    String projectId,
+    String name,
+    String address, {
+    String status = 'active',
+  }) =>
+      patchJson('/api/v1/projects/$projectId', {
+        'name': name,
+        'address': address,
+        'status': status,
+      });
 
   Future<void> deleteProject(String projectId) async {
     await deleteJson('/api/v1/projects/$projectId');
   }
 
-  Future<List<dynamic>> listCostItems(String projectId) async => _asList(await getJson('/api/v1/cost-items', {'project_id': projectId}));
+  Future<List<dynamic>> listCostItems(String projectId) async =>
+      _asList(await getJson('/api/v1/cost-items', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> createCostItem({
     required String projectId,
@@ -58,16 +112,15 @@ class ApiClient {
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
-  }) async {
-    return postJson('/api/v1/cost-items', {
-      'project_id': projectId,
-      'title': title,
-      'amount': amount,
-      'category': category,
-      'currency': currency,
-      'vendor': vendor,
-    });
-  }
+  }) =>
+      postJson('/api/v1/cost-items', {
+        'project_id': projectId,
+        'title': title,
+        'amount': amount,
+        'category': category,
+        'currency': currency,
+        'vendor': vendor,
+      });
 
   Future<Map<String, dynamic>> updateCostItem({
     required String costItemId,
@@ -76,87 +129,86 @@ class ApiClient {
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
-  }) async {
-    return patchJson('/api/v1/cost-items/$costItemId', {
-      'title': title,
-      'amount': amount,
-      'category': category,
-      'currency': currency,
-      'vendor': vendor,
-    });
-  }
+  }) =>
+      patchJson('/api/v1/cost-items/$costItemId', {
+        'title': title,
+        'amount': amount,
+        'category': category,
+        'currency': currency,
+        'vendor': vendor,
+      });
 
   Future<void> deleteCostItem(String costItemId) async {
     await deleteJson('/api/v1/cost-items/$costItemId');
   }
 
-  Future<List<dynamic>> listDailyReports(String projectId) async => _asList(await getJson('/api/v1/daily-reports', {'project_id': projectId}));
+  Future<List<dynamic>> listDailyReports(String projectId) async => _asList(
+        await getJson('/api/v1/daily-reports', {'project_id': projectId}),
+      );
 
   Future<Map<String, dynamic>> createDailyReport({
     required String projectId,
     required String summary,
     required int workersCount,
     String issues = '',
-  }) async {
-    return postJson('/api/v1/daily-reports', {
-      'project_id': projectId,
-      'summary': summary,
-      'workers_count': workersCount,
-      'issues': issues,
-    });
-  }
+  }) =>
+      postJson('/api/v1/daily-reports', {
+        'project_id': projectId,
+        'summary': summary,
+        'workers_count': workersCount,
+        'issues': issues,
+      });
 
   Future<Map<String, dynamic>> updateDailyReport({
     required String reportId,
     required String summary,
     required int workersCount,
     String issues = '',
-  }) async {
-    return patchJson('/api/v1/daily-reports/$reportId', {
-      'summary': summary,
-      'workers_count': workersCount,
-      'issues': issues,
-    });
-  }
+  }) =>
+      patchJson('/api/v1/daily-reports/$reportId', {
+        'summary': summary,
+        'workers_count': workersCount,
+        'issues': issues,
+      });
 
   Future<void> deleteDailyReport(String reportId) async {
     await deleteJson('/api/v1/daily-reports/$reportId');
   }
 
-  Future<List<dynamic>> listTasks(String projectId) async => _asList(await getJson('/api/v1/tasks', {'project_id': projectId}));
+  Future<List<dynamic>> listTasks(String projectId) async =>
+      _asList(await getJson('/api/v1/tasks', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> createTask({
     required String projectId,
     required String title,
     String description = '',
     String status = 'open',
-  }) async {
-    return postJson('/api/v1/tasks', {
-      'project_id': projectId,
-      'title': title,
-      'description': description,
-      'status': status,
-    });
-  }
+  }) =>
+      postJson('/api/v1/tasks', {
+        'project_id': projectId,
+        'title': title,
+        'description': description,
+        'status': status,
+      });
 
   Future<Map<String, dynamic>> updateTask({
     required String taskId,
     required String title,
     String description = '',
     String status = 'open',
-  }) async {
-    return patchJson('/api/v1/tasks/$taskId', {
-      'title': title,
-      'description': description,
-      'status': status,
-    });
-  }
+  }) =>
+      patchJson('/api/v1/tasks/$taskId', {
+        'title': title,
+        'description': description,
+        'status': status,
+      });
 
   Future<void> deleteTask(String taskId) async {
     await deleteJson('/api/v1/tasks/$taskId');
   }
 
-  Future<List<dynamic>> listFiles(String projectId) async => _asList(await getJson('/api/v1/files', {'project_id': projectId}));
+  Future<List<dynamic>> listFiles(String projectId) async =>
+      _asList(await getJson('/api/v1/files', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> createFileMetadata({
     required String projectId,
@@ -165,62 +217,163 @@ class ApiClient {
     required String storagePath,
     required String contentType,
     required int sizeBytes,
+  }) =>
+      postJson('/api/v1/files', {
+        'project_id': projectId,
+        'kind': kind,
+        'original_name': originalName,
+        'storage_path': storagePath,
+        'content_type': contentType,
+        'size_bytes': sizeBytes,
+      });
+
+  Future<List<dynamic>> listAuditLogs(String projectId) async => _asList(
+        await getJson('/api/v1/audit-logs', {'project_id': projectId}),
+      );
+
+  Future<Map<String, dynamic>> postJson(
+    String path,
+    Map<String, dynamic> body,
+  ) =>
+      _postJson(path, body);
+
+  Future<Map<String, dynamic>> _postJson(
+    String path,
+    Map<String, dynamic> body, {
+    bool retry = true,
+    bool includeBearer = true,
   }) async {
-    return postJson('/api/v1/files', {
-      'project_id': projectId,
-      'kind': kind,
-      'original_name': originalName,
-      'storage_path': storagePath,
-      'content_type': contentType,
-      'size_bytes': sizeBytes,
-    });
-  }
-
-  Future<List<dynamic>> listAuditLogs(String projectId) async => _asList(await getJson('/api/v1/audit-logs', {'project_id': projectId}));
-
-  Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) async {
-    final response = await _send(() => _httpClient.post(ApiConfig.endpoint(path), headers: _headers(), body: jsonEncode(body)));
+    final response = await _send(
+      () => _httpClient.post(
+        ApiConfig.endpoint(path),
+        headers: _headers(includeBearer: includeBearer),
+        body: jsonEncode(body),
+      ),
+      retry: retry,
+    );
     return _decodeObject(response);
   }
 
-  Future<Map<String, dynamic>> patchJson(String path, Map<String, dynamic> body) async {
-    final response = await _send(() => _httpClient.patch(ApiConfig.endpoint(path), headers: _headers(), body: jsonEncode(body)));
+  Future<Map<String, dynamic>> patchJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _send(
+      () => _httpClient.patch(
+        ApiConfig.endpoint(path),
+        headers: _headers(),
+        body: jsonEncode(body),
+      ),
+    );
     return _decodeObject(response);
   }
 
-  Future<dynamic> getJson(String path, [Map<String, String>? query]) async {
-    final response = await _send(() => _httpClient.get(ApiConfig.endpoint(path, query), headers: _headers()));
+  Future<dynamic> getJson(
+    String path, [
+    Map<String, String>? query,
+  ]) async {
+    final response = await _send(
+      () => _httpClient.get(
+        ApiConfig.endpoint(path, query),
+        headers: _headers(),
+      ),
+    );
     return _decodeAny(response);
   }
 
   Future<dynamic> deleteJson(String path) async {
-    final response = await _send(() => _httpClient.delete(ApiConfig.endpoint(path), headers: _headers()));
+    final response = await _send(
+      () => _httpClient.delete(ApiConfig.endpoint(path), headers: _headers()),
+    );
     return _decodeAny(response);
   }
 
-  Future<http.Response> _send(Future<http.Response> Function() request) async {
+  Future<http.Response> _send(
+    Future<http.Response> Function() request, {
+    bool retry = true,
+  }) async {
+    final response = await _perform(request);
+    if (response.statusCode != 401 || !retry) return response;
+
+    final refreshed = await _refreshTokens();
+    if (!refreshed) {
+      await _expireSession();
+      return response;
+    }
+
+    final retried = await _perform(request);
+    if (retried.statusCode == 401) await _expireSession();
+    return retried;
+  }
+
+  Future<http.Response> _perform(
+    Future<http.Response> Function() request,
+  ) async {
     try {
       return await request().timeout(_timeout);
     } on TimeoutException {
-      throw ApiException(408, 'Request timed out. Check your internet connection and backend status.');
+      throw const ApiException(
+        408,
+        'Request timed out. Check your internet connection and backend status.',
+      );
     } on http.ClientException catch (error) {
       throw ApiException(0, error.message);
     }
   }
 
-  Map<String, String> _headers() {
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      if (accessToken != null && accessToken!.isNotEmpty) 'Authorization': 'Bearer $accessToken',
-    };
+  Future<bool> _refreshTokens() {
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+    final future = _doRefreshTokens();
+    _refreshInFlight = future;
+    return future.whenComplete(() => _refreshInFlight = null);
   }
+
+  Future<bool> _doRefreshTokens() async {
+    final token = refreshToken;
+    if (token == null || token.isEmpty) return false;
+
+    try {
+      final response = await _perform(
+        () => _httpClient.post(
+          ApiConfig.endpoint('/api/v1/auth/session/refresh'),
+          headers: _headers(includeBearer: false),
+          body: jsonEncode({'refresh_token': token}),
+        ),
+      );
+      if (response.statusCode >= 400) return false;
+      final data = _decodeObject(response);
+      final newAccess = data['access_token']?.toString() ?? '';
+      final newRefresh = data['refresh_token']?.toString() ?? '';
+      if (newAccess.isEmpty || newRefresh.isEmpty) return false;
+
+      accessToken = newAccess;
+      refreshToken = newRefresh;
+      final handler = _onTokensUpdated;
+      if (handler != null) await handler(newAccess, newRefresh);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _expireSession() async {
+    accessToken = null;
+    refreshToken = null;
+    final handler = _onSessionExpired;
+    if (handler != null) await handler();
+  }
+
+  Map<String, String> _headers({bool includeBearer = true}) => {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (includeBearer && accessToken != null && accessToken!.isNotEmpty)
+          'Authorization': 'Bearer $accessToken',
+      };
 
   Map<String, dynamic> _decodeObject(http.Response response) {
     final data = _decodeAny(response);
-    if (data is Map<String, dynamic>) {
-      return data;
-    }
+    if (data is Map<String, dynamic>) return data;
     return {'data': data};
   }
 
@@ -232,16 +385,9 @@ class ApiClient {
     } on FormatException {
       throw ApiException(response.statusCode, 'Backend returned invalid JSON');
     }
-
     if (response.statusCode >= 400) {
-      if (response.statusCode == 401) {
-        accessToken = null;
-        final handler = _onUnauthorized;
-        if (handler != null) {
-          unawaited(handler());
-        }
-      }
-      final message = data is Map<String, dynamic> ? data['error']?.toString() : null;
+      final message =
+          data is Map<String, dynamic> ? data['error']?.toString() : null;
       throw ApiException(response.statusCode, message ?? 'Request failed');
     }
     return data;
@@ -250,7 +396,17 @@ class ApiClient {
   List<dynamic> _asList(dynamic data) {
     if (data is List<dynamic>) return data;
     if (data is Map<String, dynamic>) {
-      for (final key in const ['items', 'data', 'results', 'projects', 'cost_items', 'daily_reports', 'tasks', 'files', 'audit_logs']) {
+      for (final key in const [
+        'items',
+        'data',
+        'results',
+        'projects',
+        'cost_items',
+        'daily_reports',
+        'tasks',
+        'files',
+        'audit_logs',
+      ]) {
         final value = data[key];
         if (value is List<dynamic>) return value;
       }
@@ -258,9 +414,7 @@ class ApiClient {
     return const <dynamic>[];
   }
 
-  void close() {
-    _httpClient.close();
-  }
+  void close() => _httpClient.close();
 }
 
 class ApiException implements Exception {
