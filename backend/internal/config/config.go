@@ -16,7 +16,11 @@ const (
 	ProductionEnv  = "production"
 )
 
-const minProductionSigningKeyLength = 32
+const (
+	minProductionSigningKeyLength = 32
+	minProductionAccessTokenTTL    = 5 * time.Minute
+	maxProductionAccessTokenTTL    = 60 * time.Minute
+)
 
 type Config struct {
 	Env                string
@@ -37,7 +41,7 @@ func Load() Config {
 	cfg.HTTPAddr = getEnv("HTTP_ADDR", ":8080")
 	cfg.DatabaseURL = os.Getenv("DATABASE_URL")
 	cfg.JWTSecret = os.Getenv("JWT_SECRET")
-	cfg.AccessTokenTTL = time.Duration(getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 60)) * time.Minute
+	cfg.AccessTokenTTL = time.Duration(getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 15)) * time.Minute
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
@@ -72,6 +76,9 @@ func (cfg Config) Validate() error {
 		}
 		if isUnsafeSigningKey(cfg.JWTSecret) {
 			problems = append(problems, "JWT_SECRET must be replaced before production")
+		}
+		if cfg.AccessTokenTTL < minProductionAccessTokenTTL || cfg.AccessTokenTTL > maxProductionAccessTokenTTL {
+			problems = append(problems, "ACCESS_TOKEN_TTL_MINUTES must be between 5 and 60 in production")
 		}
 		if len(cfg.CORSAllowedOrigins) == 0 {
 			problems = append(problems, "CORS_ALLOWED_ORIGINS is required in production")
