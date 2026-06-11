@@ -6,13 +6,25 @@ import 'package:http/testing.dart';
 import 'package:online_prorab/services/api_client.dart';
 import 'package:online_prorab/services/auth_repository.dart';
 import 'package:online_prorab/services/session_store.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+class MemorySecureStore implements SecureKeyValueStore {
+  final Map<String, String> values = {};
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async {
+    values[key] = value;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    values.remove(key);
+  }
+}
 
 void main() {
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
-  });
-
   test('AuthRepository verifies code, saves session and sets API token', () async {
     final apiClient = ApiClient(
       httpClient: MockClient((request) async {
@@ -21,7 +33,9 @@ void main() {
         return http.Response(jsonEncode({'access_token': 'token-123'}), 200);
       }),
     );
-    final repository = AuthRepository(apiClient: apiClient, sessionStore: SessionStore());
+    final storage = MemorySecureStore();
+    final sessionStore = SessionStore(storage: storage);
+    final repository = AuthRepository(apiClient: apiClient, sessionStore: sessionStore);
 
     final session = await repository.verifyCode('+996700000000', '123456');
 
@@ -29,13 +43,13 @@ void main() {
     expect(session.accessToken, 'token-123');
     expect(apiClient.accessToken, 'token-123');
 
-    final restored = await SessionStore().load();
+    final restored = await SessionStore(storage: storage).load();
     expect(restored, isNotNull);
     expect(restored!.accessToken, 'token-123');
   });
 
   test('AuthRepository restores saved session into API client', () async {
-    final store = SessionStore();
+    final store = SessionStore(storage: MemorySecureStore());
     await store.save(const SessionData(phone: '+996700000000', accessToken: 'token-abc'));
 
     final apiClient = ApiClient(httpClient: MockClient((request) async => http.Response('{}', 200)));
@@ -49,7 +63,7 @@ void main() {
   });
 
   test('AuthRepository signOut clears session and API token', () async {
-    final store = SessionStore();
+    final store = SessionStore(storage: MemorySecureStore());
     await store.save(const SessionData(phone: '+996700000000', accessToken: 'token-abc'));
     final apiClient = ApiClient(httpClient: MockClient((request) async => http.Response('{}', 200)))..setAccessToken('token-abc');
     final repository = AuthRepository(apiClient: apiClient, sessionStore: store);
@@ -66,7 +80,10 @@ void main() {
         return http.Response(jsonEncode({'ok': true}), 200);
       }),
     );
-    final repository = AuthRepository(apiClient: apiClient, sessionStore: SessionStore());
+    final repository = AuthRepository(
+      apiClient: apiClient,
+      sessionStore: SessionStore(storage: MemorySecureStore()),
+    );
 
     expect(
       () => repository.verifyCode('+996700000000', '123456'),
