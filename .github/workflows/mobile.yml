@@ -12,9 +12,6 @@ on:
       - 'mobile/**'
       - '.github/workflows/mobile.yml'
 
-permissions:
-  contents: write
-
 jobs:
   flutter-checks:
     runs-on: ubuntu-latest
@@ -25,57 +22,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Apply one-time Flutter compatibility fixes
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          fixes = {
-              Path('lib/app/backend_app_v3.dart'): [
-                  ('Colors.white.withOpacity(.9)', 'Colors.white.withValues(alpha: .9)', 1),
-              ],
-              Path('lib/app/backend_project_dashboard_v3.dart'): [
-                  ('FilePicker.platform.pickFiles(', 'FilePicker.pickFiles(', 1),
-              ],
-              Path('lib/app/project_team_screen.dart'): [
-                  ('value: role,', 'initialValue: role,', 2),
-              ],
-              Path('test/api_client_test.dart'): [
-                  ("import 'dart:async';\n\n", '', 1),
-              ],
-          }
-
-          changed = False
-          for path, replacements in fixes.items():
-              text = path.read_text(encoding='utf-8')
-              for old, new, expected in replacements:
-                  old_count = text.count(old)
-                  new_count = text.count(new)
-                  if old_count == expected:
-                      text = text.replace(old, new)
-                      changed = True
-                  elif old_count == 0 and new_count >= expected:
-                      pass
-                  else:
-                      raise SystemExit(
-                          f'{path}: unexpected replacement state for {old!r}: '
-                          f'old={old_count}, new={new_count}, expected={expected}'
-                      )
-              path.write_text(text, encoding='utf-8')
-
-          print('compatibility_changes=', changed)
-          PY
-          git diff --check
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add lib/app/backend_app_v3.dart lib/app/backend_project_dashboard_v3.dart lib/app/project_team_screen.dart test/api_client_test.dart
-            git commit -m "Fix Flutter 3.47 UI compatibility issues"
-            git push origin HEAD:main
-          fi
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
