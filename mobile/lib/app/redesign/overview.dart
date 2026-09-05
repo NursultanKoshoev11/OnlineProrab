@@ -20,8 +20,9 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spent = costs.fold<double>(0, (sum, item) => sum + item.amount);
-    final done =
-        tasks.where((task) => task.status.toLowerCase() == 'done').length;
+    final done = tasks
+        .where((task) => task.status.toLowerCase() == 'done')
+        .length;
     final progress = tasks.isEmpty ? 0.0 : done / tasks.length;
     final photos = files
         .where(

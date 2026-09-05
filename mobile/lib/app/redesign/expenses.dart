@@ -43,7 +43,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   List<RemoteCostItem> get _filtered {
     final q = _search.text.trim().toLowerCase();
     return _items.where((item) {
-      final matchesQuery = q.isEmpty ||
+      final matchesQuery =
+          q.isEmpty ||
           item.title.toLowerCase().contains(q) ||
           item.category.toLowerCase().contains(q) ||
           item.vendor.toLowerCase().contains(q);

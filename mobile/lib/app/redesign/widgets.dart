@@ -96,13 +96,13 @@ class _StatusPill extends StatelessWidget {
     final background = active
         ? _brandSoft
         : planning
-            ? const Color(0xFFE9EEFF)
-            : _warningSoft;
+        ? const Color(0xFFE9EEFF)
+        : _warningSoft;
     final foreground = active
         ? _brand
         : planning
-            ? const Color(0xFF4561A8)
-            : _warning;
+        ? const Color(0xFF4561A8)
+        : _warning;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -116,8 +116,8 @@ class _StatusPill extends StatelessWidget {
             active
                 ? Icons.check_circle_rounded
                 : planning
-                    ? Icons.schedule_rounded
-                    : Icons.pause_circle_rounded,
+                ? Icons.schedule_rounded
+                : Icons.pause_circle_rounded,
             size: 14,
             color: foreground,
           ),

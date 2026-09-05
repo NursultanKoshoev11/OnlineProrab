@@ -43,15 +43,15 @@ class _MoreTab extends StatelessWidget {
                   ),
                 ]
               : members
-                  .take(5)
-                  .map(
-                    (member) => _InfoRow(
-                      icon: Icons.person_outline_rounded,
-                      title: member.name.isEmpty ? member.phone : member.name,
-                      subtitle: _roleLabel(member.role),
-                    ),
-                  )
-                  .toList(),
+                    .take(5)
+                    .map(
+                      (member) => _InfoRow(
+                        icon: Icons.person_outline_rounded,
+                        title: member.name.isEmpty ? member.phone : member.name,
+                        subtitle: _roleLabel(member.role),
+                      ),
+                    )
+                    .toList(),
         ),
         const SizedBox(height: 12),
         _SectionCard(
@@ -63,16 +63,18 @@ class _MoreTab extends StatelessWidget {
                   Text('Отчётов пока нет.', style: TextStyle(color: _muted)),
                 ]
               : reports
-                  .take(4)
-                  .map(
-                    (report) => _InfoRow(
-                      icon: Icons.description_outlined,
-                      title: report.summary.isEmpty ? 'Отчёт' : report.summary,
-                      subtitle:
-                          '${report.workersCount} работников${report.issues.isEmpty ? '' : ' • есть замечания'}',
-                    ),
-                  )
-                  .toList(),
+                    .take(4)
+                    .map(
+                      (report) => _InfoRow(
+                        icon: Icons.description_outlined,
+                        title: report.summary.isEmpty
+                            ? 'Отчёт'
+                            : report.summary,
+                        subtitle:
+                            '${report.workersCount} работников${report.issues.isEmpty ? '' : ' • есть замечания'}',
+                      ),
+                    )
+                    .toList(),
         ),
         const SizedBox(height: 12),
         _SectionCard(
@@ -87,19 +89,19 @@ class _MoreTab extends StatelessWidget {
                   ),
                 ]
               : files
-                  .take(5)
-                  .map(
-                    (file) => _InfoRow(
-                      icon: file.contentType.startsWith('image/')
-                          ? Icons.image_outlined
-                          : Icons.insert_drive_file_outlined,
-                      title: file.originalName.isEmpty
-                          ? 'Файл'
-                          : file.originalName,
-                      subtitle: _fileSize(file.sizeBytes),
-                    ),
-                  )
-                  .toList(),
+                    .take(5)
+                    .map(
+                      (file) => _InfoRow(
+                        icon: file.contentType.startsWith('image/')
+                            ? Icons.image_outlined
+                            : Icons.insert_drive_file_outlined,
+                        title: file.originalName.isEmpty
+                            ? 'Файл'
+                            : file.originalName,
+                        subtitle: _fileSize(file.sizeBytes),
+                      ),
+                    )
+                    .toList(),
         ),
         const SizedBox(height: 12),
         _AnalyticsCard(costs: costs),

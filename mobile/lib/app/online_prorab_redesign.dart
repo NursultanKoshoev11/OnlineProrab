@@ -209,14 +209,14 @@ class _AuthGateState extends State<_AuthGate> {
   late final Future<SessionData?> _sessionFuture;
 
   _Dependencies get _deps => _Dependencies(
-        authRepository: widget.authRepository,
-        projectRepository: widget.projectRepository,
-        costItemRepository: widget.costItemRepository,
-        dailyReportRepository: widget.dailyReportRepository,
-        taskRepository: widget.taskRepository,
-        fileRepository: widget.fileRepository,
-        teamRepository: widget.teamRepository,
-      );
+    authRepository: widget.authRepository,
+    projectRepository: widget.projectRepository,
+    costItemRepository: widget.costItemRepository,
+    dailyReportRepository: widget.dailyReportRepository,
+    taskRepository: widget.taskRepository,
+    fileRepository: widget.fileRepository,
+    teamRepository: widget.teamRepository,
+  );
 
   @override
   void initState() {

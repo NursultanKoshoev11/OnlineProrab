@@ -71,7 +71,8 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                   final all = snapshot.data ?? const <RemoteProject>[];
                   final projects = all.where((project) {
                     final query = _search.text.trim().toLowerCase();
-                    final matchesQuery = query.isEmpty ||
+                    final matchesQuery =
+                        query.isEmpty ||
                         project.name.toLowerCase().contains(query) ||
                         project.address.toLowerCase().contains(query);
                     final status = project.status.toLowerCase();

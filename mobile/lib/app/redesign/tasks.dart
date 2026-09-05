@@ -110,8 +110,9 @@ class _TasksTabState extends State<_TasksTab> {
                           task.title,
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            decoration:
-                                done ? TextDecoration.lineThrough : null,
+                            decoration: done
+                                ? TextDecoration.lineThrough
+                                : null,
                           ),
                         ),
                         subtitle: task.description.isEmpty
