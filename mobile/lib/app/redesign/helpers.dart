@@ -222,7 +222,10 @@ _ExpenseSearchQuery _parseExpenseSearchQuery(
     normalized = normalized.replaceAll(phrase, ' ');
   }
 
-  normalized = normalized.replaceAll(RegExp(r'\b(за|в|на|по|за этот|за эту)\b'), ' ');
+  normalized = normalized.replaceAll(
+    RegExp(r'\b(за|в|на|по|за этот|за эту)\b'),
+    ' ',
+  );
   normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
 
   return _ExpenseSearchQuery(
