@@ -113,7 +113,11 @@ class ApiClient {
       request.fields['address'] = address;
       request.fields['start_date'] = startDate;
       request.files.add(
-        await http.MultipartFile.fromPath('cover', filePath, filename: fileName),
+        await http.MultipartFile.fromPath(
+          'cover',
+          filePath,
+          filename: fileName,
+        ),
       );
       final streamed = await _httpClient.send(request).timeout(_timeout);
       return http.Response.fromStream(streamed);

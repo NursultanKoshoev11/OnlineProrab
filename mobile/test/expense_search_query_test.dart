@@ -20,24 +20,27 @@ RemoteCostItem cost({
 void main() {
   final now = DateTime(2026, 9, 6);
 
-  test('parses expense name and explicit month/year from Russian voice query', () {
-    final query = parseExpenseSearchQuery(
-      'Сколько потратили на окна за май 2026?',
-      now: now,
-    );
+  test(
+    'parses expense name and explicit month/year from Russian voice query',
+    () {
+      final query = parseExpenseSearchQuery(
+        'Сколько потратили на окна за май 2026?',
+        now: now,
+      );
 
-    expect(query.month, 5);
-    expect(query.year, 2026);
-    expect(query.term, 'окна');
-    expect(
-      query.matches(cost(title: 'Окна первый этаж', spentAt: '2026-05-20')),
-      isTrue,
-    );
-    expect(
-      query.matches(cost(title: 'Окна первый этаж', spentAt: '2026-06-01')),
-      isFalse,
-    );
-  });
+      expect(query.month, 5);
+      expect(query.year, 2026);
+      expect(query.term, 'окна');
+      expect(
+        query.matches(cost(title: 'Окна первый этаж', spentAt: '2026-05-20')),
+        isTrue,
+      );
+      expect(
+        query.matches(cost(title: 'Окна первый этаж', spentAt: '2026-06-01')),
+        isFalse,
+      );
+    },
+  );
 
   test('uses current year when month is spoken without a year', () {
     final query = parseExpenseSearchQuery(

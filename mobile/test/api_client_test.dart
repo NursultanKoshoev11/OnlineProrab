@@ -158,20 +158,23 @@ void main() {
     );
   });
 
-  test('ApiClient converts http client errors to network ApiException', () async {
-    final client = ApiClient(
-      httpClient: MockClient((request) async {
-        throw const http.ClientException('offline');
-      }),
-    );
+  test(
+    'ApiClient converts http client errors to network ApiException',
+    () async {
+      final client = ApiClient(
+        httpClient: MockClient((request) async {
+          throw http.ClientException('offline');
+        }),
+      );
 
-    expect(
-      () => client.listProjects(),
-      throwsA(
-        isA<ApiException>()
-            .having((error) => error.statusCode, 'statusCode', 0)
-            .having((error) => error.message, 'message', 'offline'),
-      ),
-    );
-  });
+      expect(
+        () => client.listProjects(),
+        throwsA(
+          isA<ApiException>()
+              .having((error) => error.statusCode, 'statusCode', 0)
+              .having((error) => error.message, 'message', 'offline'),
+        ),
+      );
+    },
+  );
 }
