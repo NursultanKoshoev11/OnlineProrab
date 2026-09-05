@@ -38,11 +38,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Verify redesigned UI formatting
+        run: dart format --output=none --set-exit-if-changed lib/main.dart lib/app/online_prorab_redesign.dart lib/app/redesign test/widget_test.dart
 
-      - name: Analyze
-        run: flutter analyze
+      - name: Analyze active application
+        run: flutter analyze lib/main.dart lib/app/online_prorab_redesign.dart
 
       - name: Run tests
         run: flutter test

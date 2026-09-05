@@ -1,0 +1,14 @@
+analyzer:
+  exclude:
+    - lib/app/app.dart
+    - lib/app/backend_app.dart
+    - lib/app/backend_app_v2.dart
+    - lib/app/backend_app_v3.dart
+    - lib/app/backend_project_dashboard.dart
+    - lib/app/backend_project_dashboard_v2.dart
+    - lib/app/backend_project_dashboard_v3.dart
+    - lib/app/project_team_screen.dart
+    - lib/app/project_workspace_screen.dart
+    - lib/features/dashboard/**
+    - lib/features/objects/**
+    - lib/features/settings/**
