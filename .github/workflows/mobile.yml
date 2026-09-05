@@ -7,9 +7,13 @@ on:
     paths:
       - 'mobile/**'
       - '.github/workflows/mobile.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   flutter-checks:
@@ -21,8 +25,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -30,55 +32,17 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Show Flutter version
+        run: flutter --version
+
       - name: Prepare Android platform
         run: python3 tool/prepare_android.py
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Update single-image picker and format
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          form = Path('lib/app/redesign/cost_project_form.dart')
-          text = form.read_text()
-          pattern = re.compile(
-              r"      final result = await FilePicker\.pickFiles\(\n"
-              r"        type: FileType\.image,\n"
-              r"        allowMultiple: false,\n"
-              r"        withData: false,\n"
-              r"      \);\n"
-              r"      if \(!mounted \|\| result == null \|\| result\.isEmpty\) return;\n"
-              r"      final selected = result\.single;"
-          )
-          replacement = (
-              "      final selected = await FilePicker.pickFile(type: FileType.image);\n"
-              "      if (!mounted || selected == null) return;"
-          )
-          text, count = pattern.subn(replacement, text)
-          if count != 1:
-              raise SystemExit(f'Expected one file-picker block, replaced {count}')
-          form.write_text(text)
-          PY
-          dart format lib test
-
-      - name: Commit picker cleanup when needed
-        shell: bash
-        run: |
-          if git diff --quiet -- lib test; then
-            echo "No cleanup changes"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib test
-          git commit -m "Use current single-file picker API"
-          git reset --hard HEAD
-          git pull --rebase origin main
-          git push origin HEAD:main
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze application
         run: flutter analyze
