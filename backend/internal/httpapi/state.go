@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"time"
 
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
@@ -12,6 +13,10 @@ var appState = State{
 	AccessTokenTTL: 15 * time.Minute,
 }
 
+type SMSSender interface {
+	SendLoginCode(ctx context.Context, phone, code string) error
+}
+
 type State struct {
 	DB             *database.DB
 	JWTSecret      string
@@ -19,9 +24,10 @@ type State struct {
 	UploadDir      string
 	MaxUploadBytes int64
 	IsProduction   bool
+	SMSSender      SMSSender
 }
 
-func SetState(cfg config.Config, db *database.DB) {
+func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 	appState = State{
 		DB:             db,
 		JWTSecret:      cfg.JWTSecret,
@@ -29,6 +35,7 @@ func SetState(cfg config.Config, db *database.DB) {
 		UploadDir:      cfg.UploadDir,
 		MaxUploadBytes: cfg.MaxUploadBytes,
 		IsProduction:   cfg.IsProduction(),
+		SMSSender:      smsSender,
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"
