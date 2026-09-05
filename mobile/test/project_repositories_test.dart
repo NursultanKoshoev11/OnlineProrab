@@ -21,6 +21,7 @@ void main() {
                 'name': 'House',
                 'address': 'Bishkek',
                 'status': 'active',
+                'start_date': '2026-09-01',
               },
               {'id': '', 'name': 'Invalid'},
             ]),
@@ -36,6 +37,7 @@ void main() {
       expect(projects.length, 1);
       expect(projects.first.id, 'project-1');
       expect(projects.first.name, 'House');
+      expect(projects.first.startDate, '2026-09-01');
     },
   );
 
@@ -51,9 +53,10 @@ void main() {
               'project_id': 'project-1',
               'title': 'Cement',
               'amount': 1200,
-              'category': 'materials',
+              'category': 'other',
               'currency': 'KGS',
-              'vendor': 'Supplier',
+              'vendor': '',
+              'spent_at': '2026-09-06',
             },
           ]),
           200,
@@ -68,6 +71,7 @@ void main() {
     expect(items.length, 1);
     expect(items.first.amount, 1200);
     expect(items.first.currency, 'KGS');
+    expect(items.first.spentAt, '2026-09-06');
   });
 
   test('DailyReportRepository handles numeric workers count safely', () async {
