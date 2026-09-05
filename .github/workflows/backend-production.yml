@@ -12,9 +12,6 @@ on:
       - 'backend/**'
       - '.github/workflows/backend-production.yml'
 
-permissions:
-  contents: write
-
 jobs:
   backend-checks:
     runs-on: ubuntu-latest
@@ -40,29 +37,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
           cache-dependency-path: backend/go.sum
-      - name: Normalize modules and formatting
+      - name: Download dependencies
+        run: go mod download
+      - name: Verify module metadata
         run: |
           go mod tidy
-          gofmt -w .
-      - name: Commit reproducible dependency metadata
-        run: |
-          git diff --check
-          if ! git diff --quiet -- .; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .
-            git commit -m "Normalize backend modules and formatting"
-            git fetch origin main
-            git rebase origin/main
-            git push origin HEAD:main
-          fi
+          git diff --exit-code -- go.mod go.sum
+      - name: Format check
+        run: test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
       - name: Race tests
