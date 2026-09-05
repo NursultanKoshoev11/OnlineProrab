@@ -4,7 +4,6 @@ class _OverviewTab extends StatelessWidget {
   const _OverviewTab({
     required this.project,
     required this.costs,
-    required this.tasks,
     required this.files,
     required this.members,
     required this.openTab,
@@ -12,7 +11,6 @@ class _OverviewTab extends StatelessWidget {
 
   final RemoteProject project;
   final List<RemoteCostItem> costs;
-  final List<RemoteTask> tasks;
   final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
   final ValueChanged<int> openTab;
@@ -20,10 +18,6 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spent = costs.fold<double>(0, (sum, item) => sum + item.amount);
-    final done = tasks
-        .where((task) => task.status.toLowerCase() == 'done')
-        .length;
-    final progress = tasks.isEmpty ? 0.0 : done / tasks.length;
     final photos = files
         .where(
           (file) =>
@@ -31,6 +25,7 @@ class _OverviewTab extends StatelessWidget {
               file.contentType.toLowerCase().startsWith('image/'),
         )
         .length;
+    final currency = costs.isEmpty ? 'KGS' : costs.first.currency;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
@@ -90,70 +85,57 @@ class _OverviewTab extends StatelessWidget {
         ],
         const SizedBox(height: 18),
         Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Общий прогресс',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => openTab(1),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: _brandSoft,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    Text(
-                      tasks.isEmpty ? '—' : '${(progress * 100).round()}%',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    child: const Icon(
+                      Icons.receipt_long_rounded,
+                      color: _brand,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: LinearProgressIndicator(
-                    value: tasks.isEmpty ? null : progress,
-                    minHeight: 8,
-                    backgroundColor: _line,
-                    color: _brand,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  tasks.isEmpty
-                      ? 'Добавьте задачи, чтобы видеть прогресс.'
-                      : '$done из ${tasks.length} задач выполнено',
-                  style: const TextStyle(color: _muted, fontSize: 13),
-                ),
-              ],
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Потрачено на объект',
+                          style: TextStyle(color: _muted, fontSize: 13),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _money(spent, currency),
+                          style: const TextStyle(
+                            fontSize: 25,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                          ),
+                        ),
+                        Text(
+                          '${costs.length} записей расходов',
+                          style: const TextStyle(color: _muted, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: _muted),
+                ],
+              ),
             ),
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _MetricCard(
-                icon: Icons.payments_outlined,
-                label: 'Потрачено',
-                value: _money(
-                  spent,
-                  costs.isEmpty ? 'KGS' : costs.first.currency,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _MetricCard(
-                icon: Icons.task_alt_rounded,
-                label: 'Задачи',
-                value: '${tasks.length}',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -191,17 +173,9 @@ class _OverviewTab extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _QuickAction(
-                icon: Icons.task_alt_outlined,
-                label: 'Задачи',
-                onTap: () => openTab(2),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _QuickAction(
                 icon: Icons.groups_outlined,
                 label: 'Команда',
-                onTap: () => openTab(3),
+                onTap: () => openTab(2),
               ),
             ),
             const SizedBox(width: 10),
@@ -209,57 +183,11 @@ class _OverviewTab extends StatelessWidget {
               child: _QuickAction(
                 icon: Icons.photo_camera_outlined,
                 label: 'Фото',
-                onTap: () => openTab(3),
+                onTap: () => openTab(2),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Следующие задачи',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-              ),
-            ),
-            TextButton(onPressed: () => openTab(2), child: const Text('Все')),
-          ],
-        ),
-        if (tasks.isEmpty)
-          const _EmptyCard(
-            icon: Icons.task_alt_rounded,
-            title: 'Задач пока нет',
-            message: 'Создайте первую задачу по объекту.',
-          )
-        else
-          ...tasks
-              .where((task) => task.status.toLowerCase() != 'done')
-              .take(3)
-              .map(
-                (task) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Card(
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.radio_button_unchecked_rounded,
-                        color: _brand,
-                      ),
-                      title: Text(
-                        task.title,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: task.description.isEmpty
-                          ? null
-                          : Text(
-                              task.description,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                    ),
-                  ),
-                ),
-              ),
       ],
     );
   }
