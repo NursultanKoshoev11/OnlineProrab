@@ -17,20 +17,30 @@ const (
 )
 
 const (
+	SMSProviderTwilio = "twilio"
+)
+
+const (
 	minProductionSigningKeyLength = 32
 	minProductionAccessTokenTTL   = 5 * time.Minute
 	maxProductionAccessTokenTTL   = 60 * time.Minute
 )
 
 type Config struct {
-	Env                string
-	HTTPAddr           string
-	DatabaseURL        string
-	JWTSecret          string
-	AccessTokenTTL     time.Duration
-	CORSAllowedOrigins []string
-	UploadDir          string
-	MaxUploadBytes     int64
+	Env                       string
+	HTTPAddr                  string
+	DatabaseURL               string
+	JWTSecret                 string
+	AccessTokenTTL            time.Duration
+	CORSAllowedOrigins        []string
+	UploadDir                 string
+	MaxUploadBytes            int64
+	SMSProvider               string
+	TwilioAccountSID          string
+	TwilioAPIKeySID           string
+	TwilioAPIKeySecret        string
+	TwilioFrom                string
+	TwilioMessagingServiceSID string
 }
 
 func Load() Config {
@@ -45,6 +55,12 @@ func Load() Config {
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
+	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
+	cfg.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
+	cfg.TwilioAPIKeySID = strings.TrimSpace(os.Getenv("TWILIO_API_KEY_SID"))
+	cfg.TwilioAPIKeySecret = strings.TrimSpace(os.Getenv("TWILIO_API_KEY_SECRET"))
+	cfg.TwilioFrom = strings.TrimSpace(os.Getenv("TWILIO_FROM"))
+	cfg.TwilioMessagingServiceSID = strings.TrimSpace(os.Getenv("TWILIO_MESSAGING_SERVICE_SID"))
 	return cfg
 }
 
@@ -70,6 +86,12 @@ func (cfg Config) Validate() error {
 	if cfg.MaxUploadBytes <= 0 {
 		problems = append(problems, "MAX_UPLOAD_MB must be greater than 0")
 	}
+	if cfg.SMSProvider != "" && cfg.SMSProvider != SMSProviderTwilio {
+		problems = append(problems, "SMS_PROVIDER must be twilio when configured")
+	}
+	if cfg.SMSProvider == SMSProviderTwilio {
+		problems = append(problems, validateTwilioConfig(cfg)...)
+	}
 	if cfg.IsProduction() {
 		if strings.TrimSpace(cfg.JWTSecret) == "" {
 			problems = append(problems, "JWT_SECRET is required in production")
@@ -89,12 +111,37 @@ func (cfg Config) Validate() error {
 				break
 			}
 		}
+		if cfg.SMSProvider != SMSProviderTwilio {
+			problems = append(problems, "SMS_PROVIDER=twilio is required in production")
+		}
 	}
 
 	if len(problems) > 0 {
 		return errors.New(strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+func validateTwilioConfig(cfg Config) []string {
+	var problems []string
+	if !strings.HasPrefix(cfg.TwilioAccountSID, "AC") || len(cfg.TwilioAccountSID) < 10 {
+		problems = append(problems, "TWILIO_ACCOUNT_SID is required and must be an Account SID")
+	}
+	if !strings.HasPrefix(cfg.TwilioAPIKeySID, "SK") || len(cfg.TwilioAPIKeySID) < 10 {
+		problems = append(problems, "TWILIO_API_KEY_SID is required and must be an API Key SID")
+	}
+	if len(cfg.TwilioAPIKeySecret) < 16 {
+		problems = append(problems, "TWILIO_API_KEY_SECRET is required")
+	}
+	fromSet := strings.TrimSpace(cfg.TwilioFrom) != ""
+	serviceSet := strings.TrimSpace(cfg.TwilioMessagingServiceSID) != ""
+	if fromSet == serviceSet {
+		problems = append(problems, "configure exactly one of TWILIO_FROM or TWILIO_MESSAGING_SERVICE_SID")
+	}
+	if serviceSet && (!strings.HasPrefix(cfg.TwilioMessagingServiceSID, "MG") || len(cfg.TwilioMessagingServiceSID) < 10) {
+		problems = append(problems, "TWILIO_MESSAGING_SERVICE_SID must be a Messaging Service SID")
+	}
+	return problems
 }
 
 func isUnsafeSigningKey(value string) bool {
