@@ -38,14 +38,13 @@ class BackendProjectDashboardScreenV3 extends StatefulWidget {
 
 class _BackendProjectDashboardScreenV3State
     extends State<BackendProjectDashboardScreenV3> {
-  late Future<ProjectDashboardDataV3> dashboardFuture;
+  late Future<ProjectDashboardDataV3> _dashboardFuture;
   int _tab = 0;
-  String _expenseQuery = '';
 
   @override
   void initState() {
     super.initState();
-    dashboardFuture = _load();
+    _dashboardFuture = _load();
   }
 
   Future<ProjectDashboardDataV3> _load() async {
@@ -65,7 +64,7 @@ class _BackendProjectDashboardScreenV3State
 
   Future<void> _refresh() async {
     final future = _load();
-    setState(() => dashboardFuture = future);
+    setState(() => _dashboardFuture = future);
     await future;
   }
 
@@ -105,7 +104,7 @@ class _BackendProjectDashboardScreenV3State
         ],
       ),
       body: FutureBuilder<ProjectDashboardDataV3>(
-        future: dashboardFuture,
+        future: _dashboardFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -116,53 +115,39 @@ class _BackendProjectDashboardScreenV3State
               onRetry: _refresh,
             );
           }
-          final data = snapshot.data ??
-              const ProjectDashboardDataV3(
-                expenses: [],
-                reports: [],
-                tasks: [],
-                files: [],
-              );
 
-          final pages = <Widget>[
-            _OverviewTab(
-              project: widget.project,
-              data: data,
-              onAddExpense: _addExpense,
-              onAddTask: _addTask,
-              onAddReport: _addReport,
-              onOpenExpenses: () => setState(() => _tab = 1),
-              onOpenTasks: () => setState(() => _tab = 2),
-            ),
-            _ExpensesTab(
-              data: data,
-              query: _expenseQuery,
-              onQueryChanged: (value) => setState(() => _expenseQuery = value),
-              onVoiceSearch: () => _showVoiceSearchSheet(data.expenses),
-              onAdd: _addExpense,
-            ),
-            _TasksTab(
-              tasks: data.tasks,
-              onAdd: _addTask,
-              onDone: _markTaskDone,
-            ),
-            _ReportsTab(
-              reports: data.reports,
-              onAdd: _addReport,
-            ),
-            _MoreTab(
-              files: data.files,
-              onAddFile: _addFile,
-              onOpenFile: _openFile,
-              onDeleteFile: _deleteFile,
-              onOpenTeam: _openTeam,
-            ),
-          ];
+          final data = snapshot.data ?? ProjectDashboardDataV3.empty();
+          final page = switch (_tab) {
+            0 => _OverviewTab(
+                project: widget.project,
+                data: data,
+                onAddExpense: _addExpense,
+                onAddTask: _addTask,
+                onAddReport: _addReport,
+                onOpenExpenses: () => setState(() => _tab = 1),
+                onOpenTasks: () => setState(() => _tab = 2),
+              ),
+            1 => _ExpensesTab(
+                data: data,
+                onVoiceSearch: _askExpenseQuery,
+                onAdd: _addExpense,
+              ),
+            2 => _TasksTab(
+                tasks: data.tasks,
+                onAdd: _addTask,
+                onDone: _markTaskDone,
+              ),
+            3 => _ReportsTab(reports: data.reports, onAdd: _addReport),
+            _ => _MoreTab(
+                files: data.files,
+                onAddFile: _addFile,
+                onOpenFile: _openFile,
+                onDeleteFile: _deleteFile,
+                onOpenTeam: _openTeam,
+              ),
+          };
 
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: pages[_tab],
-          );
+          return RefreshIndicator(onRefresh: _refresh, child: page);
         },
       ),
       bottomNavigationBar: NavigationBar(
@@ -171,7 +156,6 @@ class _BackendProjectDashboardScreenV3State
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.grid_view_rounded),
-            selectedIcon: Icon(Icons.grid_view_rounded),
             label: 'Обзор',
           ),
           NavigationDestination(
@@ -267,8 +251,8 @@ class _BackendProjectDashboardScreenV3State
     }
   }
 
-  Future<void> _showVoiceSearchSheet(List<RemoteCostItem> expenses) async {
-    final controller = TextEditingController(text: _expenseQuery);
+  Future<String?> _askExpenseQuery() async {
+    final controller = TextEditingController();
     final query = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -276,104 +260,99 @@ class _BackendProjectDashboardScreenV3State
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            14,
-            20,
-            MediaQuery.of(sheetContext).viewInsets.bottom + 28,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          14,
+          20,
+          MediaQuery.of(sheetContext).viewInsets.bottom + 28,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: OnlineProrabColors.border,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
-                    color: OnlineProrabColors.border,
-                    borderRadius: BorderRadius.circular(10),
+                    color: OnlineProrabColors.mint,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(
+                    Icons.mic_none_rounded,
+                    color: OnlineProrabColors.primary,
                   ),
                 ),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: OnlineProrabColors.mint,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Icon(
-                      Icons.mic_none_rounded,
-                      color: OnlineProrabColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('AI-поиск расходов',
-                            style: Theme.of(context).textTheme.titleLarge),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Ищет по реальным расходам объекта',
-                          style: TextStyle(
-                            color: OnlineProrabColors.textMuted,
-                            fontSize: 12,
-                          ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AI-поиск расходов',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Ищет только по данным этого объекта',
+                        style: TextStyle(
+                          color: OnlineProrabColors.textMuted,
+                          fontSize: 12,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Например: сколько потратили на окна?',
-                  prefixIcon: Icon(Icons.auto_awesome_outlined),
                 ),
-                onSubmitted: (value) => Navigator.of(sheetContext).pop(value),
+              ],
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Например: сколько потратили на окна?',
+                prefixIcon: Icon(Icons.auto_awesome_outlined),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Голосовое распознавание пока не подключено к системному микрофону. Поиск и расчёт уже работают по введённому запросу; суммы берутся только из данных backend.',
-                style: TextStyle(
-                  color: OnlineProrabColors.textMuted,
-                  fontSize: 12,
-                  height: 1.4,
-                ),
+              onSubmitted: (value) => Navigator.of(sheetContext).pop(value),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Распознавание речи с микрофона будет подключено отдельно. Сейчас запрос можно ввести текстом; сумма всегда считается из реальных расходов backend.',
+              style: TextStyle(
+                color: OnlineProrabColors.textMuted,
+                fontSize: 12,
+                height: 1.4,
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.of(sheetContext).pop(
-                    controller.text.trim(),
-                  ),
-                  icon: const Icon(Icons.search_rounded),
-                  label: const Text('Найти'),
-                ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () =>
+                    Navigator.of(sheetContext).pop(controller.text.trim()),
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Найти'),
               ),
-            ],
-          ),
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
     controller.dispose();
-    if (!mounted || query == null) return;
-    setState(() {
-      _expenseQuery = query.trim();
-      _tab = 1;
-    });
+    return query?.trim();
   }
 
   Future<void> _openFile(RemoteProjectFile file) async {
@@ -397,8 +376,9 @@ class _BackendProjectDashboardScreenV3State
         return;
       }
       final directory = await getTemporaryDirectory();
-      final safeName = _safeLocalFileName(downloaded.fileName);
-      final target = File('${directory.path}/$safeName');
+      final target = File(
+        '${directory.path}/${_safeLocalFileName(downloaded.fileName)}',
+      );
       await target.writeAsBytes(downloaded.bytes, flush: true);
       final result = await OpenFilex.open(target.path);
       if (!mounted) return;
@@ -445,6 +425,13 @@ class ProjectDashboardDataV3 {
     required this.tasks,
     required this.files,
   });
+
+  factory ProjectDashboardDataV3.empty() => const ProjectDashboardDataV3(
+        expenses: [],
+        reports: [],
+        tasks: [],
+        files: [],
+      );
 
   final List<RemoteCostItem> expenses;
   final List<RemoteDailyReport> reports;
@@ -505,7 +492,10 @@ class _OverviewTab extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: OnlineProrabColors.primary,
                       borderRadius: BorderRadius.circular(12),
@@ -599,7 +589,10 @@ class _OverviewTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
-        Text('Быстрые действия', style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          'Быстрые действия',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -671,27 +664,37 @@ class _OverviewTab extends StatelessWidget {
   }
 }
 
-class _ExpensesTab extends StatelessWidget {
+class _ExpensesTab extends StatefulWidget {
   const _ExpensesTab({
     required this.data,
-    required this.query,
-    required this.onQueryChanged,
     required this.onVoiceSearch,
     required this.onAdd,
   });
 
   final ProjectDashboardDataV3 data;
-  final String query;
-  final ValueChanged<String> onQueryChanged;
-  final VoidCallback onVoiceSearch;
+  final Future<String?> Function() onVoiceSearch;
   final VoidCallback onAdd;
 
   @override
+  State<_ExpensesTab> createState() => _ExpensesTabState();
+}
+
+class _ExpensesTabState extends State<_ExpensesTab> {
+  final _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final filtered = _searchExpenses(data.expenses, query);
+    final filtered = _searchExpenses(widget.data.expenses, _query);
     final filteredTotal =
         filtered.fold<double>(0, (sum, item) => sum + item.amount);
-    final searching = query.trim().isNotEmpty;
+    final searching = _query.trim().isNotEmpty;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -703,17 +706,20 @@ class _ExpensesTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Расходы', style: Theme.of(context).textTheme.headlineMedium),
+                  Text(
+                    'Расходы',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   const SizedBox(height: 4),
                   Text(
-                    '${data.expenses.length} записей',
+                    '${widget.data.expenses.length} записей',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
             ),
             FilledButton.icon(
-              onPressed: onAdd,
+              onPressed: widget.onAdd,
               icon: const Icon(Icons.add_rounded),
               label: const Text('Добавить'),
             ),
@@ -731,11 +737,14 @@ class _ExpensesTab extends StatelessWidget {
             children: [
               Text(
                 searching ? 'Найдено на сумму' : 'Всего потрачено',
-                style: const TextStyle(color: Color(0xFFD8E7DF), fontSize: 13),
+                style: const TextStyle(
+                  color: Color(0xFFD8E7DF),
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 5),
               Text(
-                _money(searching ? filteredTotal : data.totalSpent),
+                _money(searching ? filteredTotal : widget.data.totalSpent),
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -747,15 +756,14 @@ class _ExpensesTab extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         TextField(
-          onChanged: onQueryChanged,
-          controller: TextEditingController(text: query)
-            ..selection = TextSelection.collapsed(offset: query.length),
+          controller: _controller,
+          onChanged: (value) => setState(() => _query = value),
           decoration: InputDecoration(
             hintText: 'Сколько потратили на окна?',
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: IconButton(
               tooltip: 'AI-поиск',
-              onPressed: onVoiceSearch,
+              onPressed: _voiceSearch,
               icon: const Icon(
                 Icons.mic_none_rounded,
                 color: OnlineProrabColors.primary,
@@ -763,8 +771,8 @@ class _ExpensesTab extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        if (searching)
+        if (searching) ...[
+          const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
@@ -781,7 +789,7 @@ class _ExpensesTab extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'По запросу «$query» найдено: ${filtered.length}',
+                    'По запросу «$_query» найдено: ${filtered.length}',
                     style: const TextStyle(
                       color: OnlineProrabColors.primaryDark,
                       fontWeight: FontWeight.w600,
@@ -791,11 +799,14 @@ class _ExpensesTab extends StatelessWidget {
               ],
             ),
           ),
+        ],
         const SizedBox(height: 18),
         if (filtered.isEmpty)
           _EmptyCard(
             icon: Icons.search_off_rounded,
-            text: searching ? 'По этому запросу расходов нет' : 'Расходов пока нет',
+            text: searching
+                ? 'По этому запросу расходов нет'
+                : 'Расходов пока нет',
           )
         else
           ...filtered.map(
@@ -806,6 +817,14 @@ class _ExpensesTab extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  Future<void> _voiceSearch() async {
+    final result = await widget.onVoiceSearch();
+    if (!mounted || result == null || result.isEmpty) return;
+    _controller.text = result;
+    _controller.selection = TextSelection.collapsed(offset: result.length);
+    setState(() => _query = result);
   }
 }
 
@@ -822,8 +841,10 @@ class _TasksTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final open = tasks.where((item) => item.status.toLowerCase() != 'done').toList();
-    final done = tasks.where((item) => item.status.toLowerCase() == 'done').toList();
+    final open =
+        tasks.where((item) => item.status.toLowerCase() != 'done').toList();
+    final done =
+        tasks.where((item) => item.status.toLowerCase() == 'done').toList();
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -839,7 +860,10 @@ class _TasksTab extends StatelessWidget {
         Text('В работе', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 10),
         if (open.isEmpty)
-          const _EmptyCard(icon: Icons.task_alt_rounded, text: 'Все задачи выполнены')
+          const _EmptyCard(
+            icon: Icons.task_alt_rounded,
+            text: 'Все задачи выполнены',
+          )
         else
           ...open.map(
             (item) => Padding(
@@ -927,17 +951,23 @@ class _MoreTab extends StatelessWidget {
             children: [
               ListTile(
                 leading: const _RoundIcon(icon: Icons.groups_2_outlined),
-                title: const Text('Команда',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
+                title: const Text(
+                  'Команда',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
                 subtitle: const Text('Участники и роли проекта'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: onOpenTeam,
               ),
               const Divider(height: 1, indent: 72),
               ListTile(
-                leading: const _RoundIcon(icon: Icons.add_photo_alternate_outlined),
-                title: const Text('Добавить файл',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
+                leading: const _RoundIcon(
+                  icon: Icons.add_photo_alternate_outlined,
+                ),
+                title: const Text(
+                  'Добавить файл',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
                 subtitle: const Text('Фото, чек или документ'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: onAddFile,
@@ -946,10 +976,17 @@ class _MoreTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        _SectionTitle(title: 'Файлы', action: '${files.length}', onAction: null),
+        _SectionTitle(
+          title: 'Файлы',
+          action: '${files.length}',
+          onAction: null,
+        ),
         const SizedBox(height: 10),
         if (files.isEmpty)
-          const _EmptyCard(icon: Icons.folder_outlined, text: 'Файлов пока нет')
+          const _EmptyCard(
+            icon: Icons.folder_outlined,
+            text: 'Файлов пока нет',
+          )
         else
           ...files.map(
             (item) => Padding(
@@ -963,134 +1000,6 @@ class _MoreTab extends StatelessWidget {
           ),
       ],
     );
-  }
-}
-
-class FileUploadScreenV3 extends StatefulWidget {
-  const FileUploadScreenV3({
-    required this.projectId,
-    required this.repository,
-    super.key,
-  });
-
-  final String projectId;
-  final ProjectFileRepository repository;
-
-  @override
-  State<FileUploadScreenV3> createState() => _FileUploadScreenV3State();
-}
-
-class _FileUploadScreenV3State extends State<FileUploadScreenV3> {
-  String kind = 'receipt';
-  PlatformFile? selectedFile;
-  bool busy = false;
-  String? error;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Добавить файл')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-        children: [
-          Text('Файл проекта', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          const Text(
-            'Добавьте чек, фотографию или документ к этому объекту.',
-            style: TextStyle(color: OnlineProrabColors.textMuted),
-          ),
-          const SizedBox(height: 24),
-          DropdownButtonFormField<String>(
-            value: kind,
-            decoration: const InputDecoration(labelText: 'Тип файла'),
-            items: const [
-              DropdownMenuItem(value: 'receipt', child: Text('Чек')),
-              DropdownMenuItem(value: 'photo', child: Text('Фото')),
-              DropdownMenuItem(value: 'document', child: Text('Документ')),
-            ],
-            onChanged: busy ? null : (value) => setState(() => kind = value ?? 'document'),
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: busy ? null : _pickFile,
-            icon: const Icon(Icons.folder_open_rounded),
-            label: Text(selectedFile == null ? 'Выбрать JPG, PNG, WEBP или PDF' : selectedFile!.name),
-          ),
-          if (selectedFile != null) ...[
-            const SizedBox(height: 8),
-            Text(_formatBytes(selectedFile!.size), style: Theme.of(context).textTheme.bodySmall),
-          ],
-          if (error != null) ...[
-            const SizedBox(height: 14),
-            _FormError(message: error!),
-          ],
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: busy || selectedFile == null ? null : _upload,
-            icon: busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.cloud_upload_outlined),
-            label: Text(busy ? 'Загрузка…' : 'Загрузить'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _pickFile() async {
-    setState(() => error = null);
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        allowMultiple: false,
-        withData: false,
-      );
-      if (!mounted || result == null || result.files.isEmpty) return;
-      final file = result.files.single;
-      if (file.path == null || file.path!.isEmpty) {
-        setState(() {
-          selectedFile = null;
-          error = 'Выбранный файл недоступен как локальный файл.';
-        });
-        return;
-      }
-      setState(() => selectedFile = file);
-    } catch (pickerError) {
-      if (!mounted) return;
-      setState(() => error = _friendlyError(pickerError));
-    }
-  }
-
-  Future<void> _upload() async {
-    final file = selectedFile;
-    final path = file?.path;
-    if (file == null || path == null || path.isEmpty) {
-      setState(() => error = 'Сначала выберите файл.');
-      return;
-    }
-    setState(() {
-      busy = true;
-      error = null;
-    });
-    try {
-      await widget.repository.upload(
-        projectId: widget.projectId,
-        kind: kind,
-        filePath: path,
-        fileName: file.name,
-      );
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (uploadError) {
-      if (!mounted) return;
-      setState(() => error = _friendlyError(uploadError));
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
   }
 }
 
@@ -1109,19 +1018,19 @@ class ExpenseFormScreenV3 extends StatefulWidget {
 }
 
 class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
-  final titleController = TextEditingController();
-  final amountController = TextEditingController();
-  final categoryController = TextEditingController(text: 'materials');
-  final vendorController = TextEditingController();
-  bool busy = false;
-  String? error;
+  final _title = TextEditingController();
+  final _amount = TextEditingController();
+  final _category = TextEditingController(text: 'materials');
+  final _vendor = TextEditingController();
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
-    titleController.dispose();
-    amountController.dispose();
-    categoryController.dispose();
-    vendorController.dispose();
+    _title.dispose();
+    _amount.dispose();
+    _category.dispose();
+    _vendor.dispose();
     super.dispose();
   }
 
@@ -1129,13 +1038,13 @@ class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
   Widget build(BuildContext context) => _SimpleFormScaffold(
         title: 'Новый расход',
         intro: 'Добавьте фактический расход по этому объекту.',
-        error: error,
-        busy: busy,
+        error: _error,
+        busy: _busy,
         buttonText: 'Сохранить расход',
         onSave: _save,
         children: [
           TextField(
-            controller: titleController,
+            controller: _title,
             decoration: const InputDecoration(
               labelText: 'Название',
               prefixIcon: Icon(Icons.receipt_long_outlined),
@@ -1143,7 +1052,7 @@ class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: amountController,
+            controller: _amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(
               labelText: 'Сумма, сом',
@@ -1152,7 +1061,7 @@ class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: categoryController,
+            controller: _category,
             decoration: const InputDecoration(
               labelText: 'Категория',
               prefixIcon: Icon(Icons.category_outlined),
@@ -1160,7 +1069,7 @@ class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: vendorController,
+            controller: _vendor,
             decoration: const InputDecoration(
               labelText: 'Поставщик',
               prefixIcon: Icon(Icons.storefront_outlined),
@@ -1170,30 +1079,30 @@ class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
       );
 
   Future<void> _save() async {
-    final title = titleController.text.trim();
-    final amount = double.tryParse(amountController.text.trim());
-    if (title.isEmpty || amount == null || amount < 0) {
-      setState(() => error = 'Введите корректное название и сумму.');
+    final title = _title.text.trim();
+    final amount = double.tryParse(_amount.text.trim());
+    if (title.isEmpty || amount == null || amount <= 0) {
+      setState(() => _error = 'Введите корректное название и сумму.');
       return;
     }
     setState(() {
-      busy = true;
-      error = null;
+      _busy = true;
+      _error = null;
     });
     try {
       await widget.repository.create(
         projectId: widget.projectId,
         title: title,
         amount: amount,
-        category: categoryController.text.trim(),
-        vendor: vendorController.text.trim(),
+        category: _category.text.trim(),
+        vendor: _vendor.text.trim(),
       );
       if (mounted) Navigator.of(context).pop(true);
-    } catch (saveError) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => error = _friendlyError(saveError));
+      setState(() => _error = _friendlyError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 }
@@ -1213,17 +1122,17 @@ class ReportFormScreenV3 extends StatefulWidget {
 }
 
 class _ReportFormScreenV3State extends State<ReportFormScreenV3> {
-  final summaryController = TextEditingController();
-  final workersController = TextEditingController(text: '1');
-  final issuesController = TextEditingController();
-  bool busy = false;
-  String? error;
+  final _summary = TextEditingController();
+  final _workers = TextEditingController(text: '1');
+  final _issues = TextEditingController();
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
-    summaryController.dispose();
-    workersController.dispose();
-    issuesController.dispose();
+    _summary.dispose();
+    _workers.dispose();
+    _issues.dispose();
     super.dispose();
   }
 
@@ -1231,20 +1140,20 @@ class _ReportFormScreenV3State extends State<ReportFormScreenV3> {
   Widget build(BuildContext context) => _SimpleFormScaffold(
         title: 'Новый отчёт',
         intro: 'Зафиксируйте, что было сделано на объекте.',
-        error: error,
-        busy: busy,
+        error: _error,
+        busy: _busy,
         buttonText: 'Сохранить отчёт',
         onSave: _save,
         children: [
           TextField(
-            controller: summaryController,
+            controller: _summary,
             minLines: 3,
             maxLines: 5,
             decoration: const InputDecoration(labelText: 'Что сделали'),
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: workersController,
+            controller: _workers,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'Количество рабочих',
@@ -1253,38 +1162,40 @@ class _ReportFormScreenV3State extends State<ReportFormScreenV3> {
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: issuesController,
+            controller: _issues,
             minLines: 2,
             maxLines: 4,
-            decoration: const InputDecoration(labelText: 'Проблемы или задержки'),
+            decoration: const InputDecoration(
+              labelText: 'Проблемы или задержки',
+            ),
           ),
         ],
       );
 
   Future<void> _save() async {
-    final summary = summaryController.text.trim();
-    final workers = int.tryParse(workersController.text.trim());
+    final summary = _summary.text.trim();
+    final workers = int.tryParse(_workers.text.trim());
     if (summary.isEmpty || workers == null || workers < 0) {
-      setState(() => error = 'Заполните описание и количество рабочих.');
+      setState(() => _error = 'Заполните описание и количество рабочих.');
       return;
     }
     setState(() {
-      busy = true;
-      error = null;
+      _busy = true;
+      _error = null;
     });
     try {
       await widget.repository.create(
         projectId: widget.projectId,
         summary: summary,
         workersCount: workers,
-        issues: issuesController.text.trim(),
+        issues: _issues.text.trim(),
       );
       if (mounted) Navigator.of(context).pop(true);
-    } catch (saveError) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => error = _friendlyError(saveError));
+      setState(() => _error = _friendlyError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 }
@@ -1304,15 +1215,15 @@ class TaskFormScreenV3 extends StatefulWidget {
 }
 
 class _TaskFormScreenV3State extends State<TaskFormScreenV3> {
-  final titleController = TextEditingController();
-  final descriptionController = TextEditingController();
-  bool busy = false;
-  String? error;
+  final _title = TextEditingController();
+  final _description = TextEditingController();
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
-    titleController.dispose();
-    descriptionController.dispose();
+    _title.dispose();
+    _description.dispose();
     super.dispose();
   }
 
@@ -1320,13 +1231,13 @@ class _TaskFormScreenV3State extends State<TaskFormScreenV3> {
   Widget build(BuildContext context) => _SimpleFormScaffold(
         title: 'Новая задача',
         intro: 'Добавьте конкретную задачу для объекта.',
-        error: error,
-        busy: busy,
+        error: _error,
+        busy: _busy,
         buttonText: 'Сохранить задачу',
         onSave: _save,
         children: [
           TextField(
-            controller: titleController,
+            controller: _title,
             decoration: const InputDecoration(
               labelText: 'Название задачи',
               prefixIcon: Icon(Icons.task_alt_outlined),
@@ -1334,7 +1245,7 @@ class _TaskFormScreenV3State extends State<TaskFormScreenV3> {
           ),
           const SizedBox(height: 14),
           TextField(
-            controller: descriptionController,
+            controller: _description,
             minLines: 3,
             maxLines: 5,
             decoration: const InputDecoration(labelText: 'Описание'),
@@ -1343,27 +1254,170 @@ class _TaskFormScreenV3State extends State<TaskFormScreenV3> {
       );
 
   Future<void> _save() async {
-    final title = titleController.text.trim();
+    final title = _title.text.trim();
     if (title.isEmpty) {
-      setState(() => error = 'Введите название задачи.');
+      setState(() => _error = 'Введите название задачи.');
       return;
     }
     setState(() {
-      busy = true;
-      error = null;
+      _busy = true;
+      _error = null;
     });
     try {
       await widget.repository.create(
         projectId: widget.projectId,
         title: title,
-        description: descriptionController.text.trim(),
+        description: _description.text.trim(),
       );
       if (mounted) Navigator.of(context).pop(true);
-    } catch (saveError) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => error = _friendlyError(saveError));
+      setState(() => _error = _friendlyError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+class FileUploadScreenV3 extends StatefulWidget {
+  const FileUploadScreenV3({
+    required this.projectId,
+    required this.repository,
+    super.key,
+  });
+
+  final String projectId;
+  final ProjectFileRepository repository;
+
+  @override
+  State<FileUploadScreenV3> createState() => _FileUploadScreenV3State();
+}
+
+class _FileUploadScreenV3State extends State<FileUploadScreenV3> {
+  String _kind = 'receipt';
+  PlatformFile? _selectedFile;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Добавить файл')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        children: [
+          Text(
+            'Файл проекта',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Добавьте чек, фотографию или документ к этому объекту.',
+            style: TextStyle(color: OnlineProrabColors.textMuted),
+          ),
+          const SizedBox(height: 24),
+          DropdownButtonFormField<String>(
+            initialValue: _kind,
+            decoration: const InputDecoration(labelText: 'Тип файла'),
+            items: const [
+              DropdownMenuItem(value: 'receipt', child: Text('Чек')),
+              DropdownMenuItem(value: 'photo', child: Text('Фото')),
+              DropdownMenuItem(value: 'document', child: Text('Документ')),
+            ],
+            onChanged: _busy
+                ? null
+                : (value) => setState(() => _kind = value ?? 'document'),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _pickFile,
+            icon: const Icon(Icons.folder_open_rounded),
+            label: Text(
+              _selectedFile == null
+                  ? 'Выбрать JPG, PNG, WEBP или PDF'
+                  : _selectedFile!.name,
+            ),
+          ),
+          if (_selectedFile != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _formatBytes(_selectedFile!.size),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            _FormError(message: _error!),
+          ],
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: _busy || _selectedFile == null ? null : _upload,
+            icon: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.cloud_upload_outlined),
+            label: Text(_busy ? 'Загрузка…' : 'Загрузить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickFile() async {
+    setState(() => _error = null);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+        allowMultiple: false,
+        withData: false,
+      );
+      if (!mounted || result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      if (file.path == null || file.path!.isEmpty) {
+        setState(() {
+          _selectedFile = null;
+          _error = 'Выбранный файл недоступен как локальный файл.';
+        });
+        return;
+      }
+      setState(() => _selectedFile = file);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _friendlyError(error));
+    }
+  }
+
+  Future<void> _upload() async {
+    final file = _selectedFile;
+    final path = file?.path;
+    if (file == null || path == null || path.isEmpty) {
+      setState(() => _error = 'Сначала выберите файл.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.repository.upload(
+        projectId: widget.projectId,
+        kind: _kind,
+        filePath: path,
+        fileName: file.name,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 }
@@ -1396,7 +1450,10 @@ class _SimpleFormScaffold extends StatelessWidget {
         children: [
           Text(title, style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 7),
-          Text(intro, style: const TextStyle(color: OnlineProrabColors.textMuted)),
+          Text(
+            intro,
+            style: const TextStyle(color: OnlineProrabColors.textMuted),
+          ),
           const SizedBox(height: 24),
           ...children,
           if (error != null) ...[
@@ -1410,7 +1467,10 @@ class _SimpleFormScaffold extends StatelessWidget {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : Text(buttonText),
           ),
@@ -1421,7 +1481,11 @@ class _SimpleFormScaffold extends StatelessWidget {
 }
 
 class _MetricCard extends StatelessWidget {
-  const _MetricCard({required this.icon, required this.label, required this.value});
+  const _MetricCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   final IconData icon;
   final String label;
@@ -1441,7 +1505,10 @@ class _MetricCard extends StatelessWidget {
         children: [
           Icon(icon, size: 22, color: OnlineProrabColors.primary),
           const SizedBox(height: 14),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19)),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
+          ),
           const SizedBox(height: 3),
           Text(label, style: Theme.of(context).textTheme.bodySmall),
         ],
@@ -1451,7 +1518,11 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.onTap});
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -1481,7 +1552,10 @@ class _QuickAction extends StatelessWidget {
               child: Icon(icon, color: OnlineProrabColors.primary, size: 20),
             ),
             const SizedBox(height: 9),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
           ],
         ),
       ),
@@ -1551,7 +1625,9 @@ class _TaskCard extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: done ? OnlineProrabColors.mint : OnlineProrabColors.surfaceSoft,
+            color: done
+                ? OnlineProrabColors.mint
+                : OnlineProrabColors.surfaceSoft,
             borderRadius: BorderRadius.circular(13),
           ),
           child: Icon(
@@ -1571,7 +1647,11 @@ class _TaskCard extends StatelessWidget {
             ? null
             : Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(item.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  item.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
         trailing: done || onDone == null
             ? null
@@ -1604,8 +1684,13 @@ class _ReportCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.summary,
-                      style: const TextStyle(fontWeight: FontWeight.w700, height: 1.35)),
+                  Text(
+                    item.summary,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
                   const SizedBox(height: 7),
                   Text(
                     '${item.workersCount} рабочих${item.issues.isEmpty ? '' : ' • Есть замечания'}',
@@ -1620,7 +1705,10 @@ class _ReportCard extends StatelessWidget {
                         color: OnlineProrabColors.warningSoft,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(item.issues, style: const TextStyle(fontSize: 12)),
+                      child: Text(
+                        item.issues,
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ),
                   ],
                 ],
@@ -1634,7 +1722,11 @@ class _ReportCard extends StatelessWidget {
 }
 
 class _FileCard extends StatelessWidget {
-  const _FileCard({required this.item, required this.onOpen, required this.onDelete});
+  const _FileCard({
+    required this.item,
+    required this.onOpen,
+    required this.onDelete,
+  });
 
   final RemoteProjectFile item;
   final VoidCallback onOpen;
@@ -1646,9 +1738,16 @@ class _FileCard extends StatelessWidget {
     return Card(
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
-        leading: _RoundIcon(icon: image ? Icons.image_outlined : Icons.description_outlined),
-        title: Text(item.originalName, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text('${_fileKindLabel(item.kind)} • ${_formatBytes(item.sizeBytes)}'),
+        leading: _RoundIcon(
+          icon: image ? Icons.image_outlined : Icons.description_outlined,
+        ),
+        title: Text(
+          item.originalName,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          '${_fileKindLabel(item.kind)} • ${_formatBytes(item.sizeBytes)}',
+        ),
         onTap: onOpen,
         trailing: IconButton(
           tooltip: 'Удалить',
@@ -1680,7 +1779,11 @@ class _RoundIcon extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, required this.action, required this.onAction});
+  const _SectionTitle({
+    required this.title,
+    required this.action,
+    required this.onAction,
+  });
 
   final String title;
   final String action;
@@ -1690,8 +1793,16 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
-        TextButton(onPressed: onAction, child: Text(action)),
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+        ),
+        if (onAction != null)
+          TextButton(onPressed: onAction, child: Text(action))
+        else
+          Text(
+            action,
+            style: const TextStyle(color: OnlineProrabColors.textMuted),
+          ),
       ],
     );
   }
@@ -1798,11 +1909,22 @@ class _DashboardError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 52, color: OnlineProrabColors.textMuted),
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 52,
+              color: OnlineProrabColors.textMuted,
+            ),
             const SizedBox(height: 16),
-            Text('Не удалось загрузить объект', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Не удалось загрузить объект',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: onRetry,
@@ -1816,14 +1938,37 @@ class _DashboardError extends StatelessWidget {
   }
 }
 
-List<RemoteCostItem> _searchExpenses(List<RemoteCostItem> expenses, String rawQuery) {
+List<RemoteCostItem> _searchExpenses(
+  List<RemoteCostItem> expenses,
+  String rawQuery,
+) {
   final query = rawQuery.toLowerCase().trim();
   if (query.isEmpty) return expenses;
 
   const stopWords = <String>{
-    'сколько', 'было', 'потрачено', 'потратили', 'потрачено?', 'покажи',
-    'показать', 'найди', 'найти', 'расход', 'расходы', 'расходов', 'сумма',
-    'сумму', 'на', 'за', 'по', 'в', 'во', 'и', 'всего', 'мы', 'я', 'для',
+    'сколько',
+    'было',
+    'потрачено',
+    'потратили',
+    'покажи',
+    'показать',
+    'найди',
+    'найти',
+    'расход',
+    'расходы',
+    'расходов',
+    'сумма',
+    'сумму',
+    'на',
+    'за',
+    'по',
+    'в',
+    'во',
+    'и',
+    'всего',
+    'мы',
+    'я',
+    'для',
   };
 
   final tokens = query
@@ -1832,18 +1977,14 @@ List<RemoteCostItem> _searchExpenses(List<RemoteCostItem> expenses, String rawQu
       .where((token) => token.length > 1 && !stopWords.contains(token))
       .toList();
 
-  if (tokens.isEmpty) {
-    return expenses.where((item) => _expenseHaystack(item).contains(query)).toList();
-  }
+  if (tokens.isEmpty) return expenses;
 
   return expenses.where((item) {
-    final haystack = _expenseHaystack(item);
-    return tokens.every((token) => haystack.contains(token));
+    final haystack =
+        '${item.title} ${item.category} ${item.vendor}'.toLowerCase();
+    return tokens.every(haystack.contains);
   }).toList();
 }
-
-String _expenseHaystack(RemoteCostItem item) =>
-    '${item.title} ${item.category} ${item.vendor}'.toLowerCase();
 
 String _money(double amount) => '${_formatNumber(amount)} сом';
 
@@ -1859,8 +2000,7 @@ String _formatNumber(double value) {
 
 String _currencyLabel(String value) {
   final currency = value.toUpperCase();
-  if (currency == 'KGS') return 'сом';
-  return currency;
+  return currency == 'KGS' ? 'сом' : currency;
 }
 
 String _statusLabel(String status) {
@@ -1896,7 +2036,9 @@ String _friendlyError(Object? error) {
   if (text.contains('Connection refused') || text.contains('ApiException(0)')) {
     return 'Не удалось подключиться к серверу.';
   }
-  if (text.contains('invalid JSON')) return 'Сервер вернул некорректный ответ.';
+  if (text.contains('invalid JSON')) {
+    return 'Сервер вернул некорректный ответ.';
+  }
   return text.replaceFirst('Exception: ', '');
 }
 
