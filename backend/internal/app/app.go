@@ -12,12 +12,31 @@ import (
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/bootstrap"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/httpapi"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/sms"
 )
 
 func Run() {
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
+	}
+
+	var smsSender httpapi.SMSSender
+	if cfg.SMSProvider == config.SMSProviderTwilio {
+		sender, err := sms.NewTwilioSender(sms.TwilioConfig{
+			AccountSID:          cfg.TwilioAccountSID,
+			APIKeySID:           cfg.TwilioAPIKeySID,
+			APIKeySecret:        cfg.TwilioAPIKeySecret,
+			From:                cfg.TwilioFrom,
+			MessagingServiceSID: cfg.TwilioMessagingServiceSID,
+		})
+		if err != nil {
+			log.Fatalf("failed to initialize SMS provider: %v", err)
+		}
+		smsSender = sender
+	}
+	if cfg.IsProduction() && smsSender == nil {
+		log.Fatal("SMS provider is required in production")
 	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -33,7 +52,7 @@ func Run() {
 	}
 	migrationCancel()
 
-	httpapi.SetState(cfg, db)
+	httpapi.SetState(cfg, db, smsSender)
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
