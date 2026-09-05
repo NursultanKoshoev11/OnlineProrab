@@ -88,6 +88,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                 _ExpensesTab(
                   project: widget.project,
                   repository: widget.deps.costItemRepository,
+                  speechToText: widget.deps.speechToText,
                   initial: _costs,
                   onChanged: (items) => setState(() => _costs = items),
                 ),
