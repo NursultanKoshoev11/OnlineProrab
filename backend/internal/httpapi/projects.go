@@ -176,10 +176,18 @@ func createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := addProjectOwnerAndAudit(ctx, tx, userID, item.ID); err != nil {
-		Error(w, http.StatusInternalServerError, err.Error())
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO project_members (project_id, user_id, role)
+		VALUES ($1, $2, 'owner')
+		ON CONFLICT DO NOTHING
+	`, item.ID, userID); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to create project membership")
 		return
 	}
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
+		VALUES ($1, $2, 'create', 'project', $2)
+	`, userID, item.ID)
 
 	if err := tx.Commit(ctx); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to commit project")
@@ -253,10 +261,18 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := addProjectOwnerAndAudit(ctx, tx, userID, item.ID); err != nil {
-		Error(w, http.StatusInternalServerError, err.Error())
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO project_members (project_id, user_id, role)
+		VALUES ($1, $2, 'owner')
+		ON CONFLICT DO NOTHING
+	`, item.ID, userID); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to create project membership")
 		return
 	}
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
+		VALUES ($1, $2, 'create', 'project', $2)
+	`, userID, item.ID)
 
 	stored, err := storeUploadedFile(source, header, item.ID, maxBytes)
 	if err != nil {
@@ -291,12 +307,6 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 	}
 	cleanup = false
 	JSON(w, http.StatusCreated, item)
-}
-
-func addProjectOwnerAndAudit(ctx context.Context, tx interface {
-	Exec(context.Context, string, ...any) (interface{ RowsAffected() int64 }, error)
-}, userID, projectID string) error {
-	return nil
 }
 
 func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
