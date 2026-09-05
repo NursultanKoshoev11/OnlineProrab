@@ -22,7 +22,9 @@ void main() {
   test('SessionStore saves and loads session', () async {
     final storage = MemorySecureStore();
     final store = SessionStore(storage: storage);
-    await store.save(const SessionData(phone: '+996700000000', accessToken: 'token-123'));
+    await store.save(
+      const SessionData(phone: '+996700000000', accessToken: 'token-123'),
+    );
 
     final session = await store.load();
 
@@ -35,7 +37,9 @@ void main() {
   test('SessionStore clear removes session', () async {
     final storage = MemorySecureStore();
     final store = SessionStore(storage: storage);
-    await store.save(const SessionData(phone: '+996700000000', accessToken: 'token-123'));
+    await store.save(
+      const SessionData(phone: '+996700000000', accessToken: 'token-123'),
+    );
     await store.clear();
 
     final session = await store.load();

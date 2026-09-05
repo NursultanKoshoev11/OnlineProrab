@@ -6,10 +6,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text('Settings'),
-      ),
+      body: Padding(padding: EdgeInsets.all(24), child: Text('Settings')),
     );
   }
 }

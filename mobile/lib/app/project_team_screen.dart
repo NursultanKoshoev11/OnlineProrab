@@ -69,8 +69,10 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
               children: [
-                Text('Команда объекта',
-                    style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  'Команда объекта',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   '${members.length} ${_memberWord(members.length)}',
@@ -85,10 +87,12 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _ProjectMemberCard(
                         member: member,
-                        onChangeRole:
-                            member.role == 'owner' ? null : () => _changeRole(member),
-                        onRemove:
-                            member.role == 'owner' ? null : () => _removeMember(member),
+                        onChangeRole: member.role == 'owner'
+                            ? null
+                            : () => _changeRole(member),
+                        onRemove: member.role == 'owner'
+                            ? null
+                            : () => _removeMember(member),
                       ),
                     ),
                   ),
@@ -170,7 +174,8 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
             child: const Text('Отмена'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
             child: const Text('Принять'),
           ),
         ],
@@ -288,7 +293,10 @@ class _ProjectInviteDialogState extends State<ProjectInviteDialog> {
             initialValue: role,
             decoration: const InputDecoration(labelText: 'Роль'),
             items: const [
-              DropdownMenuItem(value: 'manager', child: Text('Прораб / менеджер')),
+              DropdownMenuItem(
+                value: 'manager',
+                child: Text('Прораб / менеджер'),
+              ),
               DropdownMenuItem(value: 'worker', child: Text('Рабочий')),
               DropdownMenuItem(value: 'viewer', child: Text('Наблюдатель')),
             ],
@@ -312,7 +320,9 @@ class _ProjectInviteDialogState extends State<ProjectInviteDialog> {
               setState(() => error = 'Введите корректный номер телефона.');
               return;
             }
-            Navigator.of(context).pop(ProjectInviteInput(phone: phone, role: role));
+            Navigator.of(
+              context,
+            ).pop(ProjectInviteInput(phone: phone, role: role));
           },
           child: const Text('Пригласить'),
         ),
@@ -403,10 +413,15 @@ class _ProjectMemberCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                   const SizedBox(height: 4),
                   Text(
-                    member.name.isEmpty ? _roleLabel(member.role) : '${member.phone} • ${_roleLabel(member.role)}',
+                    member.name.isEmpty
+                        ? _roleLabel(member.role)
+                        : '${member.phone} • ${_roleLabel(member.role)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -420,9 +435,15 @@ class _ProjectMemberCard extends StatelessWidget {
                 },
                 itemBuilder: (_) => [
                   if (onChangeRole != null)
-                    const PopupMenuItem(value: 'role', child: Text('Изменить роль')),
+                    const PopupMenuItem(
+                      value: 'role',
+                      child: Text('Изменить роль'),
+                    ),
                   if (onRemove != null)
-                    const PopupMenuItem(value: 'remove', child: Text('Удалить из команды')),
+                    const PopupMenuItem(
+                      value: 'remove',
+                      child: Text('Удалить из команды'),
+                    ),
                 ],
               ),
           ],
@@ -446,9 +467,16 @@ class _TeamEmptyState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.groups_2_outlined, size: 46, color: OnlineProrabColors.primary),
+          const Icon(
+            Icons.groups_2_outlined,
+            size: 46,
+            color: OnlineProrabColors.primary,
+          ),
           const SizedBox(height: 14),
-          Text('Участников пока нет', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Участников пока нет',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 6),
           Text(
             'Добавьте прораба, рабочих или наблюдателей.',
@@ -475,11 +503,22 @@ class _TeamErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 48, color: OnlineProrabColors.textMuted),
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 48,
+              color: OnlineProrabColors.textMuted,
+            ),
             const SizedBox(height: 14),
-            Text('Не удалось загрузить команду', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Не удалось загрузить команду',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 7),
-            Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: onRetry,

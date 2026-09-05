@@ -8,8 +8,8 @@ class ApiClient {
   ApiClient({
     http.Client? httpClient,
     Duration timeout = const Duration(seconds: 15),
-  })  : _httpClient = httpClient ?? http.Client(),
-        _timeout = timeout;
+  }) : _httpClient = httpClient ?? http.Client(),
+       _timeout = timeout;
 
   final http.Client _httpClient;
   final Duration _timeout;
@@ -17,7 +17,7 @@ class ApiClient {
   String? accessToken;
   String? refreshToken;
   Future<void> Function(String accessToken, String refreshToken)?
-      _onTokensUpdated;
+  _onTokensUpdated;
   Future<void> Function()? _onSessionExpired;
   Future<bool>? _refreshInFlight;
 
@@ -30,7 +30,7 @@ class ApiClient {
 
   void setSessionHandlers({
     Future<void> Function(String accessToken, String refreshToken)?
-        onTokensUpdated,
+    onTokensUpdated,
     Future<void> Function()? onSessionExpired,
   }) {
     _onTokensUpdated = onTokensUpdated;
@@ -41,22 +41,19 @@ class ApiClient {
       _postJson('/api/v1/auth/sms/request', {'phone': phone}, retry: false);
 
   Future<Map<String, dynamic>> verifySMSCode(String phone, String code) async {
-    final data = await _postJson(
-      '/api/v1/auth/sms/verify',
-      {'phone': phone, 'code': code},
-      retry: false,
-    );
+    final data = await _postJson('/api/v1/auth/sms/verify', {
+      'phone': phone,
+      'code': code,
+    }, retry: false);
     final token = data['access_token']?.toString() ?? '';
     if (token.isNotEmpty) accessToken = token;
     return data;
   }
 
   Future<String> createRefreshSession({String deviceName = 'mobile'}) async {
-    final data = await _postJson(
-      '/api/v1/auth/session',
-      {'device_name': deviceName},
-      retry: false,
-    );
+    final data = await _postJson('/api/v1/auth/session', {
+      'device_name': deviceName,
+    }, retry: false);
     final token = data['refresh_token']?.toString() ?? '';
     if (token.isEmpty) {
       throw const ApiException(500, 'Backend did not return a refresh token');
@@ -93,12 +90,11 @@ class ApiClient {
     String name,
     String address, {
     String status = 'active',
-  }) =>
-      patchJson('/api/v1/projects/$projectId', {
-        'name': name,
-        'address': address,
-        'status': status,
-      });
+  }) => patchJson('/api/v1/projects/$projectId', {
+    'name': name,
+    'address': address,
+    'status': status,
+  });
 
   Future<void> deleteProject(String projectId) async {
     await deleteJson('/api/v1/projects/$projectId');
@@ -114,15 +110,14 @@ class ApiClient {
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
-  }) =>
-      postJson('/api/v1/cost-items', {
-        'project_id': projectId,
-        'title': title,
-        'amount': amount,
-        'category': category,
-        'currency': currency,
-        'vendor': vendor,
-      });
+  }) => postJson('/api/v1/cost-items', {
+    'project_id': projectId,
+    'title': title,
+    'amount': amount,
+    'category': category,
+    'currency': currency,
+    'vendor': vendor,
+  });
 
   Future<Map<String, dynamic>> updateCostItem({
     required String costItemId,
@@ -131,47 +126,44 @@ class ApiClient {
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
-  }) =>
-      patchJson('/api/v1/cost-items/$costItemId', {
-        'title': title,
-        'amount': amount,
-        'category': category,
-        'currency': currency,
-        'vendor': vendor,
-      });
+  }) => patchJson('/api/v1/cost-items/$costItemId', {
+    'title': title,
+    'amount': amount,
+    'category': category,
+    'currency': currency,
+    'vendor': vendor,
+  });
 
   Future<void> deleteCostItem(String costItemId) async {
     await deleteJson('/api/v1/cost-items/$costItemId');
   }
 
   Future<List<dynamic>> listDailyReports(String projectId) async => _asList(
-        await getJson('/api/v1/daily-reports', {'project_id': projectId}),
-      );
+    await getJson('/api/v1/daily-reports', {'project_id': projectId}),
+  );
 
   Future<Map<String, dynamic>> createDailyReport({
     required String projectId,
     required String summary,
     required int workersCount,
     String issues = '',
-  }) =>
-      postJson('/api/v1/daily-reports', {
-        'project_id': projectId,
-        'summary': summary,
-        'workers_count': workersCount,
-        'issues': issues,
-      });
+  }) => postJson('/api/v1/daily-reports', {
+    'project_id': projectId,
+    'summary': summary,
+    'workers_count': workersCount,
+    'issues': issues,
+  });
 
   Future<Map<String, dynamic>> updateDailyReport({
     required String reportId,
     required String summary,
     required int workersCount,
     String issues = '',
-  }) =>
-      patchJson('/api/v1/daily-reports/$reportId', {
-        'summary': summary,
-        'workers_count': workersCount,
-        'issues': issues,
-      });
+  }) => patchJson('/api/v1/daily-reports/$reportId', {
+    'summary': summary,
+    'workers_count': workersCount,
+    'issues': issues,
+  });
 
   Future<void> deleteDailyReport(String reportId) async {
     await deleteJson('/api/v1/daily-reports/$reportId');
@@ -185,25 +177,23 @@ class ApiClient {
     required String title,
     String description = '',
     String status = 'open',
-  }) =>
-      postJson('/api/v1/tasks', {
-        'project_id': projectId,
-        'title': title,
-        'description': description,
-        'status': status,
-      });
+  }) => postJson('/api/v1/tasks', {
+    'project_id': projectId,
+    'title': title,
+    'description': description,
+    'status': status,
+  });
 
   Future<Map<String, dynamic>> updateTask({
     required String taskId,
     required String title,
     String description = '',
     String status = 'open',
-  }) =>
-      patchJson('/api/v1/tasks/$taskId', {
-        'title': title,
-        'description': description,
-        'status': status,
-      });
+  }) => patchJson('/api/v1/tasks/$taskId', {
+    'title': title,
+    'description': description,
+    'status': status,
+  });
 
   Future<void> deleteTask(String taskId) async {
     await deleteJson('/api/v1/tasks/$taskId');
@@ -219,15 +209,14 @@ class ApiClient {
     required String storagePath,
     required String contentType,
     required int sizeBytes,
-  }) =>
-      postJson('/api/v1/files', {
-        'project_id': projectId,
-        'kind': kind,
-        'original_name': originalName,
-        'storage_path': storagePath,
-        'content_type': contentType,
-        'size_bytes': sizeBytes,
-      });
+  }) => postJson('/api/v1/files', {
+    'project_id': projectId,
+    'kind': kind,
+    'original_name': originalName,
+    'storage_path': storagePath,
+    'content_type': contentType,
+    'size_bytes': sizeBytes,
+  });
 
   Future<Map<String, dynamic>> uploadProjectFile({
     required String projectId,
@@ -248,11 +237,7 @@ class ApiClient {
       request.fields['project_id'] = projectId;
       request.fields['kind'] = kind;
       request.files.add(
-        await http.MultipartFile.fromPath(
-          'file',
-          filePath,
-          filename: fileName,
-        ),
+        await http.MultipartFile.fromPath('file', filePath, filename: fileName),
       );
       final streamed = await _httpClient.send(request).timeout(_timeout);
       return http.Response.fromStream(streamed);
@@ -266,15 +251,13 @@ class ApiClient {
     await deleteJson('/api/v1/files/$fileId');
   }
 
-  Future<List<dynamic>> listAuditLogs(String projectId) async => _asList(
-        await getJson('/api/v1/audit-logs', {'project_id': projectId}),
-      );
+  Future<List<dynamic>> listAuditLogs(String projectId) async =>
+      _asList(await getJson('/api/v1/audit-logs', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> postJson(
     String path,
     Map<String, dynamic> body,
-  ) =>
-      _postJson(path, body);
+  ) => _postJson(path, body);
 
   Future<Map<String, dynamic>> _postJson(
     String path,
@@ -307,15 +290,10 @@ class ApiClient {
     return _decodeObject(response);
   }
 
-  Future<dynamic> getJson(
-    String path, [
-    Map<String, String>? query,
-  ]) async {
+  Future<dynamic> getJson(String path, [Map<String, String>? query]) async {
     final response = await _send(
-      () => _httpClient.get(
-        ApiConfig.endpoint(path, query),
-        headers: _headers(),
-      ),
+      () =>
+          _httpClient.get(ApiConfig.endpoint(path, query), headers: _headers()),
     );
     return _decodeAny(response);
   }
@@ -404,11 +382,11 @@ class ApiClient {
   }
 
   Map<String, String> _headers({bool includeBearer = true}) => {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (includeBearer && accessToken != null && accessToken!.isNotEmpty)
-          'Authorization': 'Bearer $accessToken',
-      };
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    if (includeBearer && accessToken != null && accessToken!.isNotEmpty)
+      'Authorization': 'Bearer $accessToken',
+  };
 
   Map<String, dynamic> _decodeObject(http.Response response) {
     final data = _decodeAny(response);
@@ -425,8 +403,9 @@ class ApiClient {
       throw ApiException(response.statusCode, 'Backend returned invalid JSON');
     }
     if (response.statusCode >= 400) {
-      final message =
-          data is Map<String, dynamic> ? data['error']?.toString() : null;
+      final message = data is Map<String, dynamic>
+          ? data['error']?.toString()
+          : null;
       throw ApiException(response.statusCode, message ?? 'Request failed');
     }
     return data;

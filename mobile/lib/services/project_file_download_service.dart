@@ -25,9 +25,9 @@ class ProjectFileDownloadService {
     required ApiClient apiClient,
     http.Client? httpClient,
     Duration timeout = const Duration(seconds: 30),
-  })  : _apiClient = apiClient,
-        _httpClient = httpClient ?? http.Client(),
-        _timeout = timeout;
+  }) : _apiClient = apiClient,
+       _httpClient = httpClient ?? http.Client(),
+       _timeout = timeout;
 
   final ApiClient _apiClient;
   final http.Client _httpClient;
@@ -46,10 +46,7 @@ class ProjectFileDownloadService {
     }
 
     if (response.statusCode >= 400) {
-      throw ApiException(
-        response.statusCode,
-        _readErrorMessage(response),
-      );
+      throw ApiException(response.statusCode, _readErrorMessage(response));
     }
 
     return DownloadedProjectFile(
@@ -63,10 +60,7 @@ class ProjectFileDownloadService {
     try {
       return await _httpClient
           .get(
-            ApiConfig.endpoint(
-              '/api/v1/files/download',
-              {'file_id': fileId},
-            ),
+            ApiConfig.endpoint('/api/v1/files/download', {'file_id': fileId}),
             headers: {
               'Accept': '*/*',
               if (_apiClient.accessToken != null &&
@@ -90,7 +84,9 @@ class ProjectFileDownloadService {
 
   String _fileName(http.Response response, String fallback) {
     final disposition = response.headers['content-disposition'] ?? '';
-    final utf8Match = RegExp("filename\\*=UTF-8''([^;]+)").firstMatch(disposition);
+    final utf8Match = RegExp(
+      "filename\\*=UTF-8''([^;]+)",
+    ).firstMatch(disposition);
     if (utf8Match != null) {
       return Uri.decodeComponent(utf8Match.group(1)!);
     }

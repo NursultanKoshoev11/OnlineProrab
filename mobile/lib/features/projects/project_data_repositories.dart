@@ -1,7 +1,15 @@
 import 'package:online_prorab/services/api_client.dart';
 
 class RemoteCostItem {
-  const RemoteCostItem({required this.id, required this.projectId, required this.title, required this.amount, required this.category, required this.currency, required this.vendor});
+  const RemoteCostItem({
+    required this.id,
+    required this.projectId,
+    required this.title,
+    required this.amount,
+    required this.category,
+    required this.currency,
+    required this.vendor,
+  });
 
   final String id;
   final String projectId;
@@ -12,18 +20,24 @@ class RemoteCostItem {
   final String vendor;
 
   factory RemoteCostItem.fromJson(Map<String, dynamic> json) => RemoteCostItem(
-        id: json['id']?.toString() ?? '',
-        projectId: json['project_id']?.toString() ?? '',
-        title: json['title']?.toString() ?? '',
-        amount: (json['amount'] as num?)?.toDouble() ?? 0,
-        category: json['category']?.toString() ?? 'other',
-        currency: json['currency']?.toString() ?? 'KGS',
-        vendor: json['vendor']?.toString() ?? '',
-      );
+    id: json['id']?.toString() ?? '',
+    projectId: json['project_id']?.toString() ?? '',
+    title: json['title']?.toString() ?? '',
+    amount: (json['amount'] as num?)?.toDouble() ?? 0,
+    category: json['category']?.toString() ?? 'other',
+    currency: json['currency']?.toString() ?? 'KGS',
+    vendor: json['vendor']?.toString() ?? '',
+  );
 }
 
 class RemoteDailyReport {
-  const RemoteDailyReport({required this.id, required this.projectId, required this.summary, required this.workersCount, required this.issues});
+  const RemoteDailyReport({
+    required this.id,
+    required this.projectId,
+    required this.summary,
+    required this.workersCount,
+    required this.issues,
+  });
 
   final String id;
   final String projectId;
@@ -31,7 +45,8 @@ class RemoteDailyReport {
   final int workersCount;
   final String issues;
 
-  factory RemoteDailyReport.fromJson(Map<String, dynamic> json) => RemoteDailyReport(
+  factory RemoteDailyReport.fromJson(Map<String, dynamic> json) =>
+      RemoteDailyReport(
         id: json['id']?.toString() ?? '',
         projectId: json['project_id']?.toString() ?? '',
         summary: json['summary']?.toString() ?? '',
@@ -41,7 +56,13 @@ class RemoteDailyReport {
 }
 
 class RemoteTask {
-  const RemoteTask({required this.id, required this.projectId, required this.title, required this.description, required this.status});
+  const RemoteTask({
+    required this.id,
+    required this.projectId,
+    required this.title,
+    required this.description,
+    required this.status,
+  });
 
   final String id;
   final String projectId;
@@ -50,12 +71,12 @@ class RemoteTask {
   final String status;
 
   factory RemoteTask.fromJson(Map<String, dynamic> json) => RemoteTask(
-        id: json['id']?.toString() ?? '',
-        projectId: json['project_id']?.toString() ?? '',
-        title: json['title']?.toString() ?? '',
-        description: json['description']?.toString() ?? '',
-        status: json['status']?.toString() ?? 'open',
-      );
+    id: json['id']?.toString() ?? '',
+    projectId: json['project_id']?.toString() ?? '',
+    title: json['title']?.toString() ?? '',
+    description: json['description']?.toString() ?? '',
+    status: json['status']?.toString() ?? 'open',
+  );
 }
 
 class RemoteProjectFile {
@@ -79,7 +100,8 @@ class RemoteProjectFile {
   final int sizeBytes;
   final String createdAt;
 
-  factory RemoteProjectFile.fromJson(Map<String, dynamic> json) => RemoteProjectFile(
+  factory RemoteProjectFile.fromJson(Map<String, dynamic> json) =>
+      RemoteProjectFile(
         id: json['id']?.toString() ?? '',
         projectId: json['project_id']?.toString() ?? '',
         kind: json['kind']?.toString() ?? 'document',
@@ -92,33 +114,67 @@ class RemoteProjectFile {
 }
 
 class CostItemRepository {
-  const CostItemRepository({required ApiClient apiClient}) : _apiClient = apiClient;
+  const CostItemRepository({required ApiClient apiClient})
+    : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
   Future<List<RemoteCostItem>> list(String projectId) async {
     final items = await _apiClient.listCostItems(projectId);
-    return items.whereType<Map<String, dynamic>>().map(RemoteCostItem.fromJson).where((item) => item.id.isNotEmpty).toList();
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(RemoteCostItem.fromJson)
+        .where((item) => item.id.isNotEmpty)
+        .toList();
   }
 
-  Future<RemoteCostItem> create({required String projectId, required String title, required double amount, String category = 'other', String currency = 'KGS', String vendor = ''}) async {
-    final data = await _apiClient.createCostItem(projectId: projectId, title: title, amount: amount, category: category, currency: currency, vendor: vendor);
+  Future<RemoteCostItem> create({
+    required String projectId,
+    required String title,
+    required double amount,
+    String category = 'other',
+    String currency = 'KGS',
+    String vendor = '',
+  }) async {
+    final data = await _apiClient.createCostItem(
+      projectId: projectId,
+      title: title,
+      amount: amount,
+      category: category,
+      currency: currency,
+      vendor: vendor,
+    );
     return RemoteCostItem.fromJson(data);
   }
 }
 
 class DailyReportRepository {
-  const DailyReportRepository({required ApiClient apiClient}) : _apiClient = apiClient;
+  const DailyReportRepository({required ApiClient apiClient})
+    : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
   Future<List<RemoteDailyReport>> list(String projectId) async {
     final items = await _apiClient.listDailyReports(projectId);
-    return items.whereType<Map<String, dynamic>>().map(RemoteDailyReport.fromJson).where((item) => item.id.isNotEmpty).toList();
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(RemoteDailyReport.fromJson)
+        .where((item) => item.id.isNotEmpty)
+        .toList();
   }
 
-  Future<RemoteDailyReport> create({required String projectId, required String summary, required int workersCount, String issues = ''}) async {
-    final data = await _apiClient.createDailyReport(projectId: projectId, summary: summary, workersCount: workersCount, issues: issues);
+  Future<RemoteDailyReport> create({
+    required String projectId,
+    required String summary,
+    required int workersCount,
+    String issues = '',
+  }) async {
+    final data = await _apiClient.createDailyReport(
+      projectId: projectId,
+      summary: summary,
+      workersCount: workersCount,
+      issues: issues,
+    );
     return RemoteDailyReport.fromJson(data);
   }
 }
@@ -130,28 +186,52 @@ class TaskRepository {
 
   Future<List<RemoteTask>> list(String projectId) async {
     final items = await _apiClient.listTasks(projectId);
-    return items.whereType<Map<String, dynamic>>().map(RemoteTask.fromJson).where((item) => item.id.isNotEmpty).toList();
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(RemoteTask.fromJson)
+        .where((item) => item.id.isNotEmpty)
+        .toList();
   }
 
-  Future<RemoteTask> create({required String projectId, required String title, String description = '', String status = 'open'}) async {
-    final data = await _apiClient.createTask(projectId: projectId, title: title, description: description, status: status);
+  Future<RemoteTask> create({
+    required String projectId,
+    required String title,
+    String description = '',
+    String status = 'open',
+  }) async {
+    final data = await _apiClient.createTask(
+      projectId: projectId,
+      title: title,
+      description: description,
+      status: status,
+    );
     return RemoteTask.fromJson(data);
   }
 
   Future<RemoteTask> markDone(RemoteTask task) async {
-    final data = await _apiClient.updateTask(taskId: task.id, title: task.title, description: task.description, status: 'done');
+    final data = await _apiClient.updateTask(
+      taskId: task.id,
+      title: task.title,
+      description: task.description,
+      status: 'done',
+    );
     return RemoteTask.fromJson(data);
   }
 }
 
 class ProjectFileRepository {
-  const ProjectFileRepository({required ApiClient apiClient}) : _apiClient = apiClient;
+  const ProjectFileRepository({required ApiClient apiClient})
+    : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
   Future<List<RemoteProjectFile>> list(String projectId) async {
     final items = await _apiClient.listFiles(projectId);
-    return items.whereType<Map<String, dynamic>>().map(RemoteProjectFile.fromJson).where((item) => item.id.isNotEmpty).toList();
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(RemoteProjectFile.fromJson)
+        .where((item) => item.id.isNotEmpty)
+        .toList();
   }
 
   Future<RemoteProjectFile> upload({

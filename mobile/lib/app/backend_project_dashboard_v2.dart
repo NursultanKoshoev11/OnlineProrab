@@ -59,7 +59,9 @@ class _BackendProjectDashboardScreenV2State
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.project.name.isEmpty ? 'Project' : widget.project.name),
+        title: Text(
+          widget.project.name.isEmpty ? 'Project' : widget.project.name,
+        ),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -80,7 +82,8 @@ class _BackendProjectDashboardScreenV2State
               onRetry: _refresh,
             );
           }
-          final data = snapshot.data ??
+          final data =
+              snapshot.data ??
               const ProjectDashboardDataV2(
                 expenses: [],
                 reports: [],
@@ -311,8 +314,7 @@ class ProjectDashboardDataV2 {
 
   double get totalSpent =>
       expenses.fold<double>(0, (sum, item) => sum + item.amount);
-  int get openTasksCount =>
-      tasks.where((item) => item.status != 'done').length;
+  int get openTasksCount => tasks.where((item) => item.status != 'done').length;
 }
 
 class BackendFileUploadScreenV2 extends StatefulWidget {
@@ -330,8 +332,7 @@ class BackendFileUploadScreenV2 extends StatefulWidget {
       _BackendFileUploadScreenV2State();
 }
 
-class _BackendFileUploadScreenV2State
-    extends State<BackendFileUploadScreenV2> {
+class _BackendFileUploadScreenV2State extends State<BackendFileUploadScreenV2> {
   String kind = 'receipt';
   PlatformFile? selectedFile;
   bool busy = false;
@@ -489,46 +490,46 @@ class _BackendExpenseFormScreenV2State
 
   @override
   Widget build(BuildContext context) => _SimpleFormScaffold(
-        title: 'Add expense',
-        error: error,
-        busy: busy,
-        buttonText: 'Save expense',
-        onSave: _save,
-        children: [
-          TextField(
-            controller: titleController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Title',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Amount, KGS',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: categoryController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Category',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: vendorController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Vendor',
-            ),
-          ),
-        ],
-      );
+    title: 'Add expense',
+    error: error,
+    busy: busy,
+    buttonText: 'Save expense',
+    onSave: _save,
+    children: [
+      TextField(
+        controller: titleController,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Title',
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: amountController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Amount, KGS',
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: categoryController,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Category',
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: vendorController,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Vendor',
+        ),
+      ),
+    ],
+  );
 
   Future<void> _save() async {
     final title = titleController.text.trim();
@@ -574,8 +575,7 @@ class BackendReportFormScreenV2 extends StatefulWidget {
       _BackendReportFormScreenV2State();
 }
 
-class _BackendReportFormScreenV2State
-    extends State<BackendReportFormScreenV2> {
+class _BackendReportFormScreenV2State extends State<BackendReportFormScreenV2> {
   final summaryController = TextEditingController();
   final workersController = TextEditingController(text: '1');
   final issuesController = TextEditingController();
@@ -592,42 +592,42 @@ class _BackendReportFormScreenV2State
 
   @override
   Widget build(BuildContext context) => _SimpleFormScaffold(
-        title: 'Add report',
-        error: error,
-        busy: busy,
-        buttonText: 'Save report',
-        onSave: _save,
-        children: [
-          TextField(
-            controller: summaryController,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Work summary',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: workersController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Workers count',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: issuesController,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Issues / delays',
-            ),
-          ),
-        ],
-      );
+    title: 'Add report',
+    error: error,
+    busy: busy,
+    buttonText: 'Save report',
+    onSave: _save,
+    children: [
+      TextField(
+        controller: summaryController,
+        minLines: 3,
+        maxLines: 5,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Work summary',
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: workersController,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Workers count',
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: issuesController,
+        minLines: 2,
+        maxLines: 4,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Issues / delays',
+        ),
+      ),
+    ],
+  );
 
   Future<void> _save() async {
     final summary = summaryController.text.trim();
@@ -672,8 +672,7 @@ class BackendTaskFormScreenV2 extends StatefulWidget {
       _BackendTaskFormScreenV2State();
 }
 
-class _BackendTaskFormScreenV2State
-    extends State<BackendTaskFormScreenV2> {
+class _BackendTaskFormScreenV2State extends State<BackendTaskFormScreenV2> {
   final titleController = TextEditingController();
   final descriptionController = TextEditingController();
   bool busy = false;
@@ -688,31 +687,31 @@ class _BackendTaskFormScreenV2State
 
   @override
   Widget build(BuildContext context) => _SimpleFormScaffold(
-        title: 'Add task',
-        error: error,
-        busy: busy,
-        buttonText: 'Save task',
-        onSave: _save,
-        children: [
-          TextField(
-            controller: titleController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Title',
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: descriptionController,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Description',
-            ),
-          ),
-        ],
-      );
+    title: 'Add task',
+    error: error,
+    busy: busy,
+    buttonText: 'Save task',
+    onSave: _save,
+    children: [
+      TextField(
+        controller: titleController,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Title',
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: descriptionController,
+        minLines: 3,
+        maxLines: 5,
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'Description',
+        ),
+      ),
+    ],
+  );
 
   Future<void> _save() async {
     final title = titleController.text.trim();

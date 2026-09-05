@@ -13,9 +13,24 @@ void main() {
 
     state.signIn('+996700000000');
     final project = state.addProject(name: 'Demo house', address: 'Bishkek');
-    state.addExpense(projectId: project.id, title: 'Cement', amount: 1200, category: 'materials', vendor: 'Supplier');
-    state.addReport(projectId: project.id, summary: 'Foundation completed', workersCount: 4, issues: '');
-    final task = state.addTask(projectId: project.id, title: 'Buy cement', description: 'Call supplier');
+    state.addExpense(
+      projectId: project.id,
+      title: 'Cement',
+      amount: 1200,
+      category: 'materials',
+      vendor: 'Supplier',
+    );
+    state.addReport(
+      projectId: project.id,
+      summary: 'Foundation completed',
+      workersCount: 4,
+      issues: '',
+    );
+    final task = state.addTask(
+      projectId: project.id,
+      title: 'Buy cement',
+      description: 'Call supplier',
+    );
 
     expect(state.isSignedIn, isTrue);
     expect(state.projects.length, 1);
@@ -34,7 +49,13 @@ void main() {
     await first.loadFromDevice();
     first.signIn('+996700000000');
     final project = first.addProject(name: 'Saved project', address: 'Osh');
-    first.addExpense(projectId: project.id, title: 'Sand', amount: 500, category: 'materials', vendor: 'Supplier');
+    first.addExpense(
+      projectId: project.id,
+      title: 'Sand',
+      amount: 500,
+      category: 'materials',
+      vendor: 'Supplier',
+    );
     await first.saveToDevice();
 
     final second = AppState();

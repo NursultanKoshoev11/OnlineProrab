@@ -6,42 +6,51 @@ import 'package:http/testing.dart';
 import 'package:online_prorab/services/api_client.dart';
 
 void main() {
-  test('verifySMSCode stores access credential from backend response', () async {
-    final client = ApiClient(
-      httpClient: MockClient((request) async {
-        expect(request.method, 'POST');
-        expect(request.url.path, '/api/v1/auth/sms/verify');
-        return http.Response(jsonEncode({'access_token': 'fixture-value'}), 200);
-      }),
-    );
+  test(
+    'verifySMSCode stores access credential from backend response',
+    () async {
+      final client = ApiClient(
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/v1/auth/sms/verify');
+          return http.Response(
+            jsonEncode({'access_token': 'fixture-value'}),
+            200,
+          );
+        }),
+      );
 
-    final data = await client.verifySMSCode('+996700000000', '123456');
+      final data = await client.verifySMSCode('+996700000000', '123456');
 
-    expect(data['access_token'], 'fixture-value');
-    expect(client.accessToken, 'fixture-value');
-  });
+      expect(data['access_token'], 'fixture-value');
+      expect(client.accessToken, 'fixture-value');
+    },
+  );
 
-  test('createProject sends bearer header, accept header and JSON body', () async {
-    final client = ApiClient(
-      httpClient: MockClient((request) async {
-        expect(request.method, 'POST');
-        expect(request.url.path, '/api/v1/projects');
-        expect(request.headers['Authorization'], 'Bearer fixture-value');
-        expect(request.headers['Accept'], 'application/json');
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['name'], 'Demo');
-        expect(body['address'], 'Bishkek');
-        return http.Response(
-          jsonEncode({'id': 'project-1', 'name': 'Demo'}),
-          201,
-        );
-      }),
-    )..setAccessToken('fixture-value');
+  test(
+    'createProject sends bearer header, accept header and JSON body',
+    () async {
+      final client = ApiClient(
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/v1/projects');
+          expect(request.headers['Authorization'], 'Bearer fixture-value');
+          expect(request.headers['Accept'], 'application/json');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['name'], 'Demo');
+          expect(body['address'], 'Bishkek');
+          return http.Response(
+            jsonEncode({'id': 'project-1', 'name': 'Demo'}),
+            201,
+          );
+        }),
+      )..setAccessToken('fixture-value');
 
-    final data = await client.createProject('Demo', 'Bishkek');
+      final data = await client.createProject('Demo', 'Bishkek');
 
-    expect(data['id'], 'project-1');
-  });
+      expect(data['id'], 'project-1');
+    },
+  );
 
   test('listProjects supports wrapped items response', () async {
     final client = ApiClient(
@@ -140,20 +149,27 @@ void main() {
     );
   });
 
-  test('ApiClient converts http client errors to network ApiException', () async {
-    final client = ApiClient(
-      httpClient: MockClient((request) async {
-        throw http.ClientException('Connection refused');
-      }),
-    );
+  test(
+    'ApiClient converts http client errors to network ApiException',
+    () async {
+      final client = ApiClient(
+        httpClient: MockClient((request) async {
+          throw http.ClientException('Connection refused');
+        }),
+      );
 
-    expect(
-      () => client.listProjects(),
-      throwsA(
-        isA<ApiException>()
-            .having((error) => error.statusCode, 'statusCode', 0)
-            .having((error) => error.isNetworkError, 'isNetworkError', isTrue),
-      ),
-    );
-  });
+      expect(
+        () => client.listProjects(),
+        throwsA(
+          isA<ApiException>()
+              .having((error) => error.statusCode, 'statusCode', 0)
+              .having(
+                (error) => error.isNetworkError,
+                'isNetworkError',
+                isTrue,
+              ),
+        ),
+      );
+    },
+  );
 }

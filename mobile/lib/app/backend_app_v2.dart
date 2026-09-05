@@ -10,7 +10,8 @@ class BackendOnlineProrabAppV2 extends StatefulWidget {
   const BackendOnlineProrabAppV2({super.key});
 
   @override
-  State<BackendOnlineProrabAppV2> createState() => _BackendOnlineProrabAppV2State();
+  State<BackendOnlineProrabAppV2> createState() =>
+      _BackendOnlineProrabAppV2State();
 }
 
 class _BackendOnlineProrabAppV2State extends State<BackendOnlineProrabAppV2> {
@@ -25,7 +26,10 @@ class _BackendOnlineProrabAppV2State extends State<BackendOnlineProrabAppV2> {
   void initState() {
     super.initState();
     apiClient = ApiClient();
-    authRepository = AuthRepository(apiClient: apiClient, sessionStore: SessionStore());
+    authRepository = AuthRepository(
+      apiClient: apiClient,
+      sessionStore: SessionStore(),
+    );
     projectRepository = ProjectRepository(apiClient: apiClient);
     costItemRepository = CostItemRepository(apiClient: apiClient);
     dailyReportRepository = DailyReportRepository(apiClient: apiClient);
@@ -43,7 +47,10 @@ class _BackendOnlineProrabAppV2State extends State<BackendOnlineProrabAppV2> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Online Prorab',
-      theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey)),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
+      ),
       home: BackendAuthGateV2(
         authRepository: authRepository,
         projectRepository: projectRepository,
@@ -89,7 +96,10 @@ class _BackendAuthGateV2State extends State<BackendAuthGateV2> {
     return FutureBuilder<SessionData?>(
       future: sessionFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        if (snapshot.connectionState != ConnectionState.done)
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         final session = snapshot.data;
         if (session != null) {
           return BackendProjectsScreenV2(
@@ -154,17 +164,48 @@ class _BackendLoginScreenV2State extends State<BackendLoginScreenV2> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text('Construction control from your phone', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const Text(
+            'Construction control from your phone',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           const Text('Sign in to sync projects with the backend.'),
           const SizedBox(height: 24),
-          TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Phone number')),
+          TextField(
+            controller: phoneController,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Phone number',
+            ),
+          ),
           const SizedBox(height: 12),
-          if (codeRequested) TextField(controller: codeController, keyboardType: TextInputType.number, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'SMS code')),
+          if (codeRequested)
+            TextField(
+              controller: codeController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'SMS code',
+              ),
+            ),
           if (codeRequested) const SizedBox(height: 12),
-          if (error != null) Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          if (error != null)
+            Text(
+              error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           if (error != null) const SizedBox(height: 12),
-          FilledButton(onPressed: busy ? null : _submit, child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(codeRequested ? 'Verify and continue' : 'Request code')),
+          FilledButton(
+            onPressed: busy ? null : _submit,
+            child: busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(codeRequested ? 'Verify and continue' : 'Request code'),
+          ),
         ],
       ),
     );
@@ -194,16 +235,18 @@ class _BackendLoginScreenV2State extends State<BackendLoginScreenV2> {
       }
       final session = await widget.authRepository.verifyCode(phone, code);
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => BackendProjectsScreenV2(
-          session: session,
-          authRepository: widget.authRepository,
-          projectRepository: widget.projectRepository,
-          costItemRepository: widget.costItemRepository,
-          dailyReportRepository: widget.dailyReportRepository,
-          taskRepository: widget.taskRepository,
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => BackendProjectsScreenV2(
+            session: session,
+            authRepository: widget.authRepository,
+            projectRepository: widget.projectRepository,
+            costItemRepository: widget.costItemRepository,
+            dailyReportRepository: widget.dailyReportRepository,
+            taskRepository: widget.taskRepository,
+          ),
         ),
-      ));
+      );
     } catch (e) {
       setState(() => error = _friendlyError(e));
     } finally {
@@ -231,7 +274,8 @@ class BackendProjectsScreenV2 extends StatefulWidget {
   final TaskRepository taskRepository;
 
   @override
-  State<BackendProjectsScreenV2> createState() => _BackendProjectsScreenV2State();
+  State<BackendProjectsScreenV2> createState() =>
+      _BackendProjectsScreenV2State();
 }
 
 class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
@@ -261,10 +305,20 @@ class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
       body: FutureBuilder<List<RemoteProject>>(
         future: projectsFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return ErrorStateV2(message: _friendlyError(snapshot.error), onRetry: _refresh);
+          if (snapshot.connectionState != ConnectionState.done)
+            return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError)
+            return ErrorStateV2(
+              message: _friendlyError(snapshot.error),
+              onRetry: _refresh,
+            );
           final projects = snapshot.data ?? const <RemoteProject>[];
-          if (projects.isEmpty) return const EmptyStateV2(icon: Icons.home_work_outlined, title: 'No projects yet', message: 'Create your first project to start tracking work.');
+          if (projects.isEmpty)
+            return const EmptyStateV2(
+              icon: Icons.home_work_outlined,
+              title: 'No projects yet',
+              message: 'Create your first project to start tracking work.',
+            );
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.separated(
@@ -275,8 +329,14 @@ class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
                 final project = projects[index];
                 return Card(
                   child: ListTile(
-                    title: Text(project.name.isEmpty ? 'Untitled project' : project.name),
-                    subtitle: Text(project.address.isEmpty ? project.status : '${project.address} • ${project.status}'),
+                    title: Text(
+                      project.name.isEmpty ? 'Untitled project' : project.name,
+                    ),
+                    subtitle: Text(
+                      project.address.isEmpty
+                          ? project.status
+                          : '${project.address} • ${project.status}',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => _openProject(project),
                   ),
@@ -286,23 +346,35 @@ class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(onPressed: _createProject, icon: const Icon(Icons.add), label: const Text('Project')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _createProject,
+        icon: const Icon(Icons.add),
+        label: const Text('Project'),
+      ),
     );
   }
 
   void _openProject(RemoteProject project) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => BackendProjectDashboardScreen(
-        project: project,
-        costItemRepository: widget.costItemRepository,
-        dailyReportRepository: widget.dailyReportRepository,
-        taskRepository: widget.taskRepository,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BackendProjectDashboardScreen(
+          project: project,
+          costItemRepository: widget.costItemRepository,
+          dailyReportRepository: widget.dailyReportRepository,
+          taskRepository: widget.taskRepository,
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> _createProject() async {
-    final created = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => BackendProjectFormScreenV2(projectRepository: widget.projectRepository)));
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => BackendProjectFormScreenV2(
+          projectRepository: widget.projectRepository,
+        ),
+      ),
+    );
     if (created == true) await _refresh();
   }
 
@@ -325,15 +397,20 @@ class _BackendProjectsScreenV2State extends State<BackendProjectsScreenV2> {
 }
 
 class BackendProjectFormScreenV2 extends StatefulWidget {
-  const BackendProjectFormScreenV2({required this.projectRepository, super.key});
+  const BackendProjectFormScreenV2({
+    required this.projectRepository,
+    super.key,
+  });
 
   final ProjectRepository projectRepository;
 
   @override
-  State<BackendProjectFormScreenV2> createState() => _BackendProjectFormScreenV2State();
+  State<BackendProjectFormScreenV2> createState() =>
+      _BackendProjectFormScreenV2State();
 }
 
-class _BackendProjectFormScreenV2State extends State<BackendProjectFormScreenV2> {
+class _BackendProjectFormScreenV2State
+    extends State<BackendProjectFormScreenV2> {
   final nameController = TextEditingController();
   final addressController = TextEditingController();
   bool busy = false;
@@ -353,13 +430,38 @@ class _BackendProjectFormScreenV2State extends State<BackendProjectFormScreenV2>
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(controller: nameController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Project name')),
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Project name',
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: addressController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Address')),
+          TextField(
+            controller: addressController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Address',
+            ),
+          ),
           const SizedBox(height: 16),
-          if (error != null) Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          if (error != null)
+            Text(
+              error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           if (error != null) const SizedBox(height: 12),
-          FilledButton(onPressed: busy ? null : _save, child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Create project')),
+          FilledButton(
+            onPressed: busy ? null : _save,
+            child: busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Create project'),
+          ),
         ],
       ),
     );
@@ -376,7 +478,10 @@ class _BackendProjectFormScreenV2State extends State<BackendProjectFormScreenV2>
       error = null;
     });
     try {
-      await widget.projectRepository.createProject(name: name, address: addressController.text.trim());
+      await widget.projectRepository.createProject(
+        name: name,
+        address: addressController.text.trim(),
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setState(() => error = _friendlyError(e));
@@ -393,19 +498,65 @@ class ErrorStateV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.cloud_off, size: 56), const SizedBox(height: 16), Text('Could not load data', style: Theme.of(context).textTheme.titleLarge), const SizedBox(height: 8), Text(message, textAlign: TextAlign.center), const SizedBox(height: 16), FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry'))])));
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off, size: 56),
+            const SizedBox(height: 16),
+            Text(
+              'Could not load data',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
 class EmptyStateV2 extends StatelessWidget {
-  const EmptyStateV2({required this.icon, required this.title, required this.message, super.key});
+  const EmptyStateV2({
+    required this.icon,
+    required this.title,
+    required this.message,
+    super.key,
+  });
   final IconData icon;
   final String title;
   final String message;
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 56), const SizedBox(height: 16), Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center), const SizedBox(height: 8), Text(message, textAlign: TextAlign.center)])));
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 56),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -415,9 +566,12 @@ void _showMessage(BuildContext context, String message) {
 
 String _friendlyError(Object? error) {
   final text = error.toString();
-  if (text.contains('408') || text.contains('timed out')) return 'Server timeout. Check internet or backend status.';
+  if (text.contains('408') || text.contains('timed out'))
+    return 'Server timeout. Check internet or backend status.';
   if (text.contains('401')) return 'Session expired. Please sign in again.';
-  if (text.contains('Connection refused') || text.contains('ApiException(0)')) return 'Cannot connect to backend. Check API_BASE_URL and server status.';
-  if (text.contains('invalid JSON')) return 'Backend returned an invalid response.';
+  if (text.contains('Connection refused') || text.contains('ApiException(0)'))
+    return 'Cannot connect to backend. Check API_BASE_URL and server status.';
+  if (text.contains('invalid JSON'))
+    return 'Backend returned an invalid response.';
   return text.replaceFirst('Exception: ', '');
 }

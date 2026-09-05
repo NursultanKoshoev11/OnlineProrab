@@ -205,8 +205,10 @@ class _LoginScreenState extends State<_LoginScreen> {
                   child: _BrandMark(size: 58),
                 ),
                 const SizedBox(height: 30),
-                Text('Стройка под контролем',
-                    style: Theme.of(context).textTheme.headlineLarge),
+                Text(
+                  'Стройка под контролем',
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
                 const SizedBox(height: 10),
                 const Text(
                   'Объекты, расходы, задачи, отчёты и команда — в одном приложении.',
@@ -291,8 +293,10 @@ class _LoginScreenState extends State<_LoginScreen> {
         return;
       }
 
-      final session =
-          await widget.dependencies.authRepository.verifyCode(phone, code);
+      final session = await widget.dependencies.authRepository.verifyCode(
+        phone,
+        code,
+      );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -312,10 +316,7 @@ class _LoginScreenState extends State<_LoginScreen> {
 }
 
 class _ProjectsScreen extends StatefulWidget {
-  const _ProjectsScreen({
-    required this.session,
-    required this.dependencies,
-  });
+  const _ProjectsScreen({required this.session, required this.dependencies});
 
   final SessionData session;
   final _AppDependencies dependencies;
@@ -344,11 +345,13 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   List<RemoteProject> _filtered(List<RemoteProject> projects) {
     final query = _query.trim().toLowerCase();
     return projects.where((project) {
-      final matchesQuery = query.isEmpty ||
+      final matchesQuery =
+          query.isEmpty ||
           project.name.toLowerCase().contains(query) ||
           project.address.toLowerCase().contains(query);
       final normalized = project.status.toLowerCase();
-      final matchesStatus = _status == 'all' ||
+      final matchesStatus =
+          _status == 'all' ||
           (_status == 'active' &&
               normalized != 'completed' &&
               normalized != 'done') ||
@@ -397,10 +400,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
               if (value == 'logout') _signOut();
             },
             itemBuilder: (_) => [
-              PopupMenuItem(
-                value: 'phone',
-                child: Text(widget.session.phone),
-              ),
+              PopupMenuItem(value: 'phone', child: Text(widget.session.phone)),
               const PopupMenuItem(
                 value: 'logout',
                 child: Row(
@@ -439,8 +439,10 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 110),
               children: [
-                Text('Мои объекты',
-                    style: Theme.of(context).textTheme.headlineLarge),
+                Text(
+                  'Мои объекты',
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
                 const SizedBox(height: 7),
                 Text(
                   '${allProjects.length} ${_objectWord(allProjects.length)}',
@@ -709,12 +711,17 @@ class _ProjectFormScreenState extends State<_ProjectFormScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
           children: [
-            Text('Добавить объект',
-                style: Theme.of(context).textTheme.headlineMedium),
+            Text(
+              'Добавить объект',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
             const SizedBox(height: 8),
             const Text(
               'Укажите основную информацию. Остальные данные можно добавить внутри объекта.',
-              style: TextStyle(color: OnlineProrabColors.textMuted, height: 1.4),
+              style: TextStyle(
+                color: OnlineProrabColors.textMuted,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 26),
             TextField(
@@ -931,13 +938,17 @@ class _ErrorState extends StatelessWidget {
               color: OnlineProrabColors.textMuted,
             ),
             const SizedBox(height: 16),
-            Text(title,
-                style: Theme.of(context).textTheme.titleLarge,
-                textAlign: TextAlign.center),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: onRetry,

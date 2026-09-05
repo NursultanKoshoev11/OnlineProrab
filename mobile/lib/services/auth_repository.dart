@@ -2,9 +2,11 @@ import 'package:online_prorab/services/api_client.dart';
 import 'package:online_prorab/services/session_store.dart';
 
 class AuthRepository {
-  AuthRepository({required ApiClient apiClient, required SessionStore sessionStore})
-      : _apiClient = apiClient,
-        _sessionStore = sessionStore {
+  AuthRepository({
+    required ApiClient apiClient,
+    required SessionStore sessionStore,
+  }) : _apiClient = apiClient,
+       _sessionStore = sessionStore {
     _apiClient.setSessionHandlers(
       onTokensUpdated: _saveRotatedTokens,
       onSessionExpired: _clearLocalSession,

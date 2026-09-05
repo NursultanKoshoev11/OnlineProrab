@@ -20,7 +20,10 @@ class _BackendOnlineProrabAppState extends State<BackendOnlineProrabApp> {
   void initState() {
     super.initState();
     apiClient = ApiClient();
-    authRepository = AuthRepository(apiClient: apiClient, sessionStore: SessionStore());
+    authRepository = AuthRepository(
+      apiClient: apiClient,
+      sessionStore: SessionStore(),
+    );
     projectRepository = ProjectRepository(apiClient: apiClient);
   }
 
@@ -38,7 +41,10 @@ class _BackendOnlineProrabAppState extends State<BackendOnlineProrabApp> {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Online Prorab',
-        theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey)),
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
+        ),
         home: const BackendAuthGate(),
       ),
     );
@@ -46,20 +52,27 @@ class _BackendOnlineProrabAppState extends State<BackendOnlineProrabApp> {
 }
 
 class BackendServices extends InheritedWidget {
-  const BackendServices({required this.authRepository, required this.projectRepository, required super.child, super.key});
+  const BackendServices({
+    required this.authRepository,
+    required this.projectRepository,
+    required super.child,
+    super.key,
+  });
 
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
 
   static BackendServices of(BuildContext context) {
-    final services = context.dependOnInheritedWidgetOfExactType<BackendServices>();
+    final services = context
+        .dependOnInheritedWidgetOfExactType<BackendServices>();
     assert(services != null, 'BackendServices not found');
     return services!;
   }
 
   @override
   bool updateShouldNotify(BackendServices oldWidget) {
-    return authRepository != oldWidget.authRepository || projectRepository != oldWidget.projectRepository;
+    return authRepository != oldWidget.authRepository ||
+        projectRepository != oldWidget.projectRepository;
   }
 }
 
@@ -85,7 +98,9 @@ class _BackendAuthGateState extends State<BackendAuthGate> {
       future: sessionFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         if (snapshot.data != null) {
           return BackendProjectsScreen(session: snapshot.data!);
@@ -96,7 +111,11 @@ class _BackendAuthGateState extends State<BackendAuthGate> {
   }
 
   void _openProjects(SessionData session) {
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => BackendProjectsScreen(session: session)));
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => BackendProjectsScreen(session: session),
+      ),
+    );
   }
 }
 
@@ -131,31 +150,54 @@ class _BackendLoginScreenState extends State<BackendLoginScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text('Construction control from your phone', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const Text(
+              'Construction control from your phone',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
-            const Text('Sign in with your phone number to sync projects with the backend.'),
+            const Text(
+              'Sign in with your phone number to sync projects with the backend.',
+            ),
             const SizedBox(height: 24),
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Phone number', hintText: '+996...'),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Phone number',
+                hintText: '+996...',
+              ),
             ),
             const SizedBox(height: 12),
             if (codeRequested) ...[
               TextField(
                 controller: codeController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'SMS code'),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'SMS code',
+                ),
               ),
               const SizedBox(height: 12),
             ],
             if (errorMessage != null) ...[
-              Text(errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                errorMessage!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
               const SizedBox(height: 12),
             ],
             FilledButton(
               onPressed: isSubmitting ? null : _submit,
-              child: isSubmitting ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(codeRequested ? 'Verify and continue' : 'Request code'),
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      codeRequested ? 'Verify and continue' : 'Request code',
+                    ),
             ),
           ],
         ),
@@ -233,9 +275,22 @@ class _BackendProjectsScreenState extends State<BackendProjectsScreen> {
       appBar: AppBar(
         title: const Text('Projects'),
         actions: [
-          IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh)),
-          IconButton(tooltip: 'Signed in phone', onPressed: () => _showMessage(context, 'Signed in as ${widget.session.phone}'), icon: const Icon(Icons.account_circle)),
-          IconButton(tooltip: 'Sign out', onPressed: _signOut, icon: const Icon(Icons.logout)),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'Signed in phone',
+            onPressed: () =>
+                _showMessage(context, 'Signed in as ${widget.session.phone}'),
+            icon: const Icon(Icons.account_circle),
+          ),
+          IconButton(
+            tooltip: 'Sign out',
+            onPressed: _signOut,
+            icon: const Icon(Icons.logout),
+          ),
         ],
       ),
       body: FutureBuilder<List<RemoteProject>>(
@@ -245,11 +300,19 @@ class _BackendProjectsScreenState extends State<BackendProjectsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return ErrorState(message: _friendlyError(snapshot.error), onRetry: _refresh);
+            return ErrorState(
+              message: _friendlyError(snapshot.error),
+              onRetry: _refresh,
+            );
           }
           final projects = snapshot.data ?? const <RemoteProject>[];
           if (projects.isEmpty) {
-            return const EmptyState(icon: Icons.home_work_outlined, title: 'No projects yet', message: 'Create your first house project to start tracking work.');
+            return const EmptyState(
+              icon: Icons.home_work_outlined,
+              title: 'No projects yet',
+              message:
+                  'Create your first house project to start tracking work.',
+            );
           }
           return RefreshIndicator(
             onRefresh: () async => _refresh(),
@@ -261,10 +324,19 @@ class _BackendProjectsScreenState extends State<BackendProjectsScreen> {
                 final project = projects[index];
                 return Card(
                   child: ListTile(
-                    title: Text(project.name.isEmpty ? 'Untitled project' : project.name),
-                    subtitle: Text(project.address.isEmpty ? project.status : '${project.address} • ${project.status}'),
+                    title: Text(
+                      project.name.isEmpty ? 'Untitled project' : project.name,
+                    ),
+                    subtitle: Text(
+                      project.address.isEmpty
+                          ? project.status
+                          : '${project.address} • ${project.status}',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _showMessage(context, 'Dashboard sync is the next step for ${project.name}'),
+                    onTap: () => _showMessage(
+                      context,
+                      'Dashboard sync is the next step for ${project.name}',
+                    ),
                   ),
                 );
               },
@@ -272,12 +344,18 @@ class _BackendProjectsScreenState extends State<BackendProjectsScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(onPressed: _createProject, icon: const Icon(Icons.add), label: const Text('Project')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _createProject,
+        icon: const Icon(Icons.add),
+        label: const Text('Project'),
+      ),
     );
   }
 
   Future<void> _createProject() async {
-    final created = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const BackendProjectFormScreen()));
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const BackendProjectFormScreen()),
+    );
     if (created == true) {
       _refresh();
     }
@@ -286,7 +364,18 @@ class _BackendProjectsScreenState extends State<BackendProjectsScreen> {
   Future<void> _signOut() async {
     await BackendServices.of(context).authRepository.signOut();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => BackendLoginScreen(onSignedIn: (session) => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => BackendProjectsScreen(session: session))))), (_) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => BackendLoginScreen(
+          onSignedIn: (session) => Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => BackendProjectsScreen(session: session),
+            ),
+          ),
+        ),
+      ),
+      (_) => false,
+    );
   }
 }
 
@@ -294,7 +383,8 @@ class BackendProjectFormScreen extends StatefulWidget {
   const BackendProjectFormScreen({super.key});
 
   @override
-  State<BackendProjectFormScreen> createState() => _BackendProjectFormScreenState();
+  State<BackendProjectFormScreen> createState() =>
+      _BackendProjectFormScreenState();
 }
 
 class _BackendProjectFormScreenState extends State<BackendProjectFormScreen> {
@@ -317,17 +407,38 @@ class _BackendProjectFormScreenState extends State<BackendProjectFormScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(controller: nameController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Project name')),
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Project name',
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: addressController, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Address')),
+          TextField(
+            controller: addressController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Address',
+            ),
+          ),
           const SizedBox(height: 16),
           if (errorMessage != null) ...[
-            Text(errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(
+              errorMessage!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
             const SizedBox(height: 12),
           ],
           FilledButton(
             onPressed: isSaving ? null : _save,
-            child: isSaving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Create project'),
+            child: isSaving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Create project'),
           ),
         ],
       ),
@@ -345,7 +456,10 @@ class _BackendProjectFormScreenState extends State<BackendProjectFormScreen> {
       errorMessage = null;
     });
     try {
-      await BackendServices.of(context).projectRepository.createProject(name: name, address: addressController.text.trim());
+      await BackendServices.of(context).projectRepository.createProject(
+        name: name,
+        address: addressController.text.trim(),
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       setState(() => errorMessage = _friendlyError(error));
@@ -371,11 +485,19 @@ class ErrorState extends StatelessWidget {
           children: [
             const Icon(Icons.cloud_off, size: 56),
             const SizedBox(height: 16),
-            Text('Could not load data', style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+            Text(
+              'Could not load data',
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            FilledButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),
@@ -384,7 +506,12 @@ class ErrorState extends StatelessWidget {
 }
 
 class EmptyState extends StatelessWidget {
-  const EmptyState({required this.icon, required this.title, required this.message, super.key});
+  const EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    super.key,
+  });
 
   final IconData icon;
   final String title;
@@ -392,7 +519,25 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 56), const SizedBox(height: 16), Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center), const SizedBox(height: 8), Text(message, textAlign: TextAlign.center)])));
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 56),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -402,9 +547,12 @@ void _showMessage(BuildContext context, String message) {
 
 String _friendlyError(Object? error) {
   final text = error.toString();
-  if (text.contains('408') || text.contains('timed out')) return 'Server timeout. Check internet or backend status.';
+  if (text.contains('408') || text.contains('timed out'))
+    return 'Server timeout. Check internet or backend status.';
   if (text.contains('401')) return 'Session expired. Please sign in again.';
-  if (text.contains('Connection refused') || text.contains('ApiException(0)')) return 'Cannot connect to backend. Check API_BASE_URL and server status.';
-  if (text.contains('invalid JSON')) return 'Backend returned an invalid response.';
+  if (text.contains('Connection refused') || text.contains('ApiException(0)'))
+    return 'Cannot connect to backend. Check API_BASE_URL and server status.';
+  if (text.contains('invalid JSON'))
+    return 'Backend returned an invalid response.';
   return text.replaceFirst('Exception: ', '');
 }

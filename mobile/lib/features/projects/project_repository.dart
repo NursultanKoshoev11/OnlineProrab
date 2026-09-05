@@ -24,7 +24,8 @@ class RemoteProject {
 }
 
 class ProjectRepository {
-  const ProjectRepository({required ApiClient apiClient}) : _apiClient = apiClient;
+  const ProjectRepository({required ApiClient apiClient})
+    : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
@@ -37,7 +38,10 @@ class ProjectRepository {
         .toList();
   }
 
-  Future<RemoteProject> createProject({required String name, required String address}) async {
+  Future<RemoteProject> createProject({
+    required String name,
+    required String address,
+  }) async {
     final data = await _apiClient.createProject(name, address);
     return RemoteProject.fromJson(data);
   }
@@ -48,7 +52,12 @@ class ProjectRepository {
     required String address,
     String status = 'active',
   }) async {
-    final data = await _apiClient.updateProject(projectId, name, address, status: status);
+    final data = await _apiClient.updateProject(
+      projectId,
+      name,
+      address,
+      status: status,
+    );
     return RemoteProject.fromJson(data);
   }
 

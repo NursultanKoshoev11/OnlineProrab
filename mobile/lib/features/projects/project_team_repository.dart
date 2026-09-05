@@ -48,15 +48,14 @@ class ProjectInviteResult {
 
 class ProjectTeamRepository {
   const ProjectTeamRepository({required ApiClient apiClient})
-      : _apiClient = apiClient;
+    : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
   Future<List<RemoteProjectMember>> listMembers(String projectId) async {
-    final data = await _apiClient.getJson(
-      '/api/v1/project-members',
-      {'project_id': projectId},
-    );
+    final data = await _apiClient.getJson('/api/v1/project-members', {
+      'project_id': projectId,
+    });
     final items = _asList(data);
     return items
         .whereType<Map<String, dynamic>>()

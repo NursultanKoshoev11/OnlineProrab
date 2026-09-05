@@ -119,32 +119,32 @@ class _BackendProjectDashboardScreenV3State
           final data = snapshot.data ?? ProjectDashboardDataV3.empty();
           final page = switch (_tab) {
             0 => _OverviewTab(
-                project: widget.project,
-                data: data,
-                onAddExpense: _addExpense,
-                onAddTask: _addTask,
-                onAddReport: _addReport,
-                onOpenExpenses: () => setState(() => _tab = 1),
-                onOpenTasks: () => setState(() => _tab = 2),
-              ),
+              project: widget.project,
+              data: data,
+              onAddExpense: _addExpense,
+              onAddTask: _addTask,
+              onAddReport: _addReport,
+              onOpenExpenses: () => setState(() => _tab = 1),
+              onOpenTasks: () => setState(() => _tab = 2),
+            ),
             1 => _ExpensesTab(
-                data: data,
-                onVoiceSearch: _askExpenseQuery,
-                onAdd: _addExpense,
-              ),
+              data: data,
+              onVoiceSearch: _askExpenseQuery,
+              onAdd: _addExpense,
+            ),
             2 => _TasksTab(
-                tasks: data.tasks,
-                onAdd: _addTask,
-                onDone: _markTaskDone,
-              ),
+              tasks: data.tasks,
+              onAdd: _addTask,
+              onDone: _markTaskDone,
+            ),
             3 => _ReportsTab(reports: data.reports, onAdd: _addReport),
             _ => _MoreTab(
-                files: data.files,
-                onAddFile: _addFile,
-                onOpenFile: _openFile,
-                onDeleteFile: _deleteFile,
-                onOpenTeam: _openTeam,
-              ),
+              files: data.files,
+              onAddFile: _addFile,
+              onOpenFile: _openFile,
+              onDeleteFile: _deleteFile,
+              onOpenTeam: _openTeam,
+            ),
           };
 
           return RefreshIndicator(onRefresh: _refresh, child: page);
@@ -427,11 +427,11 @@ class ProjectDashboardDataV3 {
   });
 
   factory ProjectDashboardDataV3.empty() => const ProjectDashboardDataV3(
-        expenses: [],
-        reports: [],
-        tasks: [],
-        files: [],
-      );
+    expenses: [],
+    reports: [],
+    tasks: [],
+    files: [],
+  );
 
   final List<RemoteCostItem> expenses;
   final List<RemoteDailyReport> reports;
@@ -589,10 +589,7 @@ class _OverviewTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
-        Text(
-          'Быстрые действия',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        Text('Быстрые действия', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -692,8 +689,10 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   @override
   Widget build(BuildContext context) {
     final filtered = _searchExpenses(widget.data.expenses, _query);
-    final filteredTotal =
-        filtered.fold<double>(0, (sum, item) => sum + item.amount);
+    final filteredTotal = filtered.fold<double>(
+      0,
+      (sum, item) => sum + item.amount,
+    );
     final searching = _query.trim().isNotEmpty;
 
     return ListView(
@@ -737,10 +736,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
             children: [
               Text(
                 searching ? 'Найдено на сумму' : 'Всего потрачено',
-                style: const TextStyle(
-                  color: Color(0xFFD8E7DF),
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: Color(0xFFD8E7DF), fontSize: 13),
               ),
               const SizedBox(height: 5),
               Text(
@@ -841,10 +837,12 @@ class _TasksTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final open =
-        tasks.where((item) => item.status.toLowerCase() != 'done').toList();
-    final done =
-        tasks.where((item) => item.status.toLowerCase() == 'done').toList();
+    final open = tasks
+        .where((item) => item.status.toLowerCase() != 'done')
+        .toList();
+    final done = tasks
+        .where((item) => item.status.toLowerCase() == 'done')
+        .toList();
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -983,10 +981,7 @@ class _MoreTab extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (files.isEmpty)
-          const _EmptyCard(
-            icon: Icons.folder_outlined,
-            text: 'Файлов пока нет',
-          )
+          const _EmptyCard(icon: Icons.folder_outlined, text: 'Файлов пока нет')
         else
           ...files.map(
             (item) => Padding(
@@ -1036,47 +1031,47 @@ class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
 
   @override
   Widget build(BuildContext context) => _SimpleFormScaffold(
-        title: 'Новый расход',
-        intro: 'Добавьте фактический расход по этому объекту.',
-        error: _error,
-        busy: _busy,
-        buttonText: 'Сохранить расход',
-        onSave: _save,
-        children: [
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(
-              labelText: 'Название',
-              prefixIcon: Icon(Icons.receipt_long_outlined),
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Сумма, сом',
-              prefixIcon: Icon(Icons.payments_outlined),
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _category,
-            decoration: const InputDecoration(
-              labelText: 'Категория',
-              prefixIcon: Icon(Icons.category_outlined),
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _vendor,
-            decoration: const InputDecoration(
-              labelText: 'Поставщик',
-              prefixIcon: Icon(Icons.storefront_outlined),
-            ),
-          ),
-        ],
-      );
+    title: 'Новый расход',
+    intro: 'Добавьте фактический расход по этому объекту.',
+    error: _error,
+    busy: _busy,
+    buttonText: 'Сохранить расход',
+    onSave: _save,
+    children: [
+      TextField(
+        controller: _title,
+        decoration: const InputDecoration(
+          labelText: 'Название',
+          prefixIcon: Icon(Icons.receipt_long_outlined),
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _amount,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(
+          labelText: 'Сумма, сом',
+          prefixIcon: Icon(Icons.payments_outlined),
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _category,
+        decoration: const InputDecoration(
+          labelText: 'Категория',
+          prefixIcon: Icon(Icons.category_outlined),
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _vendor,
+        decoration: const InputDecoration(
+          labelText: 'Поставщик',
+          prefixIcon: Icon(Icons.storefront_outlined),
+        ),
+      ),
+    ],
+  );
 
   Future<void> _save() async {
     final title = _title.text.trim();
@@ -1138,39 +1133,37 @@ class _ReportFormScreenV3State extends State<ReportFormScreenV3> {
 
   @override
   Widget build(BuildContext context) => _SimpleFormScaffold(
-        title: 'Новый отчёт',
-        intro: 'Зафиксируйте, что было сделано на объекте.',
-        error: _error,
-        busy: _busy,
-        buttonText: 'Сохранить отчёт',
-        onSave: _save,
-        children: [
-          TextField(
-            controller: _summary,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(labelText: 'Что сделали'),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _workers,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Количество рабочих',
-              prefixIcon: Icon(Icons.groups_outlined),
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _issues,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Проблемы или задержки',
-            ),
-          ),
-        ],
-      );
+    title: 'Новый отчёт',
+    intro: 'Зафиксируйте, что было сделано на объекте.',
+    error: _error,
+    busy: _busy,
+    buttonText: 'Сохранить отчёт',
+    onSave: _save,
+    children: [
+      TextField(
+        controller: _summary,
+        minLines: 3,
+        maxLines: 5,
+        decoration: const InputDecoration(labelText: 'Что сделали'),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _workers,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(
+          labelText: 'Количество рабочих',
+          prefixIcon: Icon(Icons.groups_outlined),
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _issues,
+        minLines: 2,
+        maxLines: 4,
+        decoration: const InputDecoration(labelText: 'Проблемы или задержки'),
+      ),
+    ],
+  );
 
   Future<void> _save() async {
     final summary = _summary.text.trim();
@@ -1229,29 +1222,29 @@ class _TaskFormScreenV3State extends State<TaskFormScreenV3> {
 
   @override
   Widget build(BuildContext context) => _SimpleFormScaffold(
-        title: 'Новая задача',
-        intro: 'Добавьте конкретную задачу для объекта.',
-        error: _error,
-        busy: _busy,
-        buttonText: 'Сохранить задачу',
-        onSave: _save,
-        children: [
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(
-              labelText: 'Название задачи',
-              prefixIcon: Icon(Icons.task_alt_outlined),
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _description,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(labelText: 'Описание'),
-          ),
-        ],
-      );
+    title: 'Новая задача',
+    intro: 'Добавьте конкретную задачу для объекта.',
+    error: _error,
+    busy: _busy,
+    buttonText: 'Сохранить задачу',
+    onSave: _save,
+    children: [
+      TextField(
+        controller: _title,
+        decoration: const InputDecoration(
+          labelText: 'Название задачи',
+          prefixIcon: Icon(Icons.task_alt_outlined),
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _description,
+        minLines: 3,
+        maxLines: 5,
+        decoration: const InputDecoration(labelText: 'Описание'),
+      ),
+    ],
+  );
 
   Future<void> _save() async {
     final title = _title.text.trim();
@@ -1587,9 +1580,10 @@ class _ExpenseCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    [item.category, item.vendor]
-                        .where((value) => value.trim().isNotEmpty)
-                        .join(' • '),
+                    [
+                      item.category,
+                      item.vendor,
+                    ].where((value) => value.trim().isNotEmpty).join(' • '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
@@ -1980,8 +1974,8 @@ List<RemoteCostItem> _searchExpenses(
   if (tokens.isEmpty) return expenses;
 
   return expenses.where((item) {
-    final haystack =
-        '${item.title} ${item.category} ${item.vendor}'.toLowerCase();
+    final haystack = '${item.title} ${item.category} ${item.vendor}'
+        .toLowerCase();
     return tokens.every(haystack.contains);
   }).toList();
 }

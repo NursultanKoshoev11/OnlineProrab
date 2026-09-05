@@ -31,10 +31,11 @@ abstract interface class SecureKeyValueStore {
 
 class FlutterSecureKeyValueStore implements SecureKeyValueStore {
   FlutterSecureKeyValueStore({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(migrateWithBackup: true),
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(migrateWithBackup: true),
+          );
 
   final FlutterSecureStorage _storage;
 
@@ -51,7 +52,7 @@ class FlutterSecureKeyValueStore implements SecureKeyValueStore {
 
 class SessionStore {
   SessionStore({SecureKeyValueStore? storage})
-      : _storage = storage ?? FlutterSecureKeyValueStore();
+    : _storage = storage ?? FlutterSecureKeyValueStore();
 
   static const _phoneKey = 'online_prorab_session_phone';
   static const _accessTokenKey = 'online_prorab_access_token';
