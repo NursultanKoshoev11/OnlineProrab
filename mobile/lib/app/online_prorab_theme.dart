@@ -42,7 +42,7 @@ ThemeData buildOnlineProrabTheme() {
       foregroundColor: OnlineProrabColors.text,
       centerTitle: false,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 0,
       margin: EdgeInsets.zero,
       color: OnlineProrabColors.surface,
@@ -98,13 +98,13 @@ ThemeData buildOnlineProrabTheme() {
       elevation: 0,
       backgroundColor: Colors.white,
       indicatorColor: OnlineProrabColors.mint,
-      labelTextStyle: MaterialStateProperty.resolveWith(
+      labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
           fontSize: 12,
-          fontWeight: states.contains(MaterialState.selected)
+          fontWeight: states.contains(WidgetState.selected)
               ? FontWeight.w700
               : FontWeight.w500,
-          color: states.contains(MaterialState.selected)
+          color: states.contains(WidgetState.selected)
               ? OnlineProrabColors.primary
               : OnlineProrabColors.textMuted,
         ),
