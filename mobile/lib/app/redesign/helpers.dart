@@ -84,15 +84,9 @@ String _roleLabel(String role) {
 }
 
 class ExpenseSearchQuery {
-  const ExpenseSearchQuery({
-    required this.term,
-    this.category,
-    this.month,
-    this.year,
-  });
+  const ExpenseSearchQuery({required this.term, this.month, this.year});
 
   final String term;
-  final String? category;
   final int? month;
   final int? year;
 
@@ -101,12 +95,8 @@ class ExpenseSearchQuery {
     final matchesText =
         normalizedTerm.isEmpty ||
         item.title.toLowerCase().contains(normalizedTerm) ||
-        item.vendor.toLowerCase().contains(normalizedTerm) ||
-        item.category.toLowerCase().contains(normalizedTerm) ||
-        _categoryLabel(item.category).toLowerCase().contains(normalizedTerm);
-    final matchesCategory =
-        category == null || item.category.toLowerCase() == category;
-    if (!matchesText || !matchesCategory) return false;
+        item.vendor.toLowerCase().contains(normalizedTerm);
+    if (!matchesText) return false;
     if (month == null && year == null) return true;
 
     final spentAt = DateTime.tryParse(item.spentAt);
@@ -189,29 +179,6 @@ ExpenseSearchQuery parseExpenseSearchQuery(
   }
   if (year == null && month != null) year = now.year;
 
-  const categoryPrefixes = <String, List<String>>{
-    'windows': ['окн'],
-    'electricity': ['электрик', 'электрич'],
-    'materials': ['материал'],
-    'work': ['работ', 'труд'],
-    'equipment': ['техник', 'оборудован'],
-    'delivery': ['доставк', 'транспорт'],
-  };
-  String? category;
-  for (final entry in categoryPrefixes.entries) {
-    final hasCategory = tokens.any(
-      (token) => entry.value.any((prefix) => token.startsWith(prefix)),
-    );
-    if (!hasCategory) continue;
-    category = entry.key;
-    tokens = tokens
-        .where(
-          (token) => !entry.value.any((prefix) => token.startsWith(prefix)),
-        )
-        .toList();
-    break;
-  }
-
   normalized = tokens.join(' ');
   const noisePhrases = <String>[
     'сколько мы потратили',
@@ -239,12 +206,59 @@ ExpenseSearchQuery parseExpenseSearchQuery(
       .join(' ')
       .trim();
 
-  return ExpenseSearchQuery(
-    term: normalized,
-    category: category,
-    month: month,
-    year: year,
-  );
+  return ExpenseSearchQuery(term: normalized, month: month, year: year);
+}
+
+String _displayDate(DateTime value) {
+  final day = value.day.toString().padLeft(2, '0');
+  final month = value.month.toString().padLeft(2, '0');
+  return '$day.$month.${value.year}';
+}
+
+String _apiDate(DateTime value) {
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  return '${value.year}-$month-$day';
+}
+
+String _displayIsoDate(String value) {
+  final parsed = DateTime.tryParse(value);
+  return parsed == null ? value : _displayDate(parsed);
+}
+
+String _projectDurationText(String startDate, {DateTime? now}) {
+  final start = DateTime.tryParse(startDate);
+  if (start == null) return 'Срок не указан';
+  final current = now ?? DateTime.now();
+  final from = DateTime(start.year, start.month, start.day);
+  final to = DateTime(current.year, current.month, current.day);
+  final days = to.difference(from).inDays;
+  if (days <= 0) return 'Начат сегодня';
+  if (days < 31) return 'Строится $days ${_dayWord(days)}';
+
+  var months = (to.year - from.year) * 12 + to.month - from.month;
+  if (to.day < from.day) months--;
+  if (months < 12) return 'Строится $months мес.';
+
+  final years = months ~/ 12;
+  final remainingMonths = months % 12;
+  if (remainingMonths == 0) return 'Строится $years г.';
+  return 'Строится $years г. $remainingMonths мес.';
+}
+
+String _dayWord(int value) {
+  final lastTwo = value % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'дней';
+  switch (value % 10) {
+    case 1:
+      return 'день';
+    case 2:
+    case 3:
+    case 4:
+      return 'дня';
+    default:
+      return 'дней';
+  }
 }
 
 String _money(double value, String currency) {
