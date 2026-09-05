@@ -55,6 +55,49 @@ func TestValidateRejectsTooLongProductionAccessTokenTTL(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresSMSProviderInProduction(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.SMSProvider = ""
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected missing production SMS provider to be rejected")
+	}
+	if !strings.Contains(err.Error(), "SMS_PROVIDER") {
+		t.Fatalf("expected SMS_PROVIDER error, got %v", err)
+	}
+}
+
+func TestValidateRejectsIncompleteTwilioConfig(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.TwilioAPIKeySID = ""
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected incomplete Twilio config to be rejected")
+	}
+	if !strings.Contains(err.Error(), "TWILIO_API_KEY_SID") {
+		t.Fatalf("expected TWILIO_API_KEY_SID error, got %v", err)
+	}
+}
+
+func TestValidateRejectsTwoTwilioSenderSources(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.TwilioMessagingServiceSID = "MG0000000000"
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected two Twilio sender sources to be rejected")
+	}
+	if !strings.Contains(err.Error(), "exactly one") {
+		t.Fatalf("expected sender configuration error, got %v", err)
+	}
+}
+
 func TestValidateAcceptsSafeProductionConfig(t *testing.T) {
 	cfg := validProductionConfig()
 
@@ -83,5 +126,10 @@ func validProductionConfig() Config {
 		CORSAllowedOrigins: []string{"https://app.example.com"},
 		UploadDir:          "/var/lib/onlineprorab/uploads",
 		MaxUploadBytes:     10 * 1024 * 1024,
+		SMSProvider:        SMSProviderTwilio,
+		TwilioAccountSID:   "AC0000000000",
+		TwilioAPIKeySID:    "SK0000000000",
+		TwilioAPIKeySecret: "unit-test-credential-value",
+		TwilioFrom:         "+15550000000",
 	}
 }
