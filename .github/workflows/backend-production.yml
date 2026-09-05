@@ -47,18 +47,18 @@ jobs:
         with:
           go-version: '1.23.x'
           cache-dependency-path: backend/go.sum
-      - name: Download dependencies
-        run: go mod download
-      - name: Format backend
-        run: gofmt -w .
-      - name: Commit formatter output
+      - name: Normalize modules and formatting
+        run: |
+          go mod tidy
+          gofmt -w .
+      - name: Commit reproducible dependency metadata
         run: |
           git diff --check
           if ! git diff --quiet -- .; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add .
-            git commit -m "Format backend with gofmt"
+            git commit -m "Normalize backend modules and formatting"
             git fetch origin main
             git rebase origin/main
             git push origin HEAD:main
