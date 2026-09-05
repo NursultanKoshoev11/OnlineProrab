@@ -35,7 +35,6 @@ ThemeData buildOnlineProrabTheme() {
       onSurface: OnlineProrabColors.text,
     ),
     scaffoldBackgroundColor: OnlineProrabColors.background,
-    fontFamily: 'Roboto',
     appBarTheme: const AppBarTheme(
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -43,7 +42,7 @@ ThemeData buildOnlineProrabTheme() {
       foregroundColor: OnlineProrabColors.text,
       centerTitle: false,
     ),
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       elevation: 0,
       margin: EdgeInsets.zero,
       color: OnlineProrabColors.surface,
@@ -99,13 +98,13 @@ ThemeData buildOnlineProrabTheme() {
       elevation: 0,
       backgroundColor: Colors.white,
       indicatorColor: OnlineProrabColors.mint,
-      labelTextStyle: WidgetStateProperty.resolveWith(
+      labelTextStyle: MaterialStateProperty.resolveWith(
         (states) => TextStyle(
           fontSize: 12,
-          fontWeight: states.contains(WidgetState.selected)
+          fontWeight: states.contains(MaterialState.selected)
               ? FontWeight.w700
               : FontWeight.w500,
-          color: states.contains(WidgetState.selected)
+          color: states.contains(MaterialState.selected)
               ? OnlineProrabColors.primary
               : OnlineProrabColors.textMuted,
         ),
