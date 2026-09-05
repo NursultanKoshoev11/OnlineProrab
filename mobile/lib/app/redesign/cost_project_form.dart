@@ -235,8 +235,8 @@ class _ProjectFormState extends State<_ProjectForm> {
         allowMultiple: false,
         withData: false,
       );
-      if (!mounted || result == null || result.files.isEmpty) return;
-      final selected = result.files.single;
+      if (!mounted || result == null || result.isEmpty) return;
+      final selected = result.single;
       final path = selected.path;
       if (path == null || path.trim().isEmpty) {
         setState(() => _error = 'Не удалось получить выбранное фото');
