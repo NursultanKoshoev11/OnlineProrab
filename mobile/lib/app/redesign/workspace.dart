@@ -73,39 +73,39 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))
           : _error != null
-          ? _ErrorView(message: _error!, retry: _load)
-          : IndexedStack(
-              index: _tab,
-              children: [
-                _OverviewTab(
-                  project: widget.project,
-                  costs: _costs,
-                  tasks: _tasks,
-                  files: _files,
-                  members: _members,
-                  openTab: (index) => setState(() => _tab = index),
+              ? _ErrorView(message: _error!, retry: _load)
+              : IndexedStack(
+                  index: _tab,
+                  children: [
+                    _OverviewTab(
+                      project: widget.project,
+                      costs: _costs,
+                      tasks: _tasks,
+                      files: _files,
+                      members: _members,
+                      openTab: (index) => setState(() => _tab = index),
+                    ),
+                    _ExpensesTab(
+                      project: widget.project,
+                      repository: widget.deps.costItemRepository,
+                      initial: _costs,
+                      onChanged: (items) => setState(() => _costs = items),
+                    ),
+                    _TasksTab(
+                      project: widget.project,
+                      repository: widget.deps.taskRepository,
+                      initial: _tasks,
+                      onChanged: (items) => setState(() => _tasks = items),
+                    ),
+                    _MoreTab(
+                      project: widget.project,
+                      reports: _reports,
+                      files: _files,
+                      members: _members,
+                      costs: _costs,
+                    ),
+                  ],
                 ),
-                _ExpensesTab(
-                  project: widget.project,
-                  repository: widget.deps.costItemRepository,
-                  initial: _costs,
-                  onChanged: (items) => setState(() => _costs = items),
-                ),
-                _TasksTab(
-                  project: widget.project,
-                  repository: widget.deps.taskRepository,
-                  initial: _tasks,
-                  onChanged: (items) => setState(() => _tasks = items),
-                ),
-                _MoreTab(
-                  project: widget.project,
-                  reports: _reports,
-                  files: _files,
-                  members: _members,
-                  costs: _costs,
-                ),
-              ],
-            ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (value) => setState(() => _tab = value),
