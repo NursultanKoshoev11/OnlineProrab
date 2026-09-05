@@ -8,42 +8,66 @@ class _CostDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         title: const Text(
           'Расход',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
         children: [
-          Container(
-            height: 190,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFDCE9E3), Color(0xFFABC7BA)],
-              ),
-            ),
-            child: Icon(_categoryIcon(item.category), size: 84, color: _brand),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            item.title,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _money(item.amount, item.currency),
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: _brand,
-            ),
-          ),
-          const SizedBox(height: 18),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: _brandSoft,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      _categoryIcon(item.category),
+                      size: 28,
+                      color: _brand,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: _ink,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _money(item.amount, item.currency),
+                          style: const TextStyle(
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                            color: _brand,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
               child: Column(
                 children: [
                   _DetailRow(
@@ -51,10 +75,14 @@ class _CostDetails extends StatelessWidget {
                     value: _categoryLabel(item.category),
                   ),
                   if (item.vendor.isNotEmpty) ...[
-                    const Divider(height: 24),
+                    const Divider(height: 26),
                     _DetailRow(label: 'Поставщик', value: item.vendor),
                   ],
-                  const Divider(height: 24),
+                  if (item.spentAt.isNotEmpty) ...[
+                    const Divider(height: 26),
+                    _DetailRow(label: 'Дата', value: item.spentAt),
+                  ],
+                  const Divider(height: 26),
                   _DetailRow(label: 'Валюта', value: item.currency),
                 ],
               ),
@@ -67,8 +95,13 @@ class _CostDetails extends StatelessWidget {
 }
 
 class _ProjectForm extends StatefulWidget {
-  const _ProjectForm({required this.repository});
+  const _ProjectForm({
+    required this.repository,
+    required this.fileRepository,
+  });
+
   final ProjectRepository repository;
+  final ProjectFileRepository fileRepository;
 
   @override
   State<_ProjectForm> createState() => _ProjectFormState();
@@ -77,6 +110,8 @@ class _ProjectForm extends StatefulWidget {
 class _ProjectFormState extends State<_ProjectForm> {
   final _name = TextEditingController();
   final _address = TextEditingController();
+  String? _coverPath;
+  String? _coverName;
   bool _busy = false;
   String? _error;
 
@@ -90,48 +125,139 @@ class _ProjectFormState extends State<_ProjectForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        centerTitle: true,
         title: const Text(
           'Новый объект',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
         children: [
+          _ProjectCoverPicker(
+            path: _coverPath,
+            busy: _busy,
+            onPick: _pickCover,
+            onRemove: () => setState(() {
+              _coverPath = null;
+              _coverName = null;
+            }),
+          ),
+          const SizedBox(height: 22),
+          const Text(
+            'Название объекта',
+            style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _name,
+            enabled: !_busy,
+            textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
-              labelText: 'Название объекта',
+              hintText: 'Например: Дом в Кок-Жаре',
               prefixIcon: Icon(Icons.home_work_outlined),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          const Text(
+            'Адрес',
+            style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _address,
+            enabled: !_busy,
+            textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
-              labelText: 'Адрес',
+              hintText: 'Например: с. Кок-Жар, ул. Центральная, 10',
               prefixIcon: Icon(Icons.location_on_outlined),
             ),
           ),
           if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEEEE),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    size: 20,
+                    color: Colors.redAccent,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
-          const SizedBox(height: 18),
-          FilledButton(
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: _line)),
+          ),
+          child: FilledButton(
             onPressed: _busy ? null : _save,
             child: _busy
-                ? const CircularProgressIndicator(color: Colors.white)
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Создать объект'),
           ),
-        ],
+        ),
       ),
     );
   }
 
+  Future<void> _pickCover() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: false,
+      );
+      if (!mounted || result == null || result.files.isEmpty) return;
+      final selected = result.files.single;
+      final path = selected.path;
+      if (path == null || path.trim().isEmpty) {
+        setState(() => _error = 'Не удалось получить выбранное фото');
+        return;
+      }
+      setState(() {
+        _coverPath = path;
+        _coverName = selected.name;
+        _error = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Не удалось выбрать фото');
+    }
+  }
+
   Future<void> _save() async {
-    if (_name.text.trim().isEmpty) {
+    final name = _name.text.trim();
+    if (name.isEmpty) {
       setState(() => _error = 'Введите название объекта');
       return;
     }
@@ -139,16 +265,124 @@ class _ProjectFormState extends State<_ProjectForm> {
       _busy = true;
       _error = null;
     });
+
+    RemoteProject? created;
     try {
-      await widget.repository.createProject(
-        name: _name.text.trim(),
+      created = await widget.repository.createProject(
+        name: name,
         address: _address.text.trim(),
       );
+      final coverPath = _coverPath;
+      if (coverPath != null) {
+        await widget.fileRepository.upload(
+          projectId: created.id,
+          kind: 'project_cover',
+          filePath: coverPath,
+          fileName: _coverName ?? 'project-cover.jpg',
+        );
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
+      if (created != null && _coverPath != null) {
+        try {
+          await widget.repository.deleteProject(created.id);
+        } catch (_) {
+          // The original creation/upload error is more useful to the user.
+        }
+      }
       if (mounted) setState(() => _error = _errorText(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+}
+
+class _ProjectCoverPicker extends StatelessWidget {
+  const _ProjectCoverPicker({
+    required this.path,
+    required this.busy,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  final String? path;
+  final bool busy;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedPath = path;
+    if (selectedPath != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: SizedBox(
+          height: 205,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.file(
+                File(selectedPath),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const _CoverPlaceholder(),
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xB3000000),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: busy ? null : onRemove,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                bottom: 12,
+                child: FilledButton.tonalIcon(
+                  onPressed: busy ? null : onPick,
+                  icon: const Icon(Icons.photo_library_outlined, size: 18),
+                  label: const Text('Заменить'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: busy ? null : onPick,
+      child: Container(
+        height: 190,
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: _line, width: 1.4),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _RoundIcon(
+              icon: Icons.add_a_photo_outlined,
+              size: 58,
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Добавить фото объекта',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            SizedBox(height: 5),
+            Text(
+              'Будет обложкой в списке объектов',
+              style: TextStyle(color: _muted, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
