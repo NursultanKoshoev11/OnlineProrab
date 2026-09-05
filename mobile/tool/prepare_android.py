@@ -53,17 +53,32 @@ def configure_main_manifest() -> None:
     if manifest_close < 0:
         raise RuntimeError("Android manifest root tag is not closed")
 
-    permission = '<uses-permission android:name="android.permission.INTERNET" />'
-    if permission not in text:
-        text = (
-            text[: manifest_close + 1]
-            + f"\n    {permission}"
-            + text[manifest_close + 1 :]
-        )
+    permissions = [
+        '<uses-permission android:name="android.permission.INTERNET" />',
+        '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
+    ]
+    insertion = ""
+    for permission in permissions:
+        if permission not in text:
+            insertion += f"\n    {permission}"
+    if insertion:
+        text = text[: manifest_close + 1] + insertion + text[manifest_close + 1 :]
 
     application_tag = "<application"
-    if application_tag not in text:
+    application_index = text.find(application_tag)
+    if application_index < 0:
         raise RuntimeError("Android application tag was not generated")
+
+    recognition_action = 'android:name="android.speech.RecognitionService"'
+    if recognition_action not in text:
+        queries = (
+            "    <queries>\n"
+            "        <intent>\n"
+            "            <action android:name=\"android.speech.RecognitionService\" />\n"
+            "        </intent>\n"
+            "    </queries>\n\n"
+        )
+        text = text[:application_index] + queries + text[application_index:]
 
     attributes = {
         "android:allowBackup": "false",
