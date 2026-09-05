@@ -13,11 +13,9 @@ part 'redesign/project_card.dart';
 part 'redesign/workspace.dart';
 part 'redesign/overview.dart';
 part 'redesign/expenses.dart';
-part 'redesign/tasks.dart';
 part 'redesign/more_analytics.dart';
 part 'redesign/cost_project_form.dart';
 part 'redesign/expense_form.dart';
-part 'redesign/task_form.dart';
 part 'redesign/widgets.dart';
 part 'redesign/helpers.dart';
 
@@ -44,7 +42,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final ProjectRepository _projectRepository;
   late final CostItemRepository _costItemRepository;
   late final DailyReportRepository _dailyReportRepository;
-  late final TaskRepository _taskRepository;
   late final ProjectFileRepository _fileRepository;
   late final ProjectTeamRepository _teamRepository;
   late final stt.SpeechToText _speechToText;
@@ -60,7 +57,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     _projectRepository = ProjectRepository(apiClient: _apiClient);
     _costItemRepository = CostItemRepository(apiClient: _apiClient);
     _dailyReportRepository = DailyReportRepository(apiClient: _apiClient);
-    _taskRepository = TaskRepository(apiClient: _apiClient);
     _fileRepository = ProjectFileRepository(apiClient: _apiClient);
     _teamRepository = ProjectTeamRepository(apiClient: _apiClient);
     _speechToText = stt.SpeechToText();
@@ -158,7 +154,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         projectRepository: _projectRepository,
         costItemRepository: _costItemRepository,
         dailyReportRepository: _dailyReportRepository,
-        taskRepository: _taskRepository,
         fileRepository: _fileRepository,
         teamRepository: _teamRepository,
         speechToText: _speechToText,
@@ -173,7 +168,6 @@ class _Dependencies {
     required this.projectRepository,
     required this.costItemRepository,
     required this.dailyReportRepository,
-    required this.taskRepository,
     required this.fileRepository,
     required this.teamRepository,
     required this.speechToText,
@@ -183,7 +177,6 @@ class _Dependencies {
   final ProjectRepository projectRepository;
   final CostItemRepository costItemRepository;
   final DailyReportRepository dailyReportRepository;
-  final TaskRepository taskRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
   final stt.SpeechToText speechToText;
@@ -195,7 +188,6 @@ class _AuthGate extends StatefulWidget {
     required this.projectRepository,
     required this.costItemRepository,
     required this.dailyReportRepository,
-    required this.taskRepository,
     required this.fileRepository,
     required this.teamRepository,
     required this.speechToText,
@@ -205,7 +197,6 @@ class _AuthGate extends StatefulWidget {
   final ProjectRepository projectRepository;
   final CostItemRepository costItemRepository;
   final DailyReportRepository dailyReportRepository;
-  final TaskRepository taskRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
   final stt.SpeechToText speechToText;
@@ -222,7 +213,6 @@ class _AuthGateState extends State<_AuthGate> {
     projectRepository: widget.projectRepository,
     costItemRepository: widget.costItemRepository,
     dailyReportRepository: widget.dailyReportRepository,
-    taskRepository: widget.taskRepository,
     fileRepository: widget.fileRepository,
     teamRepository: widget.teamRepository,
     speechToText: widget.speechToText,
