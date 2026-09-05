@@ -104,32 +104,32 @@ class _MoreTab extends StatelessWidget {
                     .toList(),
         ),
         const SizedBox(height: 12),
-        _AnalyticsCard(costs: costs),
+        _ExpenseSummaryCard(costs: costs),
       ],
     );
   }
 }
 
-class _AnalyticsCard extends StatelessWidget {
-  const _AnalyticsCard({required this.costs});
+class _ExpenseSummaryCard extends StatelessWidget {
+  const _ExpenseSummaryCard({required this.costs});
   final List<RemoteCostItem> costs;
 
   @override
   Widget build(BuildContext context) {
     final total = costs.fold<double>(0, (sum, item) => sum + item.amount);
-    final grouped = <String, double>{};
-    for (final item in costs) {
-      grouped.update(
-        item.category,
-        (value) => value + item.amount,
-        ifAbsent: () => item.amount,
-      );
-    }
-    final entries = grouped.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final now = DateTime.now();
+    final thisMonth = costs.fold<double>(0, (sum, item) {
+      final date = DateTime.tryParse(item.spentAt);
+      if (date == null || date.year != now.year || date.month != now.month) {
+        return sum;
+      }
+      return sum + item.amount;
+    });
+    final currency = costs.isEmpty ? 'KGS' : costs.first.currency;
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -138,62 +138,68 @@ class _AnalyticsCard extends StatelessWidget {
                 Icon(Icons.analytics_outlined, color: _brand),
                 SizedBox(width: 10),
                 Text(
-                  'Аналитика расходов',
+                  'Сводка расходов',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
             Text(
-              _money(total, costs.isEmpty ? 'KGS' : costs.first.currency),
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+              _money(total, currency),
+              style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
             ),
             const Text('Всего потрачено', style: TextStyle(color: _muted)),
             const SizedBox(height: 16),
-            if (entries.isEmpty)
-              const Text(
-                'Нет данных для аналитики.',
-                style: TextStyle(color: _muted),
-              )
-            else
-              ...entries.take(5).map((entry) {
-                final ratio = total <= 0 ? 0.0 : entry.value / total;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _categoryLabel(entry.key),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            '${(ratio * 100).round()}%',
-                            style: const TextStyle(color: _muted),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: LinearProgressIndicator(
-                          value: ratio,
-                          minHeight: 7,
-                          backgroundColor: _line,
-                          color: _brand,
-                        ),
-                      ),
-                    ],
+            Row(
+              children: [
+                Expanded(
+                  child: _SummaryValue(
+                    label: 'Записей',
+                    value: '${costs.length}',
                   ),
-                );
-              }),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SummaryValue(
+                    label: 'За этот месяц',
+                    value: _money(thisMonth, currency),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SummaryValue extends StatelessWidget {
+  const _SummaryValue({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: _muted, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800, color: _ink),
+          ),
+        ],
       ),
     );
   }
