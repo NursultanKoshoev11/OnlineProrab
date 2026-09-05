@@ -75,8 +75,8 @@ func DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if filename == "" {
 		filename = "download"
 	}
-	disposition, err := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
-	if err == nil {
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+	if disposition != "" {
 		w.Header().Set("Content-Disposition", disposition)
 	}
 	w.Header().Set("Content-Type", contentType)
