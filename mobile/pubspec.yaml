@@ -4,12 +4,12 @@ publish_to: none
 version: 0.1.0+1
 
 environment:
-  sdk: ^3.5.0
+  sdk: ^3.10.0
 
 dependencies:
   flutter:
     sdk: flutter
-  file_picker: ^11.0.2
+  file_picker: ^12.2.0
   flutter_secure_storage: ^10.3.1
   http: ^1.2.2
   open_filex: ^4.7.0
