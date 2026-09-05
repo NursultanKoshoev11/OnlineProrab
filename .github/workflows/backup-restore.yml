@@ -1,0 +1,84 @@
+name: Backup Restore Verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/scripts/backup.sh'
+      - 'backend/scripts/restore.sh'
+      - '.github/workflows/backup-restore.yml'
+  pull_request:
+    paths:
+      - 'backend/scripts/backup.sh'
+      - 'backend/scripts/restore.sh'
+      - '.github/workflows/backup-restore.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backup-restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: onlineprorab_backup_test
+          POSTGRES_USER: onlineprorab
+          POSTGRES_PASSWORD: onlineprorab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U onlineprorab -d onlineprorab_backup_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://onlineprorab:onlineprorab@127.0.0.1:5432/onlineprorab_backup_test?sslmode=disable
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Seed database and uploads
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE backup_probe (id integer PRIMARY KEY, value text NOT NULL);
+          INSERT INTO backup_probe (id, value) VALUES (1, 'backup-ok');
+          SQL
+          mkdir -p "$RUNNER_TEMP/onlineprorab-uploads/nested"
+          printf '%s' 'receipt-content' > "$RUNNER_TEMP/onlineprorab-uploads/nested/receipt.txt"
+
+      - name: Create backup
+        run: |
+          BACKUP_DIR="$RUNNER_TEMP/onlineprorab-backups" \
+          UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" \
+          RETENTION_DAYS=14 \
+          sh scripts/backup.sh > "$RUNNER_TEMP/backup-path.txt"
+          test -s "$RUNNER_TEMP/backup-path.txt"
+
+      - name: Destroy source data
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'DROP TABLE backup_probe;'
+          rm -rf "$RUNNER_TEMP/onlineprorab-uploads"
+          mkdir -p "$RUNNER_TEMP/onlineprorab-uploads"
+
+      - name: Restore backup
+        run: |
+          backup_dir="$(cat "$RUNNER_TEMP/backup-path.txt")"
+          CONFIRM_RESTORE=YES \
+          UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" \
+          sh scripts/restore.sh "$backup_dir"
+
+      - name: Verify restored database and file
+        run: |
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT value FROM backup_probe WHERE id = 1')" = 'backup-ok'
+          test "$(cat "$RUNNER_TEMP/onlineprorab-uploads/nested/receipt.txt")" = 'receipt-content'
