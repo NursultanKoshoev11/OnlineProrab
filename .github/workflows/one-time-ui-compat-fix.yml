@@ -1,0 +1,68 @@
+name: One-time UI compatibility fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-ui-compat-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact compatibility fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          fixes = {
+              Path('mobile/lib/app/backend_app_v3.dart'): [
+                  ('Colors.white.withOpacity(.9)', 'Colors.white.withValues(alpha: .9)', 1),
+              ],
+              Path('mobile/lib/app/backend_project_dashboard_v3.dart'): [
+                  ('FilePicker.platform.pickFiles(', 'FilePicker.pickFiles(', 1),
+              ],
+              Path('mobile/lib/app/project_team_screen.dart'): [
+                  ('value: role,', 'initialValue: role,', 2),
+              ],
+              Path('mobile/test/api_client_test.dart'): [
+                  ("import 'dart:async';\n\n", '', 1),
+              ],
+          }
+
+          for path, replacements in fixes.items():
+              text = path.read_text(encoding='utf-8')
+              for old, new, expected in replacements:
+                  actual = text.count(old)
+                  if actual != expected:
+                      raise SystemExit(
+                          f'{path}: expected {expected} occurrence(s) of {old!r}, found {actual}'
+                      )
+                  text = text.replace(old, new)
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify diff
+        run: |
+          git diff --check
+          git diff -- mobile/lib/app/backend_app_v3.dart mobile/lib/app/backend_project_dashboard_v3.dart mobile/lib/app/project_team_screen.dart mobile/test/api_client_test.dart
+
+      - name: Commit fixes
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/lib/app/backend_app_v3.dart mobile/lib/app/backend_project_dashboard_v3.dart mobile/lib/app/project_team_screen.dart mobile/test/api_client_test.dart
+          git commit -m "Fix Flutter 3.47 UI compatibility issues"
+          git push origin HEAD:main
