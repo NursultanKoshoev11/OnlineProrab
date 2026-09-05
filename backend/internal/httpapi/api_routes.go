@@ -5,6 +5,7 @@ import "net/http"
 func registerAPIRoutes(mux *http.ServeMux) {
 	api := "/api/v1"
 	mux.HandleFunc(api+"/projects", requireAuth(Projects))
+	mux.HandleFunc(api+"/projects/create-with-cover", requireAuth(CreateProjectWithCover))
 	mux.HandleFunc(api+"/projects/", requireAuth(Projects))
 	mux.HandleFunc(api+"/project-members", requireAuth(ProjectMembers))
 	mux.HandleFunc(api+"/project-members/", requireAuth(ProjectMember))
