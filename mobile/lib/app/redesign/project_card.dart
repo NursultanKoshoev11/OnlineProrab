@@ -1,9 +1,14 @@
 part of '../online_prorab_redesign.dart';
 
 class _ProjectCard extends StatelessWidget {
-  const _ProjectCard({required this.project, required this.onTap});
+  const _ProjectCard({
+    required this.project,
+    required this.apiClient,
+    required this.onTap,
+  });
 
   final RemoteProject project;
+  final ApiClient apiClient;
   final VoidCallback onTap;
 
   @override
@@ -17,69 +22,64 @@ class _ProjectCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 104,
-                height: 92,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFDDE8E2), Color(0xFFB8CEC2)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.cottage_rounded,
-                  color: _brand,
-                  size: 46,
-                ),
+              _ProjectCoverImage(
+                apiClient: apiClient,
+                fileId: project.coverFileId,
+                width: 112,
+                height: 96,
+                borderRadius: 16,
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            project.name.isEmpty
-                                ? 'Без названия'
-                                : project.name,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: _ink,
-                            ),
-                          ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        project.name.isEmpty ? 'Без названия' : project.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          height: 1.18,
+                          fontWeight: FontWeight.w900,
+                          color: _ink,
                         ),
-                        const Icon(Icons.more_horiz_rounded, color: _muted),
-                      ],
-                    ),
-                    const SizedBox(height: 7),
-                    if (project.address.isNotEmpty)
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_outlined,
-                            size: 16,
-                            color: _muted,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              project.address,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: _muted),
-                            ),
-                          ),
-                        ],
                       ),
-                    const SizedBox(height: 10),
-                    _StatusPill(status: project.status),
-                  ],
+                      if (project.address.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 16,
+                              color: _muted,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                project.address,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _muted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      _StatusPill(status: project.status),
+                    ],
+                  ),
                 ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(top: 31),
+                child: Icon(Icons.chevron_right_rounded, color: _muted),
               ),
             ],
           ),
