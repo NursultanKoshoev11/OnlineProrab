@@ -36,23 +36,65 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Apply test fix and Dart formatter
+      - name: Clean obsolete UI code and format
         shell: bash
         run: |
-          sed -i 's/throw const http.ClientException/throw http.ClientException/' test/api_client_test.dart
-          dart format lib/services/api_client.dart test/api_client_test.dart test/expense_search_query_test.dart
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Commit formatting when needed
+          form = Path('lib/app/redesign/cost_project_form.dart')
+          text = form.read_text()
+          old = """      final result = await FilePicker.pickFiles(
+                type: FileType.image,
+                allowMultiple: false,
+                withData: false,
+              );
+              if (!mounted || result == null || result.isEmpty) return;
+              final selected = result.single;
+          """
+          if old not in text:
+              old = """      final result = await FilePicker.pickFiles(
+                type: FileType.image,
+                allowMultiple: false,
+                withData: false,
+              );
+              if (!mounted || result == null || result.isEmpty) return;
+              final selected = result.single;
+          """
+          text = text.replace(old, """      final selected = await FilePicker.pickFile(type: FileType.image);
+              if (!mounted || selected == null) return;
+          """)
+          form.write_text(text)
+
+          helpers = Path('lib/app/redesign/helpers.dart')
+          text = helpers.read_text()
+          start = text.find('String _categoryLabel(')
+          end = text.find('String _roleLabel(')
+          if start >= 0 and end > start:
+              text = text[:start] + text[end:]
+          helpers.write_text(text)
+
+          widgets = Path('lib/app/redesign/widgets.dart')
+          text = widgets.read_text()
+          start = text.find('class _FilterChip')
+          end = text.find('class _StatusPill')
+          if start >= 0 and end > start:
+              text = text[:start] + text[end:]
+          widgets.write_text(text)
+          PY
+          dart format lib test
+
+      - name: Commit cleanup when needed
         shell: bash
         run: |
-          if git diff --quiet -- lib/services/api_client.dart test/api_client_test.dart test/expense_search_query_test.dart; then
-            echo "No formatting changes"
+          if git diff --quiet -- lib test; then
+            echo "No cleanup changes"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/services/api_client.dart test/api_client_test.dart test/expense_search_query_test.dart
-          git commit -m "Format project start date changes"
+          git add lib test
+          git commit -m "Clean simplified project and expense UI"
           git reset --hard HEAD
           git pull --rebase origin main
           git push origin HEAD:main
