@@ -55,15 +55,18 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         title: Text(
           widget.project.name.isEmpty ? 'Объект' : widget.project.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
           IconButton(
-            onPressed: () => _toast(context, 'Настройки объекта'),
-            icon: const Icon(Icons.more_horiz_rounded),
+            tooltip: 'Обновить',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
@@ -76,6 +79,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
               children: [
                 _OverviewTab(
                   project: widget.project,
+                  apiClient: widget.deps.apiClient,
                   costs: _costs,
                   files: _files,
                   members: _members,
