@@ -7,6 +7,7 @@ class RemoteProject {
     required this.address,
     required this.status,
     required this.coverFileId,
+    required this.startDate,
   });
 
   final String id;
@@ -14,6 +15,7 @@ class RemoteProject {
   final String address;
   final String status;
   final String coverFileId;
+  final String startDate;
 
   factory RemoteProject.fromJson(Map<String, dynamic> json) {
     return RemoteProject(
@@ -22,6 +24,7 @@ class RemoteProject {
       address: json['address']?.toString() ?? '',
       status: json['status']?.toString() ?? 'active',
       coverFileId: json['cover_file_id']?.toString() ?? '',
+      startDate: json['start_date']?.toString() ?? '',
     );
   }
 }
@@ -44,8 +47,30 @@ class ProjectRepository {
   Future<RemoteProject> createProject({
     required String name,
     required String address,
+    required String startDate,
   }) async {
-    final data = await _apiClient.createProject(name, address);
+    final data = await _apiClient.createProject(
+      name,
+      address,
+      startDate: startDate,
+    );
+    return RemoteProject.fromJson(data);
+  }
+
+  Future<RemoteProject> createProjectWithCover({
+    required String name,
+    required String address,
+    required String startDate,
+    required String filePath,
+    required String fileName,
+  }) async {
+    final data = await _apiClient.createProjectWithCover(
+      name: name,
+      address: address,
+      startDate: startDate,
+      filePath: filePath,
+      fileName: fileName,
+    );
     return RemoteProject.fromJson(data);
   }
 
@@ -53,6 +78,7 @@ class ProjectRepository {
     required String projectId,
     required String name,
     required String address,
+    required String startDate,
     String status = 'active',
   }) async {
     final data = await _apiClient.updateProject(
@@ -60,6 +86,7 @@ class ProjectRepository {
       name,
       address,
       status: status,
+      startDate: startDate,
     );
     return RemoteProject.fromJson(data);
   }
