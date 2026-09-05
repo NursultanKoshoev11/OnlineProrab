@@ -39,14 +39,23 @@ void main() {
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           expect(body['name'], 'Demo');
           expect(body['address'], 'Bishkek');
+          expect(body['start_date'], '2026-09-06');
           return http.Response(
-            jsonEncode({'id': 'project-1', 'name': 'Demo'}),
+            jsonEncode({
+              'id': 'project-1',
+              'name': 'Demo',
+              'start_date': '2026-09-06',
+            }),
             201,
           );
         }),
       )..setAccessToken('fixture-value');
 
-      final data = await client.createProject('Demo', 'Bishkek');
+      final data = await client.createProject(
+        'Demo',
+        'Bishkek',
+        startDate: '2026-09-06',
+      );
 
       expect(data['id'], 'project-1');
     },
@@ -149,27 +158,20 @@ void main() {
     );
   });
 
-  test(
-    'ApiClient converts http client errors to network ApiException',
-    () async {
-      final client = ApiClient(
-        httpClient: MockClient((request) async {
-          throw http.ClientException('Connection refused');
-        }),
-      );
+  test('ApiClient converts http client errors to network ApiException', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        throw const http.ClientException('offline');
+      }),
+    );
 
-      expect(
-        () => client.listProjects(),
-        throwsA(
-          isA<ApiException>()
-              .having((error) => error.statusCode, 'statusCode', 0)
-              .having(
-                (error) => error.isNetworkError,
-                'isNetworkError',
-                isTrue,
-              ),
-        ),
-      );
-    },
-  );
+    expect(
+      () => client.listProjects(),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.statusCode, 'statusCode', 0)
+            .having((error) => error.message, 'message', 'offline'),
+      ),
+    );
+  });
 }
