@@ -92,17 +92,8 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = status.toLowerCase() == 'active';
-    final planning = status.toLowerCase() == 'planning';
-    final background = active
-        ? _brandSoft
-        : planning
-        ? const Color(0xFFE9EEFF)
-        : _warningSoft;
-    final foreground = active
-        ? _brand
-        : planning
-        ? const Color(0xFF4561A8)
-        : _warning;
+    final background = active ? _brandSoft : _warningSoft;
+    final foreground = active ? _brand : _warning;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -113,11 +104,7 @@ class _StatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            active
-                ? Icons.check_circle_rounded
-                : planning
-                ? Icons.schedule_rounded
-                : Icons.pause_circle_rounded,
+            active ? Icons.check_circle_rounded : Icons.archive_outlined,
             size: 14,
             color: foreground,
           ),
@@ -402,6 +389,112 @@ class _ErrorView extends StatelessWidget {
               child: const Text('Повторить'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundIcon extends StatelessWidget {
+  const _RoundIcon({required this.icon, this.size = 48});
+
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(
+        color: _brandSoft,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: _brand, size: size * .45),
+    );
+  }
+}
+
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE6F1EA), Color(0xFFC6DDD0)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Icon(Icons.cottage_rounded, size: 54, color: _brand),
+      ),
+    );
+  }
+}
+
+class _ProjectCoverImage extends StatelessWidget {
+  const _ProjectCoverImage({
+    required this.apiClient,
+    required this.fileId,
+    required this.width,
+    required this.height,
+    required this.borderRadius,
+  });
+
+  final ApiClient apiClient;
+  final String fileId;
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    if (fileId.isEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: const _CoverPlaceholder(),
+        ),
+      );
+    }
+
+    final token = apiClient.accessToken;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Image.network(
+          ApiConfig.endpoint('/api/v1/files/download', {
+            'file_id': fileId,
+          }).toString(),
+          headers: {
+            if (token != null && token.isNotEmpty)
+              'Authorization': 'Bearer $token',
+          },
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, _, _) => const _CoverPlaceholder(),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              color: _brandSoft,
+              alignment: Alignment.center,
+              child: const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _brand,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
