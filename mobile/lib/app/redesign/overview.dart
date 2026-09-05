@@ -3,6 +3,7 @@ part of '../online_prorab_redesign.dart';
 class _OverviewTab extends StatelessWidget {
   const _OverviewTab({
     required this.project,
+    required this.apiClient,
     required this.costs,
     required this.files,
     required this.members,
@@ -10,6 +11,7 @@ class _OverviewTab extends StatelessWidget {
   });
 
   final RemoteProject project;
+  final ApiClient apiClient;
   final List<RemoteCostItem> costs;
   final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
@@ -22,6 +24,7 @@ class _OverviewTab extends StatelessWidget {
         .where(
           (file) =>
               file.kind.toLowerCase().contains('photo') ||
+              file.kind.toLowerCase() == 'project_cover' ||
               file.contentType.toLowerCase().startsWith('image/'),
         )
         .length;
@@ -30,54 +33,42 @@ class _OverviewTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
       children: [
-        Container(
-          height: 190,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFDCE9E3), Color(0xFFABC7BA)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        Stack(
+          children: [
+            _ProjectCoverImage(
+              apiClient: apiClient,
+              fileId: project.coverFileId,
+              width: double.infinity,
+              height: 218,
+              borderRadius: 24,
             ),
-          ),
-          child: Stack(
-            children: [
-              const Positioned(
-                right: 22,
-                bottom: 10,
-                child: Icon(
-                  Icons.house_siding_rounded,
-                  size: 125,
-                  color: Color(0x55315F4D),
-                ),
-              ),
-              Positioned(
-                left: 18,
-                top: 18,
-                child: _StatusPill(status: project.status),
-              ),
-            ],
-          ),
+            Positioned(
+              left: 14,
+              top: 14,
+              child: _StatusPill(status: project.status),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         Text(
           project.name.isEmpty ? 'Объект' : project.name,
           style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
+            fontSize: 29,
+            height: 1.08,
+            fontWeight: FontWeight.w900,
             color: _ink,
           ),
         ),
         if (project.address.isNotEmpty) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             children: [
               const Icon(Icons.location_on_outlined, size: 18, color: _muted),
-              const SizedBox(width: 4),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   project.address,
-                  style: const TextStyle(color: _muted),
+                  style: const TextStyle(color: _muted, fontSize: 14),
                 ),
               ),
             ],
@@ -86,18 +77,18 @@ class _OverviewTab extends StatelessWidget {
         const SizedBox(height: 18),
         Card(
           child: InkWell(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             onTap: () => openTab(1),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
                   Container(
-                    width: 50,
-                    height: 50,
+                    width: 54,
+                    height: 54,
                     decoration: BoxDecoration(
                       color: _brandSoft,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(
                       Icons.receipt_long_rounded,
@@ -118,10 +109,11 @@ class _OverviewTab extends StatelessWidget {
                           _money(spent, currency),
                           style: const TextStyle(
                             fontSize: 25,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
                             color: _ink,
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           '${costs.length} записей расходов',
                           style: const TextStyle(color: _muted, fontSize: 13),
@@ -158,7 +150,7 @@ class _OverviewTab extends StatelessWidget {
         const SizedBox(height: 24),
         const Text(
           'Быстрый доступ',
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 12),
         Row(
