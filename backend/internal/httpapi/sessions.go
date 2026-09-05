@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	refreshTokenTTL            = 60 * 24 * time.Hour
-	maxActiveUserSessions      = 10
+	refreshTokenTTL             = 60 * 24 * time.Hour
+	maxActiveUserSessions       = 10
 	refreshSessionRetentionDays = 30
 )
 

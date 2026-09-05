@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	verifyAttemptWindow      = 15 * time.Minute
+	verifyAttemptWindow     = 15 * time.Minute
 	maxVerifyAttemptsPhone  = 10
 	maxVerifyAttemptsRemote = 30
 	authAttemptRetention    = 7 * 24 * time.Hour

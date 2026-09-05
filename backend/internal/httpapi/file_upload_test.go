@@ -11,10 +11,10 @@ import (
 
 func TestSanitizeOriginalName(t *testing.T) {
 	cases := map[string]string{
-		"receipt.jpg":              "receipt.jpg",
-		"../receipt.jpg":           "receipt.jpg",
+		"receipt.jpg":           "receipt.jpg",
+		"../receipt.jpg":        "receipt.jpg",
 		`C:\\temp\\receipt.jpg`: "receipt.jpg",
-		"..":                       "",
+		"..":                    "",
 	}
 	for input, expected := range cases {
 		if got := sanitizeOriginalName(input); got != expected {

@@ -18,8 +18,8 @@ const (
 
 const (
 	minProductionSigningKeyLength = 32
-	minProductionAccessTokenTTL    = 5 * time.Minute
-	maxProductionAccessTokenTTL    = 60 * time.Minute
+	minProductionAccessTokenTTL   = 5 * time.Minute
+	maxProductionAccessTokenTTL   = 60 * time.Minute
 )
 
 type Config struct {
