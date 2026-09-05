@@ -6,12 +6,14 @@ class RemoteProject {
     required this.name,
     required this.address,
     required this.status,
+    required this.coverFileId,
   });
 
   final String id;
   final String name;
   final String address;
   final String status;
+  final String coverFileId;
 
   factory RemoteProject.fromJson(Map<String, dynamic> json) {
     return RemoteProject(
@@ -19,6 +21,7 @@ class RemoteProject {
       name: json['name']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
       status: json['status']?.toString() ?? 'active',
+      coverFileId: json['cover_file_id']?.toString() ?? '',
     );
   }
 }
