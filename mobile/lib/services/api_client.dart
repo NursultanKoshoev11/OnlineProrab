@@ -107,6 +107,7 @@ class ApiClient {
     required String projectId,
     required String title,
     required double amount,
+    required String spentAt,
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
@@ -117,12 +118,14 @@ class ApiClient {
     'category': category,
     'currency': currency,
     'vendor': vendor,
+    'spent_at': spentAt,
   });
 
   Future<Map<String, dynamic>> updateCostItem({
     required String costItemId,
     required String title,
     required double amount,
+    required String spentAt,
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
@@ -132,6 +135,7 @@ class ApiClient {
     'category': category,
     'currency': currency,
     'vendor': vendor,
+    'spent_at': spentAt,
   });
 
   Future<void> deleteCostItem(String costItemId) async {
