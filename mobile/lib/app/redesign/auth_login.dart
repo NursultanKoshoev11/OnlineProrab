@@ -26,37 +26,48 @@ class _LoginScreenState extends State<_LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+            constraints: const BoxConstraints(maxWidth: 460),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
+              padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
               children: [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: _BrandMark(size: 72),
-                ),
-                const SizedBox(height: 30),
+                const Center(child: _BrandMark(size: 78)),
+                const SizedBox(height: 18),
                 const Text(
-                  'Стройка под контролем',
+                  'OnlinePRorab',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 34,
-                    height: 1.08,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: _brand,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _requested ? 'Введите код из SMS' : 'Строительство под контролем',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                     color: _ink,
                   ),
                 ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Объекты, расходы, задачи, команда и отчёты — в одном приложении.',
-                  style: TextStyle(fontSize: 16, height: 1.45, color: _muted),
+                const SizedBox(height: 8),
+                Text(
+                  _requested
+                      ? 'Мы отправили 6-значный код на указанный номер.'
+                      : 'Объекты и расходы — просто и понятно.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, height: 1.4, color: _muted),
                 ),
-                const SizedBox(height: 34),
+                const SizedBox(height: 38),
                 TextField(
                   controller: _phone,
                   keyboardType: TextInputType.phone,
-                  enabled: !_busy,
+                  enabled: !_busy && !_requested,
                   decoration: const InputDecoration(
                     labelText: 'Номер телефона',
                     prefixIcon: Icon(Icons.phone_outlined),
@@ -68,8 +79,11 @@ class _LoginScreenState extends State<_LoginScreen> {
                     controller: _code,
                     keyboardType: TextInputType.number,
                     enabled: !_busy,
+                    autofocus: true,
+                    maxLength: 6,
                     decoration: const InputDecoration(
                       labelText: 'Код из SMS',
+                      counterText: '',
                       prefixIcon: Icon(Icons.lock_outline),
                     ),
                   ),
@@ -78,6 +92,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                   const SizedBox(height: 12),
                   Text(
                     _error!,
+                    textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.redAccent),
                   ),
                 ],
@@ -95,6 +110,19 @@ class _LoginScreenState extends State<_LoginScreen> {
                         )
                       : Text(_requested ? 'Войти' : 'Получить код'),
                 ),
+                if (_requested) ...[
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                            _requested = false;
+                            _code.clear();
+                            _error = null;
+                          }),
+                    child: const Text('Изменить номер'),
+                  ),
+                ],
               ],
             ),
           ),
