@@ -64,22 +64,59 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 	codeHash := hashLoginCode(req.Phone, code)
 	expiresAt := time.Now().UTC().Add(5 * time.Minute)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-	defer cancel()
-	_, err = appState.DB.Pool.Exec(ctx, `
+	dbCtx, dbCancel := context.WithTimeout(r.Context(), 3*time.Second)
+	var codeID string
+	err = appState.DB.Pool.QueryRow(dbCtx, `
 		INSERT INTO sms_login_codes (phone, code_hash, expires_at)
 		VALUES ($1, $2, $3)
-	`, req.Phone, codeHash, expiresAt)
+		RETURNING id::text
+	`, req.Phone, codeHash, expiresAt).Scan(&codeID)
+	dbCancel()
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create login code")
 		return
 	}
 
+	if appState.SMSSender != nil {
+		sendCtx, sendCancel := context.WithTimeout(r.Context(), 12*time.Second)
+		err = appState.SMSSender.SendLoginCode(sendCtx, req.Phone, code)
+		sendCancel()
+		if err != nil {
+			cleanupSMSCode(codeID)
+			Error(w, http.StatusBadGateway, "failed to deliver login code")
+			return
+		}
+	} else if appState.IsProduction {
+		cleanupSMSCode(codeID)
+		Error(w, http.StatusServiceUnavailable, "SMS service is unavailable")
+		return
+	}
+
+	invalidateOlderSMSCodes(req.Phone, codeID)
+
 	response := map[string]any{"status": "code_requested", "expires_in": 300}
-	if appState.JWTSecret == "dev-only-change-me" {
+	if !appState.IsProduction && appState.SMSSender == nil {
 		response["dev_code"] = code
 	}
 	JSON(w, http.StatusAccepted, response)
+}
+
+func cleanupSMSCode(codeID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _ = appState.DB.Pool.Exec(ctx, `DELETE FROM sms_login_codes WHERE id = $1`, codeID)
+}
+
+func invalidateOlderSMSCodes(phone, keepCodeID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _ = appState.DB.Pool.Exec(ctx, `
+		UPDATE sms_login_codes
+		SET consumed_at = now()
+		WHERE phone = $1
+		  AND id <> $2
+		  AND consumed_at IS NULL
+	`, phone, keepCodeID)
 }
 
 func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
