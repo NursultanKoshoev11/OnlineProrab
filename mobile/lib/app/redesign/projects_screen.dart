@@ -177,10 +177,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   Future<void> _createProject() async {
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => _ProjectForm(
-          repository: widget.deps.projectRepository,
-          fileRepository: widget.deps.fileRepository,
-        ),
+        builder: (_) => _ProjectForm(repository: widget.deps.projectRepository),
       ),
     );
     if (created == true) await _reload();
