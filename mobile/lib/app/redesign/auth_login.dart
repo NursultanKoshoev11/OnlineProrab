@@ -33,11 +33,19 @@ class _LoginScreenState extends State<_LoginScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
               children: [
-                const Align(alignment: Alignment.centerLeft, child: _BrandMark(size: 72)),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: _BrandMark(size: 72),
+                ),
                 const SizedBox(height: 30),
                 const Text(
                   'Стройка под контролем',
-                  style: TextStyle(fontSize: 34, height: 1.08, fontWeight: FontWeight.w800, color: _ink),
+                  style: TextStyle(
+                    fontSize: 34,
+                    height: 1.08,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 const Text(
@@ -68,13 +76,23 @@ class _LoginScreenState extends State<_LoginScreen> {
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
                 ],
                 const SizedBox(height: 18),
                 FilledButton(
                   onPressed: _busy ? null : _submit,
                   child: _busy
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                       : Text(_requested ? 'Войти' : 'Получить код'),
                 ),
               ],
@@ -106,10 +124,15 @@ class _LoginScreenState extends State<_LoginScreen> {
         setState(() => _error = 'Введите 6-значный код');
         return;
       }
-      final session = await widget.deps.authRepository.verifyCode(phone, _code.text.trim());
+      final session = await widget.deps.authRepository.verifyCode(
+        phone,
+        _code.text.trim(),
+      );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => _ProjectsScreen(session: session, deps: widget.deps)),
+        MaterialPageRoute(
+          builder: (_) => _ProjectsScreen(session: session, deps: widget.deps),
+        ),
       );
     } catch (error) {
       if (mounted) setState(() => _error = _errorText(error));

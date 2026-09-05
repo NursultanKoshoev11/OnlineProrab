@@ -1,4 +1,5 @@
 part of '../online_prorab_redesign.dart';
+
 String _projectStatusLabel(String value) {
   switch (value.toLowerCase()) {
     case 'active':
@@ -127,5 +128,7 @@ String _errorText(Object? error) {
 }
 
 void _toast(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating));
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+  );
 }

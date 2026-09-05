@@ -33,7 +33,8 @@ class OnlineProrabRedesignApp extends StatefulWidget {
   const OnlineProrabRedesignApp({super.key});
 
   @override
-  State<OnlineProrabRedesignApp> createState() => _OnlineProrabRedesignAppState();
+  State<OnlineProrabRedesignApp> createState() =>
+      _OnlineProrabRedesignAppState();
 }
 
 class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
@@ -105,7 +106,10 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           filled: true,
           fillColor: Colors.white,
           hintStyle: const TextStyle(color: _muted),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(color: _line),
@@ -124,7 +128,9 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
             backgroundColor: _brand,
             foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
         navigationBarTheme: NavigationBarThemeData(
@@ -203,14 +209,14 @@ class _AuthGateState extends State<_AuthGate> {
   late final Future<SessionData?> _sessionFuture;
 
   _Dependencies get _deps => _Dependencies(
-        authRepository: widget.authRepository,
-        projectRepository: widget.projectRepository,
-        costItemRepository: widget.costItemRepository,
-        dailyReportRepository: widget.dailyReportRepository,
-        taskRepository: widget.taskRepository,
-        fileRepository: widget.fileRepository,
-        teamRepository: widget.teamRepository,
-      );
+    authRepository: widget.authRepository,
+    projectRepository: widget.projectRepository,
+    costItemRepository: widget.costItemRepository,
+    dailyReportRepository: widget.dailyReportRepository,
+    taskRepository: widget.taskRepository,
+    fileRepository: widget.fileRepository,
+    teamRepository: widget.teamRepository,
+  );
 
   @override
   void initState() {

@@ -1,4 +1,5 @@
 part of '../online_prorab_redesign.dart';
+
 class _CreateExpenseSheet extends StatefulWidget {
   const _CreateExpenseSheet({required this.project, required this.repository});
   final RemoteProject project;
@@ -26,16 +27,34 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 24),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        MediaQuery.viewInsetsOf(context).bottom + 24,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Добавить расход', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+          const Text(
+            'Добавить расход',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 16),
-          TextField(controller: _title, decoration: const InputDecoration(labelText: 'Название')),
+          TextField(
+            controller: _title,
+            decoration: const InputDecoration(labelText: 'Название'),
+          ),
           const SizedBox(height: 10),
-          TextField(controller: _amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Сумма', suffixText: 'сом')),
+          TextField(
+            controller: _amount,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Сумма',
+              suffixText: 'сом',
+            ),
+          ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: _category,
@@ -50,9 +69,19 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
             onChanged: (value) => setState(() => _category = value ?? 'other'),
           ),
           const SizedBox(height: 10),
-          TextField(controller: _vendor, decoration: const InputDecoration(labelText: 'Поставщик (необязательно)')),
+          TextField(
+            controller: _vendor,
+            decoration: const InputDecoration(
+              labelText: 'Поставщик (необязательно)',
+            ),
+          ),
           const SizedBox(height: 16),
-          FilledButton(onPressed: _busy ? null : _save, child: _busy ? const CircularProgressIndicator(color: Colors.white) : const Text('Сохранить расход')),
+          FilledButton(
+            onPressed: _busy ? null : _save,
+            child: _busy
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text('Сохранить расход'),
+          ),
         ],
       ),
     );

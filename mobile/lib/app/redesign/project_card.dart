@@ -1,4 +1,5 @@
 part of '../online_prorab_redesign.dart';
+
 class _ProjectCard extends StatelessWidget {
   const _ProjectCard({required this.project, required this.onTap});
 
@@ -21,9 +22,17 @@ class _ProjectCard extends StatelessWidget {
                 height: 92,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(colors: [Color(0xFFDDE8E2), Color(0xFFB8CEC2)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFDDE8E2), Color(0xFFB8CEC2)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                 ),
-                child: const Icon(Icons.cottage_rounded, color: _brand, size: 46),
+                child: const Icon(
+                  Icons.cottage_rounded,
+                  color: _brand,
+                  size: 46,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -32,7 +41,18 @@ class _ProjectCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text(project.name.isEmpty ? 'Без названия' : project.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _ink))),
+                        Expanded(
+                          child: Text(
+                            project.name.isEmpty
+                                ? 'Без названия'
+                                : project.name,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: _ink,
+                            ),
+                          ),
+                        ),
                         const Icon(Icons.more_horiz_rounded, color: _muted),
                       ],
                     ),
@@ -40,9 +60,20 @@ class _ProjectCard extends StatelessWidget {
                     if (project.address.isNotEmpty)
                       Row(
                         children: [
-                          const Icon(Icons.location_on_outlined, size: 16, color: _muted),
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: _muted,
+                          ),
                           const SizedBox(width: 4),
-                          Expanded(child: Text(project.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted))),
+                          Expanded(
+                            child: Text(
+                              project.address,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: _muted),
+                            ),
+                          ),
                         ],
                       ),
                     const SizedBox(height: 10),

@@ -58,56 +58,77 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.project.name.isEmpty ? 'Объект' : widget.project.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(
+          widget.project.name.isEmpty ? 'Объект' : widget.project.name,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
-          IconButton(onPressed: () => _toast(context, 'Настройки объекта'), icon: const Icon(Icons.more_horiz_rounded)),
+          IconButton(
+            onPressed: () => _toast(context, 'Настройки объекта'),
+            icon: const Icon(Icons.more_horiz_rounded),
+          ),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _brand))
           : _error != null
-              ? _ErrorView(message: _error!, retry: _load)
-              : IndexedStack(
-                  index: _tab,
-                  children: [
-                    _OverviewTab(
-                      project: widget.project,
-                      costs: _costs,
-                      tasks: _tasks,
-                      files: _files,
-                      members: _members,
-                      openTab: (index) => setState(() => _tab = index),
-                    ),
-                    _ExpensesTab(
-                      project: widget.project,
-                      repository: widget.deps.costItemRepository,
-                      initial: _costs,
-                      onChanged: (items) => setState(() => _costs = items),
-                    ),
-                    _TasksTab(
-                      project: widget.project,
-                      repository: widget.deps.taskRepository,
-                      initial: _tasks,
-                      onChanged: (items) => setState(() => _tasks = items),
-                    ),
-                    _MoreTab(
-                      project: widget.project,
-                      reports: _reports,
-                      files: _files,
-                      members: _members,
-                      costs: _costs,
-                    ),
-                  ],
+          ? _ErrorView(message: _error!, retry: _load)
+          : IndexedStack(
+              index: _tab,
+              children: [
+                _OverviewTab(
+                  project: widget.project,
+                  costs: _costs,
+                  tasks: _tasks,
+                  files: _files,
+                  members: _members,
+                  openTab: (index) => setState(() => _tab = index),
                 ),
+                _ExpensesTab(
+                  project: widget.project,
+                  repository: widget.deps.costItemRepository,
+                  initial: _costs,
+                  onChanged: (items) => setState(() => _costs = items),
+                ),
+                _TasksTab(
+                  project: widget.project,
+                  repository: widget.deps.taskRepository,
+                  initial: _tasks,
+                  onChanged: (items) => setState(() => _tasks = items),
+                ),
+                _MoreTab(
+                  project: widget.project,
+                  reports: _reports,
+                  files: _files,
+                  members: _members,
+                  costs: _costs,
+                ),
+              ],
+            ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (value) => setState(() => _tab = value),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard_rounded), label: 'Обзор'),
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long_rounded), label: 'Расходы'),
-          NavigationDestination(icon: Icon(Icons.task_alt_outlined), selectedIcon: Icon(Icons.task_alt_rounded), label: 'Задачи'),
-          NavigationDestination(icon: Icon(Icons.more_horiz_rounded), label: 'Ещё'),
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Обзор',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long_rounded),
+            label: 'Расходы',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.task_alt_outlined),
+            selectedIcon: Icon(Icons.task_alt_rounded),
+            label: 'Задачи',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz_rounded),
+            label: 'Ещё',
+          ),
         ],
       ),
     );

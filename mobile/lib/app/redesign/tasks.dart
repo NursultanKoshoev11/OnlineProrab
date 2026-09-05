@@ -1,6 +1,12 @@
 part of '../online_prorab_redesign.dart';
+
 class _TasksTab extends StatefulWidget {
-  const _TasksTab({required this.project, required this.repository, required this.initial, required this.onChanged});
+  const _TasksTab({
+    required this.project,
+    required this.repository,
+    required this.initial,
+    required this.onChanged,
+  });
 
   final RemoteProject project;
   final TaskRepository repository;
@@ -31,7 +37,9 @@ class _TasksTabState extends State<_TasksTab> {
   Widget build(BuildContext context) {
     final visible = _tasks.where((task) {
       final done = task.status.toLowerCase() == 'done';
-      return _filter == 'all' || (_filter == 'active' && !done) || (_filter == 'done' && done);
+      return _filter == 'all' ||
+          (_filter == 'active' && !done) ||
+          (_filter == 'done' && done);
     }).toList();
     return Column(
       children: [
@@ -39,22 +47,45 @@ class _TasksTabState extends State<_TasksTab> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
             children: [
-              const Text('Задачи', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: _ink)),
+              const Text(
+                'Задачи',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(widget.project.name, style: const TextStyle(color: _muted)),
               const SizedBox(height: 16),
               Row(
                 children: [
-                  _FilterChip(label: 'Все', selected: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
+                  _FilterChip(
+                    label: 'Все',
+                    selected: _filter == 'all',
+                    onTap: () => setState(() => _filter = 'all'),
+                  ),
                   const SizedBox(width: 8),
-                  _FilterChip(label: 'Активные', selected: _filter == 'active', onTap: () => setState(() => _filter = 'active')),
+                  _FilterChip(
+                    label: 'Активные',
+                    selected: _filter == 'active',
+                    onTap: () => setState(() => _filter = 'active'),
+                  ),
                   const SizedBox(width: 8),
-                  _FilterChip(label: 'Завершённые', selected: _filter == 'done', onTap: () => setState(() => _filter = 'done')),
+                  _FilterChip(
+                    label: 'Завершённые',
+                    selected: _filter == 'done',
+                    onTap: () => setState(() => _filter = 'done'),
+                  ),
                 ],
               ),
               const SizedBox(height: 14),
               if (visible.isEmpty)
-                const _EmptyCard(icon: Icons.task_alt_rounded, title: 'Задач нет', message: 'Добавьте новую задачу.')
+                const _EmptyCard(
+                  icon: Icons.task_alt_rounded,
+                  title: 'Задач нет',
+                  message: 'Добавьте новую задачу.',
+                )
               else
                 ...visible.map((task) {
                   final done = task.status.toLowerCase() == 'done';
@@ -62,13 +93,35 @@ class _TasksTabState extends State<_TasksTab> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Card(
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 5,
+                        ),
                         leading: IconButton(
                           onPressed: done ? null : () => _markDone(task),
-                          icon: Icon(done ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, color: done ? _brand : _muted),
+                          icon: Icon(
+                            done
+                                ? Icons.check_box_rounded
+                                : Icons.check_box_outline_blank_rounded,
+                            color: done ? _brand : _muted,
+                          ),
                         ),
-                        title: Text(task.title, style: TextStyle(fontWeight: FontWeight.w700, decoration: done ? TextDecoration.lineThrough : null)),
-                        subtitle: task.description.isEmpty ? null : Text(task.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        title: Text(
+                          task.title,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            decoration: done
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        subtitle: task.description.isEmpty
+                            ? null
+                            : Text(
+                                task.description,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                       ),
                     ),
                   );
@@ -78,7 +131,11 @@ class _TasksTabState extends State<_TasksTab> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
-          child: FilledButton.icon(onPressed: _addTask, icon: const Icon(Icons.add_rounded), label: const Text('Добавить задачу')),
+          child: FilledButton.icon(
+            onPressed: _addTask,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Добавить задачу'),
+          ),
         ),
       ],
     );
@@ -101,7 +158,10 @@ class _TasksTabState extends State<_TasksTab> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => _CreateTaskSheet(project: widget.project, repository: widget.repository),
+      builder: (context) => _CreateTaskSheet(
+        project: widget.project,
+        repository: widget.repository,
+      ),
     );
     if (result == null) return;
     setState(() => _tasks = [result, ..._tasks]);

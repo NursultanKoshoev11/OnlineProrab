@@ -1,4 +1,5 @@
 part of '../online_prorab_redesign.dart';
+
 class _CostDetails extends StatelessWidget {
   const _CostDetails({required this.item});
   final RemoteCostItem item;
@@ -6,27 +7,53 @@ class _CostDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Расход', style: TextStyle(fontWeight: FontWeight.w800))),
+      appBar: AppBar(
+        title: const Text(
+          'Расход',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           Container(
             height: 190,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), gradient: const LinearGradient(colors: [Color(0xFFDCE9E3), Color(0xFFABC7BA)])),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFDCE9E3), Color(0xFFABC7BA)],
+              ),
+            ),
             child: Icon(_categoryIcon(item.category), size: 84, color: _brand),
           ),
           const SizedBox(height: 18),
-          Text(item.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+          Text(
+            item.title,
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 6),
-          Text(_money(item.amount, item.currency), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: _brand)),
+          Text(
+            _money(item.amount, item.currency),
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: _brand,
+            ),
+          ),
           const SizedBox(height: 18),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _DetailRow(label: 'Категория', value: _categoryLabel(item.category)),
-                  if (item.vendor.isNotEmpty) ...[const Divider(height: 24), _DetailRow(label: 'Поставщик', value: item.vendor)],
+                  _DetailRow(
+                    label: 'Категория',
+                    value: _categoryLabel(item.category),
+                  ),
+                  if (item.vendor.isNotEmpty) ...[
+                    const Divider(height: 24),
+                    _DetailRow(label: 'Поставщик', value: item.vendor),
+                  ],
                   const Divider(height: 24),
                   _DetailRow(label: 'Валюта', value: item.currency),
                 ],
@@ -63,16 +90,41 @@ class _ProjectFormState extends State<_ProjectForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Новый объект', style: TextStyle(fontWeight: FontWeight.w800))),
+      appBar: AppBar(
+        title: const Text(
+          'Новый объект',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          TextField(controller: _name, decoration: const InputDecoration(labelText: 'Название объекта', prefixIcon: Icon(Icons.home_work_outlined))),
+          TextField(
+            controller: _name,
+            decoration: const InputDecoration(
+              labelText: 'Название объекта',
+              prefixIcon: Icon(Icons.home_work_outlined),
+            ),
+          ),
           const SizedBox(height: 12),
-          TextField(controller: _address, decoration: const InputDecoration(labelText: 'Адрес', prefixIcon: Icon(Icons.location_on_outlined))),
-          if (_error != null) ...[const SizedBox(height: 12), Text(_error!, style: const TextStyle(color: Colors.redAccent))],
+          TextField(
+            controller: _address,
+            decoration: const InputDecoration(
+              labelText: 'Адрес',
+              prefixIcon: Icon(Icons.location_on_outlined),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+          ],
           const SizedBox(height: 18),
-          FilledButton(onPressed: _busy ? null : _save, child: _busy ? const CircularProgressIndicator(color: Colors.white) : const Text('Создать объект')),
+          FilledButton(
+            onPressed: _busy ? null : _save,
+            child: _busy
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text('Создать объект'),
+          ),
         ],
       ),
     );
@@ -88,7 +140,10 @@ class _ProjectFormState extends State<_ProjectForm> {
       _error = null;
     });
     try {
-      await widget.repository.createProject(name: _name.text.trim(), address: _address.text.trim());
+      await widget.repository.createProject(
+        name: _name.text.trim(),
+        address: _address.text.trim(),
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) setState(() => _error = _errorText(error));
