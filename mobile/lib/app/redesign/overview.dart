@@ -74,6 +74,45 @@ class _OverviewTab extends StatelessWidget {
             ],
           ),
         ],
+        if (project.startDate.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              color: _brandSoft,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_month_outlined, color: _brand),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Начало: ${_displayIsoDate(project.startDate)}',
+                        style: const TextStyle(
+                          color: _ink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _projectDurationText(project.startDate),
+                        style: const TextStyle(
+                          color: _brand,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         Card(
           child: InkWell(
