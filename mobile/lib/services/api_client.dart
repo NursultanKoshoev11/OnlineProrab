@@ -82,18 +82,58 @@ class ApiClient {
   Future<List<dynamic>> listProjects() async =>
       _asList(await getJson('/api/v1/projects'));
 
-  Future<Map<String, dynamic>> createProject(String name, String address) =>
-      postJson('/api/v1/projects', {'name': name, 'address': address});
+  Future<Map<String, dynamic>> createProject(
+    String name,
+    String address, {
+    required String startDate,
+  }) => postJson('/api/v1/projects', {
+    'name': name,
+    'address': address,
+    'start_date': startDate,
+  });
+
+  Future<Map<String, dynamic>> createProjectWithCover({
+    required String name,
+    required String address,
+    required String startDate,
+    required String filePath,
+    required String fileName,
+  }) async {
+    Future<http.Response> sendUpload() async {
+      final request = http.MultipartRequest(
+        'POST',
+        ApiConfig.endpoint('/api/v1/projects/create-with-cover'),
+      );
+      request.headers['Accept'] = 'application/json';
+      final token = accessToken;
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.fields['name'] = name;
+      request.fields['address'] = address;
+      request.fields['start_date'] = startDate;
+      request.files.add(
+        await http.MultipartFile.fromPath('cover', filePath, filename: fileName),
+      );
+      final streamed = await _httpClient.send(request).timeout(_timeout);
+      return http.Response.fromStream(streamed);
+    }
+
+    final response = await _send(sendUpload);
+    return _decodeObject(response);
+  }
 
   Future<Map<String, dynamic>> updateProject(
     String projectId,
     String name,
     String address, {
     String status = 'active',
+    String? startDate,
   }) => patchJson('/api/v1/projects/$projectId', {
     'name': name,
     'address': address,
     'status': status,
+    if (startDate != null) 'start_date': startDate,
   });
 
   Future<void> deleteProject(String projectId) async {
