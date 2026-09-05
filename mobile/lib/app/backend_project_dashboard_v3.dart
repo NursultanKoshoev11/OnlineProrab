@@ -1372,7 +1372,7 @@ class _FileUploadScreenV3State extends State<FileUploadScreenV3> {
   Future<void> _pickFile() async {
     setState(() => _error = null);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
         allowMultiple: false,

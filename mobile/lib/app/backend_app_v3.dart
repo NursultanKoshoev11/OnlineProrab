@@ -604,7 +604,7 @@ class _ProjectCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: completed
-                            ? Colors.white.withOpacity(.9)
+                            ? Colors.white.withValues(alpha: .9)
                             : OnlineProrabColors.primary,
                         borderRadius: BorderRadius.circular(12),
                       ),

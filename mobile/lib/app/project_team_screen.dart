@@ -285,7 +285,7 @@ class _ProjectInviteDialogState extends State<ProjectInviteDialog> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: role,
+            initialValue: role,
             decoration: const InputDecoration(labelText: 'Роль'),
             items: const [
               DropdownMenuItem(value: 'manager', child: Text('Прораб / менеджер')),
@@ -344,7 +344,7 @@ class _RoleSelectionDialogState extends State<RoleSelectionDialog> {
     return AlertDialog(
       title: const Text('Изменить роль'),
       content: DropdownButtonFormField<String>(
-        value: role,
+        initialValue: role,
         decoration: const InputDecoration(labelText: 'Роль'),
         items: const [
           DropdownMenuItem(value: 'manager', child: Text('Прораб / менеджер')),
