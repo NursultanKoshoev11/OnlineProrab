@@ -5,6 +5,7 @@ import 'package:online_prorab/features/projects/project_team_repository.dart';
 import 'package:online_prorab/services/api_client.dart';
 import 'package:online_prorab/services/auth_repository.dart';
 import 'package:online_prorab/services/session_store.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 part 'redesign/auth_login.dart';
 part 'redesign/projects_screen.dart';
@@ -46,6 +47,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final TaskRepository _taskRepository;
   late final ProjectFileRepository _fileRepository;
   late final ProjectTeamRepository _teamRepository;
+  late final stt.SpeechToText _speechToText;
 
   @override
   void initState() {
@@ -61,11 +63,13 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     _taskRepository = TaskRepository(apiClient: _apiClient);
     _fileRepository = ProjectFileRepository(apiClient: _apiClient);
     _teamRepository = ProjectTeamRepository(apiClient: _apiClient);
+    _speechToText = stt.SpeechToText();
   }
 
   @override
   void dispose() {
     _apiClient.close();
+    _speechToText.cancel();
     super.dispose();
   }
 
@@ -157,6 +161,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         taskRepository: _taskRepository,
         fileRepository: _fileRepository,
         teamRepository: _teamRepository,
+        speechToText: _speechToText,
       ),
     );
   }
@@ -171,6 +176,7 @@ class _Dependencies {
     required this.taskRepository,
     required this.fileRepository,
     required this.teamRepository,
+    required this.speechToText,
   });
 
   final AuthRepository authRepository;
@@ -180,6 +186,7 @@ class _Dependencies {
   final TaskRepository taskRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
+  final stt.SpeechToText speechToText;
 }
 
 class _AuthGate extends StatefulWidget {
@@ -191,6 +198,7 @@ class _AuthGate extends StatefulWidget {
     required this.taskRepository,
     required this.fileRepository,
     required this.teamRepository,
+    required this.speechToText,
   });
 
   final AuthRepository authRepository;
@@ -200,6 +208,7 @@ class _AuthGate extends StatefulWidget {
   final TaskRepository taskRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
+  final stt.SpeechToText speechToText;
 
   @override
   State<_AuthGate> createState() => _AuthGateState();
@@ -216,6 +225,7 @@ class _AuthGateState extends State<_AuthGate> {
     taskRepository: widget.taskRepository,
     fileRepository: widget.fileRepository,
     teamRepository: widget.teamRepository,
+    speechToText: widget.speechToText,
   );
 
   @override
