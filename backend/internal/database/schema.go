@@ -16,6 +16,10 @@ var migrations = []migration{
 	{version: 2, name: "production_constraints", sql: productionConstraintsSQL},
 }
 
+// EnsureSchema is retained only for compatibility with older local tooling.
+// Production startup uses ApplyMigrations, which is the single authoritative
+// embedded migration system. Keeping a distinct legacy method name prevents
+// the old compatibility path from colliding with the production migrator.
 func (db *DB) EnsureSchema(ctx context.Context) error {
 	if db == nil || db.Pool == nil {
 		return fmt.Errorf("database pool is not initialized")
@@ -32,14 +36,14 @@ func (db *DB) EnsureSchema(ctx context.Context) error {
 	}
 
 	for _, item := range migrations {
-		if err := db.applyMigration(ctx, item); err != nil {
+		if err := db.applyLegacyMigration(ctx, item); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (db *DB) applyMigration(ctx context.Context, item migration) error {
+func (db *DB) applyLegacyMigration(ctx context.Context, item migration) error {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin migration %d: %w", item.version, err)
