@@ -341,8 +341,6 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
     });
     try {
       await widget.speechToText.listen(
-        listenFor: const Duration(seconds: 15),
-        pauseFor: const Duration(seconds: 3),
         onResult: (result) {
           if (!mounted) return;
           final recognized = result.recognizedWords.trim();
@@ -355,6 +353,8 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
           }
         },
         listenOptions: stt.SpeechListenOptions(
+          listenFor: const Duration(seconds: 15),
+          pauseFor: const Duration(seconds: 3),
           cancelOnError: true,
           partialResults: true,
           listenMode: stt.ListenMode.confirmation,
