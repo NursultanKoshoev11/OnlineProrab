@@ -71,7 +71,7 @@ String _roleLabel(String role) {
     case 'owner':
       return 'Владелец';
     case 'foreman':
-      return 'Прораб';
+      return 'Участник';
     case 'manager':
       return 'Менеджер';
     case 'worker':
