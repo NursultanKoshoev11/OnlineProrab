@@ -15,7 +15,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   bool _loading = true;
   String? _error;
   List<RemoteCostItem> _costs = const [];
-  List<RemoteTask> _tasks = const [];
   List<RemoteDailyReport> _reports = const [];
   List<RemoteProjectFile> _files = const [];
   List<RemoteProjectMember> _members = const [];
@@ -34,7 +33,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     try {
       final results = await Future.wait<dynamic>([
         widget.deps.costItemRepository.list(widget.project.id),
-        widget.deps.taskRepository.list(widget.project.id),
         widget.deps.dailyReportRepository.list(widget.project.id),
         widget.deps.fileRepository.list(widget.project.id),
         widget.deps.teamRepository.listMembers(widget.project.id),
@@ -42,10 +40,9 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
       if (!mounted) return;
       setState(() {
         _costs = results[0] as List<RemoteCostItem>;
-        _tasks = results[1] as List<RemoteTask>;
-        _reports = results[2] as List<RemoteDailyReport>;
-        _files = results[3] as List<RemoteProjectFile>;
-        _members = results[4] as List<RemoteProjectMember>;
+        _reports = results[1] as List<RemoteDailyReport>;
+        _files = results[2] as List<RemoteProjectFile>;
+        _members = results[3] as List<RemoteProjectMember>;
       });
     } catch (error) {
       if (mounted) setState(() => _error = _errorText(error));
@@ -80,7 +77,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                 _OverviewTab(
                   project: widget.project,
                   costs: _costs,
-                  tasks: _tasks,
                   files: _files,
                   members: _members,
                   openTab: (index) => setState(() => _tab = index),
@@ -91,12 +87,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                   speechToText: widget.deps.speechToText,
                   initial: _costs,
                   onChanged: (items) => setState(() => _costs = items),
-                ),
-                _TasksTab(
-                  project: widget.project,
-                  repository: widget.deps.taskRepository,
-                  initial: _tasks,
-                  onChanged: (items) => setState(() => _tasks = items),
                 ),
                 _MoreTab(
                   project: widget.project,
@@ -120,11 +110,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long_rounded),
             label: 'Расходы',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.task_alt_outlined),
-            selectedIcon: Icon(Icons.task_alt_rounded),
-            label: 'Задачи',
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz_rounded),
