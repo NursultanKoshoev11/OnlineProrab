@@ -245,13 +245,8 @@ class _ProjectFormState extends State<_ProjectForm> {
 
   Future<void> _pickCover() async {
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withData: false,
-      );
-      if (!mounted || result == null || result.isEmpty) return;
-      final selected = result.single;
+      final selected = await FilePicker.pickFile(type: FileType.image);
+      if (!mounted || selected == null) return;
       final path = selected.path;
       if (path == null || path.trim().isEmpty) {
         setState(() => _error = 'Не удалось получить выбранное фото');
