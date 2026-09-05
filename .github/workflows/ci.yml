@@ -46,8 +46,16 @@ jobs:
           go-version: '1.23.x'
           cache-dependency-path: backend/go.sum
 
-      - name: Prepare dependencies
-        run: go mod tidy
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify module metadata
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Verify formatting
+        run: test -z "$(gofmt -l .)"
 
       - name: Vet
         run: go vet ./...
@@ -83,8 +91,8 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Format sources for verification build
-        run: dart format lib test
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
 
       - name: Analyze
         run: flutter analyze
