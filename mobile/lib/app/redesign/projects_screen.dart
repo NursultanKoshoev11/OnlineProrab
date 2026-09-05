@@ -12,7 +12,6 @@ class _ProjectsScreen extends StatefulWidget {
 
 class _ProjectsScreenState extends State<_ProjectsScreen> {
   final _search = TextEditingController();
-  String _filter = 'all';
   late Future<List<RemoteProject>> _future;
 
   @override
@@ -41,14 +40,15 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 12, 0),
+              padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
               child: Row(
                 children: [
                   const _BrandWordmark(),
                   const Spacer(),
                   IconButton(
-                    onPressed: () => _toast(context, 'Новых уведомлений нет'),
-                    icon: const Icon(Icons.notifications_none_rounded),
+                    tooltip: 'Профиль',
+                    onPressed: _showProfile,
+                    icon: const Icon(Icons.account_circle_outlined),
                   ),
                 ],
               ),
@@ -69,21 +69,17 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                     );
                   }
                   final all = snapshot.data ?? const <RemoteProject>[];
+                  final query = _search.text.trim().toLowerCase();
                   final projects = all.where((project) {
-                    final query = _search.text.trim().toLowerCase();
-                    final matchesQuery =
-                        query.isEmpty ||
+                    return query.isEmpty ||
                         project.name.toLowerCase().contains(query) ||
                         project.address.toLowerCase().contains(query);
-                    final status = project.status.toLowerCase();
-                    final matchesFilter = _filter == 'all' || status == _filter;
-                    return matchesQuery && matchesFilter;
                   }).toList();
                   return RefreshIndicator(
                     onRefresh: _reload,
                     color: _brand,
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
                       children: [
                         Row(
                           children: [
@@ -91,68 +87,35 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                               child: Text(
                                 'Объекты',
                                 style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w800,
+                                  fontSize: 31,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w900,
                                   color: _ink,
                                 ),
                               ),
                             ),
-                            FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size(0, 44),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                ),
+                            IconButton.filled(
+                              style: IconButton.styleFrom(
+                                backgroundColor: _brand,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(46, 46),
                               ),
+                              tooltip: 'Добавить объект',
                               onPressed: _createProject,
-                              icon: const Icon(Icons.add_rounded, size: 20),
-                              label: const Text('Добавить'),
+                              icon: const Icon(Icons.add_rounded, size: 25),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 18),
                         TextField(
                           controller: _search,
                           onChanged: (_) => setState(() {}),
                           decoration: const InputDecoration(
-                            hintText: 'Поиск по объектам...',
+                            hintText: 'Поиск объектов',
                             prefixIcon: Icon(Icons.search_rounded),
-                            suffixIcon: Icon(Icons.tune_rounded),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _FilterChip(
-                                label: 'Все ${all.length}',
-                                selected: _filter == 'all',
-                                onTap: () => setState(() => _filter = 'all'),
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'В работе',
-                                selected: _filter == 'active',
-                                onTap: () => setState(() => _filter = 'active'),
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Планирование',
-                                selected: _filter == 'planning',
-                                onTap: () =>
-                                    setState(() => _filter = 'planning'),
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Пауза',
-                                selected: _filter == 'paused',
-                                onTap: () => setState(() => _filter = 'paused'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 18),
                         if (projects.isEmpty)
                           _EmptyCard(
                             icon: Icons.home_work_outlined,
@@ -160,8 +123,8 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                                 ? 'Пока нет объектов'
                                 : 'Ничего не найдено',
                             message: all.isEmpty
-                                ? 'Добавьте первый строительный объект.'
-                                : 'Измените поиск или фильтр.',
+                                ? 'Нажмите «+», чтобы создать первый объект.'
+                                : 'Попробуйте изменить поисковый запрос.',
                           )
                         else
                           ...projects.map(
@@ -169,6 +132,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _ProjectCard(
                                 project: project,
+                                apiClient: widget.deps.apiClient,
                                 onTap: () => Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) => _ProjectWorkspace(
@@ -192,19 +156,13 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (index) {
-          if (index == 1) _toast(context, 'Новых уведомлений нет');
-          if (index == 2) _showProfile();
+          if (index == 1) _showProfile();
         },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_work_outlined),
             selectedIcon: Icon(Icons.home_work_rounded),
             label: 'Объекты',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_none_rounded),
-            selectedIcon: Icon(Icons.notifications_rounded),
-            label: 'Уведомления',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
@@ -219,7 +177,10 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   Future<void> _createProject() async {
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => _ProjectForm(repository: widget.deps.projectRepository),
+        builder: (_) => _ProjectForm(
+          repository: widget.deps.projectRepository,
+          fileRepository: widget.deps.fileRepository,
+        ),
       ),
     );
     if (created == true) await _reload();
@@ -238,7 +199,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
             children: [
               const Text(
                 'Профиль',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 14),
               _InfoRow(
@@ -251,6 +212,9 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                   foregroundColor: Colors.redAccent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
                 ),
                 onPressed: () async {
                   Navigator.of(context).pop();
