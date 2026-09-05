@@ -104,10 +104,8 @@ class ExpenseSearchQuery {
         item.vendor.toLowerCase().contains(normalizedTerm) ||
         item.category.toLowerCase().contains(normalizedTerm) ||
         _categoryLabel(item.category).toLowerCase().contains(normalizedTerm);
-
     final matchesCategory =
         category == null || item.category.toLowerCase() == category;
-
     if (!matchesText || !matchesCategory) return false;
     if (month == null && year == null) return true;
 
@@ -166,43 +164,52 @@ ExpenseSearchQuery parseExpenseSearchQuery(
     'декабре': 12,
   };
 
+  var tokens = normalized.split(' ').where((token) => token.isNotEmpty).toList();
   int? month;
-  for (final entry in months.entries) {
-    if (RegExp('(^|\\s)${entry.key}(\\s|\$)').hasMatch(normalized)) {
-      month = entry.value;
-      normalized = normalized.replaceAll(entry.key, ' ');
+  for (final token in List<String>.of(tokens)) {
+    final parsedMonth = months[token];
+    if (parsedMonth != null) {
+      month = parsedMonth;
+      tokens.remove(token);
       break;
     }
   }
 
   int? year;
-  final yearMatch = RegExp(r'\b(20\d{2})\b').firstMatch(normalized);
-  if (yearMatch != null) {
-    year = int.tryParse(yearMatch.group(1)!);
-    normalized = normalized.replaceFirst(yearMatch.group(0)!, ' ');
-  } else if (month != null) {
-    year = now.year;
-  }
-
-  String? category;
-  final categoryPatterns = <String, List<RegExp>>{
-    'windows': [RegExp(r'\bокна?\b'), RegExp(r'\bокон\b')],
-    'electricity': [RegExp(r'\bэлектрик\w*\b'), RegExp(r'\bэлектрич\w*\b')],
-    'materials': [RegExp(r'\bматериал\w*\b')],
-    'work': [RegExp(r'\bработ\w*\b'), RegExp(r'\bтруд\w*\b')],
-    'equipment': [RegExp(r'\bтехник\w*\b'), RegExp(r'\bоборудован\w*\b')],
-    'delivery': [RegExp(r'\bдоставк\w*\b'), RegExp(r'\bтранспорт\w*\b')],
-  };
-  for (final entry in categoryPatterns.entries) {
-    if (entry.value.any((pattern) => pattern.hasMatch(normalized))) {
-      category = entry.key;
-      for (final pattern in entry.value) {
-        normalized = normalized.replaceAll(pattern, ' ');
-      }
+  for (final token in List<String>.of(tokens)) {
+    final value = int.tryParse(token);
+    if (value != null && value >= 2000 && value <= 2100) {
+      year = value;
+      tokens.remove(token);
       break;
     }
   }
+  if (year == null && month != null) year = now.year;
 
+  const categoryPrefixes = <String, List<String>>{
+    'windows': ['окн'],
+    'electricity': ['электрик', 'электрич'],
+    'materials': ['материал'],
+    'work': ['работ', 'труд'],
+    'equipment': ['техник', 'оборудован'],
+    'delivery': ['доставк', 'транспорт'],
+  };
+  String? category;
+  for (final entry in categoryPrefixes.entries) {
+    final hasCategory = tokens.any(
+      (token) => entry.value.any((prefix) => token.startsWith(prefix)),
+    );
+    if (!hasCategory) continue;
+    category = entry.key;
+    tokens = tokens
+        .where(
+          (token) => !entry.value.any((prefix) => token.startsWith(prefix)),
+        )
+        .toList();
+    break;
+  }
+
+  normalized = tokens.join(' ');
   const noisePhrases = <String>[
     'сколько мы потратили',
     'сколько потратили',
@@ -222,11 +229,12 @@ ExpenseSearchQuery parseExpenseSearchQuery(
     normalized = normalized.replaceAll(phrase, ' ');
   }
 
-  normalized = normalized.replaceAll(
-    RegExp(r'\b(за|в|на|по|за этот|за эту)\b'),
-    ' ',
-  );
-  normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
+  const stopWords = <String>{'за', 'в', 'на', 'по', 'этот', 'эту', 'этом'};
+  normalized = normalized
+      .split(' ')
+      .where((token) => token.isNotEmpty && !stopWords.contains(token))
+      .join(' ')
+      .trim();
 
   return ExpenseSearchQuery(
     term: normalized,
