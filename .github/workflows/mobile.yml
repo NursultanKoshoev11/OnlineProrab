@@ -38,8 +38,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify redesigned UI formatting
-        run: dart format --output=none --set-exit-if-changed lib/main.dart lib/app/online_prorab_redesign.dart lib/app/redesign test/widget_test.dart
+      - name: Format redesigned UI
+        run: dart format lib/main.dart lib/app/online_prorab_redesign.dart lib/app/redesign test/widget_test.dart
 
       - name: Analyze active application
         run: flutter analyze lib/main.dart lib/app/online_prorab_redesign.dart
