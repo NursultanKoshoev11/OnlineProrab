@@ -43,7 +43,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   }
 
   List<RemoteCostItem> get _filtered {
-    final parsed = _parseExpenseSearchQuery(_search.text, now: DateTime.now());
+    final parsed = parseExpenseSearchQuery(_search.text, now: DateTime.now());
     return _items.where((item) {
       final matchesQuery = parsed.matches(item);
       final matchesCategory =
