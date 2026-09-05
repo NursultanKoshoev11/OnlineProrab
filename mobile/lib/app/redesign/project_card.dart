@@ -26,7 +26,7 @@ class _ProjectCard extends StatelessWidget {
                 apiClient: apiClient,
                 fileId: project.coverFileId,
                 width: 112,
-                height: 96,
+                height: 112,
                 borderRadius: 16,
               ),
               const SizedBox(width: 14),
@@ -48,7 +48,7 @@ class _ProjectCard extends StatelessWidget {
                         ),
                       ),
                       if (project.address.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 7),
                         Row(
                           children: [
                             const Icon(
@@ -71,14 +71,39 @@ class _ProjectCard extends StatelessWidget {
                           ],
                         ),
                       ],
-                      const SizedBox(height: 10),
+                      if (project.startDate.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.schedule_rounded,
+                              size: 15,
+                              color: _muted,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                _projectDurationText(project.startDate),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: _muted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 9),
                       _StatusPill(status: project.status),
                     ],
                   ),
                 ),
               ),
               const Padding(
-                padding: EdgeInsets.only(top: 31),
+                padding: EdgeInsets.only(top: 42),
                 child: Icon(Icons.chevron_right_rounded, color: _muted),
               ),
             ],
