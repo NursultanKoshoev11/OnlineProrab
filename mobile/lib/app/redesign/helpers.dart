@@ -16,56 +16,6 @@ String _projectStatusLabel(String value) {
   }
 }
 
-String _categoryLabel(String value) {
-  switch (value.toLowerCase()) {
-    case 'materials':
-    case 'material':
-      return 'Материалы';
-    case 'work':
-    case 'works':
-    case 'labor':
-      return 'Работы';
-    case 'equipment':
-    case 'technique':
-      return 'Техника';
-    case 'delivery':
-    case 'transport':
-      return 'Доставка';
-    case 'windows':
-      return 'Окна';
-    case 'electricity':
-      return 'Электрика';
-    case 'other':
-      return 'Прочее';
-    default:
-      return value.isEmpty ? 'Прочее' : value;
-  }
-}
-
-IconData _categoryIcon(String value) {
-  switch (value.toLowerCase()) {
-    case 'materials':
-    case 'material':
-      return Icons.inventory_2_outlined;
-    case 'work':
-    case 'works':
-    case 'labor':
-      return Icons.handyman_outlined;
-    case 'equipment':
-    case 'technique':
-      return Icons.precision_manufacturing_outlined;
-    case 'delivery':
-    case 'transport':
-      return Icons.local_shipping_outlined;
-    case 'windows':
-      return Icons.window_outlined;
-    case 'electricity':
-      return Icons.electrical_services_outlined;
-    default:
-      return Icons.receipt_long_outlined;
-  }
-}
-
 String _roleLabel(String role) {
   switch (role.toLowerCase()) {
     case 'owner':
