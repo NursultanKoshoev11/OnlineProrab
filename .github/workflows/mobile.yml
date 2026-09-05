@@ -12,9 +12,6 @@ on:
       - 'mobile/**'
       - '.github/workflows/mobile.yml'
 
-permissions:
-  contents: write
-
 jobs:
   flutter-checks:
     runs-on: ubuntu-latest
@@ -25,8 +22,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -43,24 +38,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Format active redesign
+      - name: Verify redesigned UI formatting
         run: >-
-          dart format
+          dart format --output=none --set-exit-if-changed
           lib/main.dart
           lib/app/online_prorab_redesign.dart
           lib/app/redesign
           test/widget_test.dart
-
-      - name: Commit formatter output
-        run: |
-          git diff --check
-          if ! git diff --quiet -- lib/main.dart lib/app/online_prorab_redesign.dart lib/app/redesign test/widget_test.dart; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add lib/main.dart lib/app/online_prorab_redesign.dart lib/app/redesign test/widget_test.dart
-            git commit -m "Format active OnlineProrab redesign with Dart 3.13"
-            git push origin HEAD:main
-          fi
 
       - name: Analyze active application
         run: flutter analyze lib/main.dart lib/app/online_prorab_redesign.dart
