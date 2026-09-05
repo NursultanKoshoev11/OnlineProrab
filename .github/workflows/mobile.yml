@@ -38,11 +38,24 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Format redesigned UI
-        run: dart format lib/main.dart lib/app/online_prorab_redesign.dart lib/app/redesign test/widget_test.dart
+      - name: Format active application
+        run: >-
+          dart format
+          lib/main.dart
+          lib/app/backend_app_v3.dart
+          lib/app/backend_project_dashboard_v3.dart
+          lib/app/project_team_screen.dart
+          lib/app/online_prorab_theme.dart
+          test/widget_test.dart
 
       - name: Analyze active application
-        run: flutter analyze lib/main.dart lib/app/online_prorab_redesign.dart
+        run: >-
+          flutter analyze
+          lib/main.dart
+          lib/app/backend_app_v3.dart
+          lib/app/backend_project_dashboard_v3.dart
+          lib/app/project_team_screen.dart
+          lib/app/online_prorab_theme.dart
 
       - name: Run tests
         run: flutter test
