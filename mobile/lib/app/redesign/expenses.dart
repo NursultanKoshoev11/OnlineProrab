@@ -21,7 +21,6 @@ class _ExpensesTab extends StatefulWidget {
 
 class _ExpensesTabState extends State<_ExpensesTab> {
   final _search = TextEditingController();
-  String _category = 'all';
   late List<RemoteCostItem> _items;
 
   @override
@@ -44,24 +43,13 @@ class _ExpensesTabState extends State<_ExpensesTab> {
 
   List<RemoteCostItem> get _filtered {
     final parsed = parseExpenseSearchQuery(_search.text, now: DateTime.now());
-    return _items.where((item) {
-      final matchesQuery = parsed.matches(item);
-      final matchesCategory =
-          _category == 'all' || item.category.toLowerCase() == _category;
-      return matchesQuery && matchesCategory;
-    }).toList();
+    return _items.where(parsed.matches).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
     final total = filtered.fold<double>(0, (sum, item) => sum + item.amount);
-    final categories = _items
-        .map((e) => e.category.toLowerCase())
-        .where((e) => e.isNotEmpty)
-        .toSet()
-        .take(6)
-        .toList();
     final currency = filtered.isEmpty
         ? (_items.isEmpty ? 'KGS' : _items.first.currency)
         : filtered.first.currency;
@@ -101,27 +89,6 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                       icon: const Icon(Icons.mic_rounded),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'Все',
-                      selected: _category == 'all',
-                      onTap: () => setState(() => _category = 'all'),
-                    ),
-                    for (final category in categories) ...[
-                      const SizedBox(width: 8),
-                      _FilterChip(
-                        label: _categoryLabel(category),
-                        selected: _category == category,
-                        onTap: () => setState(() => _category = category),
-                      ),
-                    ],
-                  ],
                 ),
               ),
               const SizedBox(height: 14),
@@ -183,8 +150,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                                   color: _brandSoft,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Icon(
-                                  _categoryIcon(item.category),
+                                child: const Icon(
+                                  Icons.receipt_long_outlined,
                                   color: _brand,
                                 ),
                               ),
@@ -200,30 +167,16 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                                         color: _ink,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _categoryLabel(item.category),
-                                      style: const TextStyle(
-                                        color: _muted,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    if (item.vendor.isNotEmpty)
+                                    if (item.spentAt.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
                                       Text(
-                                        item.vendor,
+                                        _displayIsoDate(item.spentAt),
                                         style: const TextStyle(
                                           color: _muted,
                                           fontSize: 12,
                                         ),
                                       ),
-                                    if (item.spentAt.isNotEmpty)
-                                      Text(
-                                        item.spentAt,
-                                        style: const TextStyle(
-                                          color: _muted,
-                                          fontSize: 12,
-                                        ),
-                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -285,7 +238,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     if (!mounted || value == null || value.trim().isEmpty) return;
     _search.text = value.trim();
     _search.selection = TextSelection.collapsed(offset: _search.text.length);
-    setState(() => _category = 'all');
+    setState(() {});
   }
 
   Future<void> _addExpense() async {
