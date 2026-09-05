@@ -9,6 +9,7 @@ class RemoteCostItem {
     required this.category,
     required this.currency,
     required this.vendor,
+    required this.spentAt,
   });
 
   final String id;
@@ -18,6 +19,7 @@ class RemoteCostItem {
   final String category;
   final String currency;
   final String vendor;
+  final String spentAt;
 
   factory RemoteCostItem.fromJson(Map<String, dynamic> json) => RemoteCostItem(
     id: json['id']?.toString() ?? '',
@@ -27,6 +29,7 @@ class RemoteCostItem {
     category: json['category']?.toString() ?? 'other',
     currency: json['currency']?.toString() ?? 'KGS',
     vendor: json['vendor']?.toString() ?? '',
+    spentAt: json['spent_at']?.toString() ?? '',
   );
 }
 
@@ -132,6 +135,7 @@ class CostItemRepository {
     required String projectId,
     required String title,
     required double amount,
+    required String spentAt,
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
@@ -143,6 +147,7 @@ class CostItemRepository {
       category: category,
       currency: currency,
       vendor: vendor,
+      spentAt: spentAt,
     );
     return RemoteCostItem.fromJson(data);
   }
