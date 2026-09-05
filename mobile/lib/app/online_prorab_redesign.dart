@@ -27,7 +27,6 @@ const _ink = Color(0xFF111815);
 const _muted = Color(0xFF6F7C75);
 const _surface = Color(0xFFF6F8F6);
 const _brand = Color(0xFF087A3D);
-const _brandDark = Color(0xFF056432);
 const _brandSoft = Color(0xFFE5F5EB);
 const _line = Color(0xFFE8ECE9);
 const _warningSoft = Color(0xFFFFF0D6);
