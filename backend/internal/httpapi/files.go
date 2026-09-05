@@ -271,7 +271,7 @@ func normalizeFileRequest(req *createFileRequest) {
 }
 
 func isValidFileKind(kind string) bool {
-	return kind == "receipt" || kind == "photo" || kind == "document"
+	return kind == "receipt" || kind == "photo" || kind == "document" || kind == "project_cover"
 }
 
 func isSafeStoragePath(value string) bool {
