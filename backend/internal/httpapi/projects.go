@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,18 +17,21 @@ type ProjectDTO struct {
 	Address     string `json:"address,omitempty"`
 	Status      string `json:"status"`
 	CoverFileID string `json:"cover_file_id,omitempty"`
+	StartDate   string `json:"start_date"`
 	CreatedAt   string `json:"created_at,omitempty"`
 }
 
 type createProjectRequest struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
+	Name      string `json:"name"`
+	Address   string `json:"address"`
+	StartDate string `json:"start_date"`
 }
 
 type updateProjectRequest struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Status  string `json:"status"`
+	Name      string `json:"name"`
+	Address   string `json:"address"`
+	Status    string `json:"status"`
+	StartDate string `json:"start_date"`
 }
 
 func Projects(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +83,7 @@ func listProjects(w http.ResponseWriter, r *http.Request) {
 		           ORDER BY f.created_at DESC
 		           LIMIT 1
 		       ), ''),
+		       p.start_date::text,
 		       p.created_at::text
 		FROM projects p
 		JOIN project_members pm ON pm.project_id = p.id
@@ -96,7 +101,7 @@ func listProjects(w http.ResponseWriter, r *http.Request) {
 	projects := []ProjectDTO{}
 	for rows.Next() {
 		var item ProjectDTO
-		if err := rows.Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CoverFileID, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CoverFileID, &item.StartDate, &item.CreatedAt); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to scan project")
 			return
 		}
@@ -131,10 +136,11 @@ func getProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		           ORDER BY f.created_at DESC
 		           LIMIT 1
 		       ), ''),
+		       p.start_date::text,
 		       p.created_at::text
 		FROM projects p
 		WHERE p.id = $1 AND p.deleted_at IS NULL
-	`, projectID).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CoverFileID, &item.CreatedAt)
+	`, projectID).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CoverFileID, &item.StartDate, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "project not found")
 		return
@@ -155,6 +161,11 @@ func createProject(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "project name is required")
 		return
 	}
+	startDate, err := normalizeProjectStartDate(req.StartDate, true)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
@@ -167,10 +178,10 @@ func createProject(w http.ResponseWriter, r *http.Request) {
 
 	var item ProjectDTO
 	err = tx.QueryRow(ctx, `
-		INSERT INTO projects (owner_id, name, address)
-		VALUES ($1, $2, NULLIF($3, ''))
-		RETURNING id::text, name, COALESCE(address, ''), status, created_at::text
-	`, userID, req.Name, req.Address).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CreatedAt)
+		INSERT INTO projects (owner_id, name, address, start_date)
+		VALUES ($1, $2, NULLIF($3, ''), $4::date)
+		RETURNING id::text, name, COALESCE(address, ''), status, start_date::text, created_at::text
+	`, userID, req.Name, req.Address, startDate).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.StartDate, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create project")
 		return
@@ -227,6 +238,11 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "project name is required")
 		return
 	}
+	startDate, err := normalizeProjectStartDate(r.FormValue("start_date"), true)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	source, header, err := r.FormFile("cover")
 	if err != nil {
@@ -252,10 +268,10 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 
 	var item ProjectDTO
 	err = tx.QueryRow(ctx, `
-		INSERT INTO projects (owner_id, name, address)
-		VALUES ($1, $2, NULLIF($3, ''))
-		RETURNING id::text, name, COALESCE(address, ''), status, created_at::text
-	`, userID, name, address).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CreatedAt)
+		INSERT INTO projects (owner_id, name, address, start_date)
+		VALUES ($1, $2, NULLIF($3, ''), $4::date)
+		RETURNING id::text, name, COALESCE(address, ''), status, start_date::text, created_at::text
+	`, userID, name, address, startDate).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.StartDate, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create project")
 		return
@@ -330,6 +346,11 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		Error(w, http.StatusBadRequest, "invalid project status")
 		return
 	}
+	startDate, err := normalizeProjectStartDate(req.StartDate, false)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
@@ -339,12 +360,16 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	}
 
 	var item ProjectDTO
-	err := appState.DB.Pool.QueryRow(ctx, `
+	err = appState.DB.Pool.QueryRow(ctx, `
 		UPDATE projects
-		SET name = $2, address = NULLIF($3, ''), status = $4, updated_at = now()
+		SET name = $2,
+		    address = NULLIF($3, ''),
+		    status = $4,
+		    start_date = COALESCE(NULLIF($5, '')::date, start_date),
+		    updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL
-		RETURNING id::text, name, COALESCE(address, ''), status, created_at::text
-	`, projectID, req.Name, req.Address, req.Status).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.CreatedAt)
+		RETURNING id::text, name, COALESCE(address, ''), status, start_date::text, created_at::text
+	`, projectID, req.Name, req.Address, req.Status, startDate).Scan(&item.ID, &item.Name, &item.Address, &item.Status, &item.StartDate, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "project not found")
 		return
@@ -394,4 +419,18 @@ func deleteProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		VALUES ($1, $2, 'archive', 'project', $2)
 	`, userID, projectID)
 	JSON(w, http.StatusOK, map[string]string{"status": "archived"})
+}
+
+func normalizeProjectStartDate(raw string, fallbackToday bool) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		if fallbackToday {
+			return time.Now().Format("2006-01-02"), nil
+		}
+		return "", nil
+	}
+	if _, err := time.Parse("2006-01-02", value); err != nil {
+		return "", fmt.Errorf("start_date must use YYYY-MM-DD format")
+	}
+	return value, nil
 }
