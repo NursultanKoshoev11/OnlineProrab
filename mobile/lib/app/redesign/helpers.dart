@@ -164,7 +164,10 @@ ExpenseSearchQuery parseExpenseSearchQuery(
     'декабре': 12,
   };
 
-  var tokens = normalized.split(' ').where((token) => token.isNotEmpty).toList();
+  var tokens = normalized
+      .split(' ')
+      .where((token) => token.isNotEmpty)
+      .toList();
   int? month;
   for (final token in List<String>.of(tokens)) {
     final parsedMonth = months[token];
