@@ -29,8 +29,8 @@ class _CostDetails extends StatelessWidget {
                       color: _brandSoft,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(
-                      _categoryIcon(item.category),
+                    child: const Icon(
+                      Icons.receipt_long_outlined,
                       size: 28,
                       color: _brand,
                     ),
@@ -64,30 +64,18 @@ class _CostDetails extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  _DetailRow(
-                    label: 'Категория',
-                    value: _categoryLabel(item.category),
-                  ),
-                  if (item.vendor.isNotEmpty) ...[
-                    const Divider(height: 26),
-                    _DetailRow(label: 'Поставщик', value: item.vendor),
-                  ],
-                  if (item.spentAt.isNotEmpty) ...[
-                    const Divider(height: 26),
-                    _DetailRow(label: 'Дата', value: item.spentAt),
-                  ],
-                  const Divider(height: 26),
-                  _DetailRow(label: 'Валюта', value: item.currency),
-                ],
+          if (item.spentAt.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: _DetailRow(
+                  label: 'Дата',
+                  value: _displayIsoDate(item.spentAt),
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -95,10 +83,9 @@ class _CostDetails extends StatelessWidget {
 }
 
 class _ProjectForm extends StatefulWidget {
-  const _ProjectForm({required this.repository, required this.fileRepository});
+  const _ProjectForm({required this.repository});
 
   final ProjectRepository repository;
-  final ProjectFileRepository fileRepository;
 
   @override
   State<_ProjectForm> createState() => _ProjectFormState();
@@ -107,6 +94,7 @@ class _ProjectForm extends StatefulWidget {
 class _ProjectFormState extends State<_ProjectForm> {
   final _name = TextEditingController();
   final _address = TextEditingController();
+  DateTime _startDate = DateTime.now();
   String? _coverPath;
   String? _coverName;
   bool _busy = false;
@@ -172,6 +160,33 @@ class _ProjectFormState extends State<_ProjectForm> {
               hintText: 'Например: с. Кок-Жар, ул. Центральная, 10',
               prefixIcon: Icon(Icons.location_on_outlined),
             ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Дата начала',
+            style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
+          ),
+          const SizedBox(height: 8),
+          InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: _busy ? null : _pickStartDate,
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.calendar_today_outlined),
+              ),
+              child: Text(
+                _displayDate(_startDate),
+                style: const TextStyle(
+                  color: _ink,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'Нужна, чтобы показывать срок строительства объекта.',
+            style: TextStyle(color: _muted, fontSize: 12),
           ),
           if (_error != null) ...[
             const SizedBox(height: 14),
@@ -252,6 +267,16 @@ class _ProjectFormState extends State<_ProjectForm> {
     }
   }
 
+  Future<void> _pickStartDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (selected != null && mounted) setState(() => _startDate = selected);
+  }
+
   Future<void> _save() async {
     final name = _name.text.trim();
     if (name.isEmpty) {
@@ -263,30 +288,25 @@ class _ProjectFormState extends State<_ProjectForm> {
       _error = null;
     });
 
-    RemoteProject? created;
     try {
-      created = await widget.repository.createProject(
-        name: name,
-        address: _address.text.trim(),
-      );
       final coverPath = _coverPath;
-      if (coverPath != null) {
-        await widget.fileRepository.upload(
-          projectId: created.id,
-          kind: 'project_cover',
+      if (coverPath == null) {
+        await widget.repository.createProject(
+          name: name,
+          address: _address.text.trim(),
+          startDate: _apiDate(_startDate),
+        );
+      } else {
+        await widget.repository.createProjectWithCover(
+          name: name,
+          address: _address.text.trim(),
+          startDate: _apiDate(_startDate),
           filePath: coverPath,
           fileName: _coverName ?? 'project-cover.jpg',
         );
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
-      if (created != null && _coverPath != null) {
-        try {
-          await widget.repository.deleteProject(created.id);
-        } catch (_) {
-          // The original creation/upload error is more useful to the user.
-        }
-      }
       if (mounted) setState(() => _error = _errorText(error));
     } finally {
       if (mounted) setState(() => _busy = false);
