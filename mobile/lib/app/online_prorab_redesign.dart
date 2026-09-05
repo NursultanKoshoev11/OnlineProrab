@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:online_prorab/features/projects/project_data_repositories.dart';
 import 'package:online_prorab/features/projects/project_repository.dart';
 import 'package:online_prorab/features/projects/project_team_repository.dart';
 import 'package:online_prorab/services/api_client.dart';
+import 'package:online_prorab/services/api_config.dart';
 import 'package:online_prorab/services/auth_repository.dart';
 import 'package:online_prorab/services/session_store.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -19,12 +23,13 @@ part 'redesign/expense_form.dart';
 part 'redesign/widgets.dart';
 part 'redesign/helpers.dart';
 
-const _ink = Color(0xFF101512);
-const _muted = Color(0xFF718078);
-const _surface = Color(0xFFF7F8F6);
-const _brand = Color(0xFF315F4D);
-const _brandSoft = Color(0xFFDFF2E7);
-const _line = Color(0xFFE7EBE8);
+const _ink = Color(0xFF111815);
+const _muted = Color(0xFF6F7C75);
+const _surface = Color(0xFFF6F8F6);
+const _brand = Color(0xFF087A3D);
+const _brandDark = Color(0xFF056432);
+const _brandSoft = Color(0xFFE5F5EB);
+const _line = Color(0xFFE8ECE9);
 const _warningSoft = Color(0xFFFFF0D6);
 const _warning = Color(0xFFC27A16);
 
@@ -98,28 +103,29 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           color: Colors.white,
           surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             side: const BorderSide(color: _line),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
-          hintStyle: const TextStyle(color: _muted),
+          labelStyle: const TextStyle(color: _muted),
+          hintStyle: const TextStyle(color: Color(0xFF9AA49F)),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
-            vertical: 14,
+            vertical: 16,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(15),
             borderSide: const BorderSide(color: _line),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(15),
             borderSide: const BorderSide(color: _line),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(15),
             borderSide: const BorderSide(color: _brand, width: 1.5),
           ),
         ),
@@ -127,13 +133,15 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           style: FilledButton.styleFrom(
             backgroundColor: _brand,
             foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(52),
+            minimumSize: const Size.fromHeight(54),
+            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(15),
             ),
           ),
         ),
         navigationBarTheme: NavigationBarThemeData(
+          height: 72,
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
           elevation: 0,
@@ -150,6 +158,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         ),
       ),
       home: _AuthGate(
+        apiClient: _apiClient,
         authRepository: _authRepository,
         projectRepository: _projectRepository,
         costItemRepository: _costItemRepository,
@@ -164,6 +173,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
 
 class _Dependencies {
   const _Dependencies({
+    required this.apiClient,
     required this.authRepository,
     required this.projectRepository,
     required this.costItemRepository,
@@ -173,6 +183,7 @@ class _Dependencies {
     required this.speechToText,
   });
 
+  final ApiClient apiClient;
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
   final CostItemRepository costItemRepository;
@@ -184,6 +195,7 @@ class _Dependencies {
 
 class _AuthGate extends StatefulWidget {
   const _AuthGate({
+    required this.apiClient,
     required this.authRepository,
     required this.projectRepository,
     required this.costItemRepository,
@@ -193,6 +205,7 @@ class _AuthGate extends StatefulWidget {
     required this.speechToText,
   });
 
+  final ApiClient apiClient;
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
   final CostItemRepository costItemRepository;
@@ -209,6 +222,7 @@ class _AuthGateState extends State<_AuthGate> {
   late final Future<SessionData?> _sessionFuture;
 
   _Dependencies get _deps => _Dependencies(
+    apiClient: widget.apiClient,
     authRepository: widget.authRepository,
     projectRepository: widget.projectRepository,
     costItemRepository: widget.costItemRepository,
