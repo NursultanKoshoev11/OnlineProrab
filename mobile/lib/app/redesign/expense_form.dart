@@ -51,7 +51,9 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Сумма',
                 suffixText: 'сом',
@@ -67,10 +69,14 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
                 DropdownMenuItem(value: 'equipment', child: Text('Техника')),
                 DropdownMenuItem(value: 'delivery', child: Text('Доставка')),
                 DropdownMenuItem(value: 'windows', child: Text('Окна')),
-                DropdownMenuItem(value: 'electricity', child: Text('Электрика')),
+                DropdownMenuItem(
+                  value: 'electricity',
+                  child: Text('Электрика'),
+                ),
                 DropdownMenuItem(value: 'other', child: Text('Прочее')),
               ],
-              onChanged: (value) => setState(() => _category = value ?? 'other'),
+              onChanged: (value) =>
+                  setState(() => _category = value ?? 'other'),
             ),
             const SizedBox(height: 10),
             InkWell(
