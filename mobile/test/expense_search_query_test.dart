@@ -57,16 +57,17 @@ void main() {
   });
 
   test('keeps a material name as free text search', () {
-    final query = parseExpenseSearchQuery(
-      'Покажи расходы на цемент',
-      now: now,
-    );
+    final query = parseExpenseSearchQuery('Покажи расходы на цемент', now: now);
 
     expect(query.category, isNull);
     expect(query.term, 'цемент');
     expect(
       query.matches(
-        cost(title: 'Цемент М500', category: 'materials', spentAt: '2026-09-01'),
+        cost(
+          title: 'Цемент М500',
+          category: 'materials',
+          spentAt: '2026-09-01',
+        ),
       ),
       isTrue,
     );
