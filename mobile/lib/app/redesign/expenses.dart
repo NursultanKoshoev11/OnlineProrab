@@ -354,7 +354,7 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
             Navigator.of(context).pop(recognized);
           }
         },
-        options: stt.SpeechListenOptions(
+        listenOptions: stt.SpeechListenOptions(
           cancelOnError: true,
           partialResults: true,
           listenMode: stt.ListenMode.confirmation,
