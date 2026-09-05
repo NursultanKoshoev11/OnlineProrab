@@ -134,7 +134,10 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
             backgroundColor: _brand,
             foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(54),
-            textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            textStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(15),
             ),

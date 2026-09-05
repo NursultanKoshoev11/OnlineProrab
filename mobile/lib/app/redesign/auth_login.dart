@@ -47,7 +47,9 @@ class _LoginScreenState extends State<_LoginScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _requested ? 'Введите код из SMS' : 'Строительство под контролем',
+                  _requested
+                      ? 'Введите код из SMS'
+                      : 'Строительство под контролем',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 16,
@@ -61,7 +63,11 @@ class _LoginScreenState extends State<_LoginScreen> {
                       ? 'Мы отправили 6-значный код на указанный номер.'
                       : 'Объекты и расходы — просто и понятно.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 14, height: 1.4, color: _muted),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    color: _muted,
+                  ),
                 ),
                 const SizedBox(height: 38),
                 TextField(

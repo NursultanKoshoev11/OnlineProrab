@@ -488,10 +488,7 @@ class _ProjectCoverImage extends StatelessWidget {
               child: const SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: _brand,
-                ),
+                child: CircularProgressIndicator(strokeWidth: 2, color: _brand),
               ),
             );
           },

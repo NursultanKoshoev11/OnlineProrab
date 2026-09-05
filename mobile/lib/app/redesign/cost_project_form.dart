@@ -95,10 +95,7 @@ class _CostDetails extends StatelessWidget {
 }
 
 class _ProjectForm extends StatefulWidget {
-  const _ProjectForm({
-    required this.repository,
-    required this.fileRepository,
-  });
+  const _ProjectForm({required this.repository, required this.fileRepository});
 
   final ProjectRepository repository;
   final ProjectFileRepository fileRepository;
@@ -366,10 +363,7 @@ class _ProjectCoverPicker extends StatelessWidget {
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _RoundIcon(
-              icon: Icons.add_a_photo_outlined,
-              size: 58,
-            ),
+            _RoundIcon(icon: Icons.add_a_photo_outlined, size: 58),
             SizedBox(height: 12),
             Text(
               'Добавить фото объекта',
