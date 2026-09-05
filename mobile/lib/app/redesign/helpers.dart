@@ -83,8 +83,8 @@ String _roleLabel(String role) {
   }
 }
 
-class _ExpenseSearchQuery {
-  const _ExpenseSearchQuery({
+class ExpenseSearchQuery {
+  const ExpenseSearchQuery({
     required this.term,
     this.category,
     this.month,
@@ -119,7 +119,7 @@ class _ExpenseSearchQuery {
   }
 }
 
-_ExpenseSearchQuery _parseExpenseSearchQuery(
+ExpenseSearchQuery parseExpenseSearchQuery(
   String query, {
   required DateTime now,
 }) {
@@ -228,7 +228,7 @@ _ExpenseSearchQuery _parseExpenseSearchQuery(
   );
   normalized = normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-  return _ExpenseSearchQuery(
+  return ExpenseSearchQuery(
     term: normalized,
     category: category,
     month: month,
