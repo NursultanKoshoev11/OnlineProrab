@@ -43,10 +43,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   }
 
   List<RemoteCostItem> get _filtered {
-    final parsed = _parseExpenseSearchQuery(
-      _search.text,
-      now: DateTime.now(),
-    );
+    final parsed = _parseExpenseSearchQuery(_search.text, now: DateTime.now());
     return _items.where((item) {
       final matchesQuery = parsed.matches(item);
       final matchesCategory =
@@ -282,9 +279,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => _VoiceExpenseSearchSheet(
-        speechToText: widget.speechToText,
-      ),
+      builder: (context) =>
+          _VoiceExpenseSearchSheet(speechToText: widget.speechToText),
     );
     if (!mounted || value == null || value.trim().isEmpty) return;
     _search.text = value.trim();
@@ -431,10 +427,7 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _listening ? _brand : _brandSoft,
-                  border: Border.all(
-                    color: const Color(0xFFBFD8CC),
-                    width: 8,
-                  ),
+                  border: Border.all(color: const Color(0xFFBFD8CC), width: 8),
                 ),
                 child: Icon(
                   _listening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
@@ -458,7 +451,9 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: _words.isEmpty ? _muted : _ink,
-                  fontWeight: _words.isEmpty ? FontWeight.w400 : FontWeight.w700,
+                  fontWeight: _words.isEmpty
+                      ? FontWeight.w400
+                      : FontWeight.w700,
                 ),
               ),
             ),
