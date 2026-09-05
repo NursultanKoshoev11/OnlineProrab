@@ -4,7 +4,6 @@ import 'package:online_prorab/features/projects/project_data_repositories.dart';
 
 RemoteCostItem cost({
   required String title,
-  required String category,
   required String spentAt,
   String vendor = '',
 }) => RemoteCostItem(
@@ -12,35 +11,30 @@ RemoteCostItem cost({
   projectId: 'project-1',
   title: title,
   amount: 100,
-  category: category,
+  category: 'other',
   currency: 'KGS',
   vendor: vendor,
   spentAt: spentAt,
 );
 
 void main() {
-  final now = DateTime(2026, 9, 5);
+  final now = DateTime(2026, 9, 6);
 
-  test('parses windows and explicit month/year from Russian voice query', () {
+  test('parses expense name and explicit month/year from Russian voice query', () {
     final query = parseExpenseSearchQuery(
       'Сколько потратили на окна за май 2026?',
       now: now,
     );
 
-    expect(query.category, 'windows');
     expect(query.month, 5);
     expect(query.year, 2026);
-    expect(query.term, isEmpty);
+    expect(query.term, 'окна');
     expect(
-      query.matches(
-        cost(title: 'Монтаж', category: 'windows', spentAt: '2026-05-20'),
-      ),
+      query.matches(cost(title: 'Окна первый этаж', spentAt: '2026-05-20')),
       isTrue,
     );
     expect(
-      query.matches(
-        cost(title: 'Монтаж', category: 'windows', spentAt: '2026-06-01'),
-      ),
+      query.matches(cost(title: 'Окна первый этаж', spentAt: '2026-06-01')),
       isFalse,
     );
   });
@@ -51,29 +45,26 @@ void main() {
       now: now,
     );
 
-    expect(query.category, 'electricity');
+    expect(query.term, 'электрику');
     expect(query.month, 9);
     expect(query.year, 2026);
+    expect(
+      query.matches(cost(title: 'Электрику оплатили', spentAt: '2026-09-02')),
+      isTrue,
+    );
   });
 
   test('keeps a material name as free text search', () {
     final query = parseExpenseSearchQuery('Покажи расходы на цемент', now: now);
 
-    expect(query.category, isNull);
     expect(query.term, 'цемент');
     expect(
-      query.matches(
-        cost(
-          title: 'Цемент М500',
-          category: 'materials',
-          spentAt: '2026-09-01',
-        ),
-      ),
+      query.matches(cost(title: 'Цемент М500', spentAt: '2026-09-01')),
       isTrue,
     );
   });
 
-  test('searches a supplier name without requiring a category', () {
+  test('legacy supplier text can still be found', () {
     final query = parseExpenseSearchQuery(
       'Найди расходы СтройМаркет',
       now: now,
@@ -84,7 +75,6 @@ void main() {
       query.matches(
         cost(
           title: 'Кабель',
-          category: 'materials',
           spentAt: '2026-09-02',
           vendor: 'СтройМаркет Бишкек',
         ),
