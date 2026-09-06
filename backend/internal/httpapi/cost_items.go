@@ -16,7 +16,7 @@ type CostItemDTO struct {
 	Amount        float64 `json:"amount"`
 	Currency      string  `json:"currency"`
 	Vendor        string  `json:"vendor,omitempty"`
-	ReceiptFileID string `json:"receipt_file_id,omitempty"`
+	ReceiptFileID string  `json:"receipt_file_id,omitempty"`
 	SpentAt       string  `json:"spent_at"`
 	CreatedAt     string  `json:"created_at,omitempty"`
 }
@@ -28,7 +28,7 @@ type createCostItemRequest struct {
 	Amount        float64 `json:"amount"`
 	Currency      string  `json:"currency"`
 	Vendor        string  `json:"vendor"`
-	ReceiptFileID string `json:"receipt_file_id"`
+	ReceiptFileID string  `json:"receipt_file_id"`
 	SpentAt       string  `json:"spent_at"`
 }
 

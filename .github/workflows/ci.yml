@@ -58,10 +58,7 @@ jobs:
           git diff --exit-code -- go.mod go.sum
 
       - name: Verify formatting
-        run: |
-          gofmt -w internal/httpapi/cost_items.go internal/httpapi/projects.go
-          git diff --no-ext-diff --unified=80 -- internal/httpapi/cost_items.go internal/httpapi/projects.go
-          test -z "$(git diff --name-only -- internal/httpapi/cost_items.go internal/httpapi/projects.go)"
+        run: test -z "$(gofmt -l .)"
 
       - name: Vet
         run: go vet ./...

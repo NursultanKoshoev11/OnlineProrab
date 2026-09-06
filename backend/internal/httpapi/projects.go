@@ -28,20 +28,20 @@ type ProjectDTO struct {
 }
 
 type createProjectRequest struct {
-	Name        string  `json:"name"`
-	Address     string  `json:"address"`
+	Name         string  `json:"name"`
+	Address      string  `json:"address"`
 	BudgetAmount float64 `json:"budget_amount"`
 	Currency     string  `json:"currency"`
 	StartDate    string  `json:"start_date"`
 }
 
 type updateProjectRequest struct {
-	Name        string  `json:"name"`
-	Address     string  `json:"address"`
+	Name         string   `json:"name"`
+	Address      string   `json:"address"`
 	BudgetAmount *float64 `json:"budget_amount"`
-	Currency    string  `json:"currency"`
-	Status      string  `json:"status"`
-	StartDate   string  `json:"start_date"`
+	Currency     string   `json:"currency"`
+	Status       string   `json:"status"`
+	StartDate    string   `json:"start_date"`
 }
 
 func Projects(w http.ResponseWriter, r *http.Request) {
