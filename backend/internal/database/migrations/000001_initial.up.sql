@@ -15,11 +15,15 @@ CREATE TABLE IF NOT EXISTS projects (
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     address TEXT,
+    budget_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'KGS',
     status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ,
-    CONSTRAINT projects_status_check CHECK (status IN ('active', 'archived'))
+    CONSTRAINT projects_status_check CHECK (status IN ('active', 'archived')),
+    CONSTRAINT projects_budget_amount_check CHECK (budget_amount >= 0),
+    CONSTRAINT projects_currency_check CHECK (currency IN ('KGS', 'USD', 'KZT'))
 );
 
 CREATE TABLE IF NOT EXISTS project_members (
@@ -42,7 +46,7 @@ CREATE TABLE IF NOT EXISTS files (
     size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at TIMESTAMPTZ,
-    CONSTRAINT files_kind_check CHECK (kind IN ('receipt', 'photo', 'document'))
+    CONSTRAINT files_kind_check CHECK (kind IN ('receipt', 'photo', 'document', 'project_cover'))
 );
 
 CREATE TABLE IF NOT EXISTS cost_items (

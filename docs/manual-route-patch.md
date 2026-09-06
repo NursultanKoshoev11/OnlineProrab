@@ -1,19 +1,12 @@
 # Manual route patch
 
-Add these routes locally after cloning the repo:
-
-```go
-mux.HandleFunc("/api/v1/files", Files)
-mux.HandleFunc("/api/v1/auth/sms/request", RequestSMSCode)
-mux.HandleFunc("/api/v1/auth/sms/verify", VerifySMSCode)
-mux.HandleFunc("/api/v1/subscriptions/plans", ListPlans)
-mux.HandleFunc("/api/v1/subscriptions/status", SubscriptionStatus)
-```
-
-Then run:
+The route patch is already included in the current repository. Do not add a
+second router; run the authoritative API entrypoint instead:
 
 ```bash
 cd backend
 go test ./...
 go run ./cmd/api
 ```
+
+Routes are registered in `internal/httpapi/api_routes.go`.

@@ -15,7 +15,8 @@
 - [ ] Check authenticated `GET /api/v1/projects`
 - [ ] Check authenticated `POST /api/v1/cost-items`
 - [ ] Check authenticated `POST /api/v1/daily-reports`
-- [ ] Check authenticated file metadata endpoint
+- [ ] Upload a real file through the authenticated multipart endpoint
+- [ ] Check protected file download and attached receipt flow
 
 ## Mobile readiness
 
@@ -27,7 +28,8 @@
 - [ ] Project dashboard opens
 - [ ] Add expense screen opens
 - [ ] Add daily report screen opens
-- [ ] Connect forms to backend API before external beta
+- [ ] Replace project cover from the edit screen
+- [ ] Complete the auth-to-project-to-expense flow against staging
 
 ## Production environment
 

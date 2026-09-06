@@ -1,12 +1,14 @@
-# Local production MVP patch
+# Local production MVP notes
 
-The GitHub connector can block router and auth updates. Apply these files locally.
+This document is retained as a historical checklist. The changes below are
+already part of the current repository; do not apply a second implementation.
 
 ## 1. Router
 
-Update `backend/internal/httpapi/router.go` and add routes for files, SMS auth, and subscriptions.
+Routes for files, SMS auth and subscriptions are registered in
+`backend/internal/httpapi/api_routes.go`.
 
-Required routes:
+Available routes include:
 
 - `/api/v1/files`
 - `/api/v1/auth/sms/request`
@@ -16,20 +18,26 @@ Required routes:
 
 ## 2. Database startup
 
-Update `backend/cmd/api/main.go` so it opens PostgreSQL when `DATABASE_URL` is set.
+`backend/cmd/api` opens PostgreSQL and applies the embedded authoritative
+migrations on startup.
 
 ## 3. Project CRUD
 
-Replace demo project responses with PostgreSQL repository calls.
+Project CRUD is backed by PostgreSQL and protected by authenticated project
+membership checks.
 
 ## 4. Owner dashboard
 
-Add `/api/v1/projects/{id}/dashboard` after project storage works.
+The mobile workspace loads expenses, reports, tasks, files, team members and
+the audit log from their current API endpoints.
 
 ## 5. Verify
 
-Run:
+Verify with:
 
 ```bash
 cd backend
 go test ./...
+```
+
+For a complete request sequence use `backend/SMOKE_TEST.md`.

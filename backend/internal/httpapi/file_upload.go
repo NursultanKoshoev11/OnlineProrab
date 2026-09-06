@@ -53,6 +53,10 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r.Context())
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	if kind == "project_cover" && !canManageProject(ctx, userID, projectID) {
+		Error(w, http.StatusForbidden, "project management permission required")
+		return
+	}
 	if !canContributeToProject(ctx, userID, projectID) {
 		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
@@ -82,6 +86,10 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 			_ = os.Remove(stored.absolutePath)
 		}
 	}()
+	if kind == "project_cover" && !isAllowedProjectCoverType(stored.contentType) {
+		Error(w, http.StatusBadRequest, "project cover must be a JPEG, PNG or WebP image")
+		return
+	}
 
 	var item FileDTO
 	err = appState.DB.Pool.QueryRow(ctx, `
@@ -108,6 +116,9 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
 		VALUES ($1, $2, 'upload', 'file', $3, jsonb_build_object('content_type', $4, 'size_bytes', $5))
 	`, userID, projectID, item.ID, item.ContentType, item.SizeBytes)
+	if kind == "project_cover" {
+		archivePreviousProjectCovers(ctx, projectID, item.ID)
+	}
 
 	cleanup = false
 	JSON(w, http.StatusCreated, item)

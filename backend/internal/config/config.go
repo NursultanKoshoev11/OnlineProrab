@@ -71,6 +71,9 @@ func (cfg Config) IsProduction() bool {
 func (cfg Config) Validate() error {
 	var problems []string
 
+	if !strings.EqualFold(cfg.Env, DevelopmentEnv) && !strings.EqualFold(cfg.Env, ProductionEnv) {
+		problems = append(problems, "APP_ENV must be development or production")
+	}
 	if strings.TrimSpace(cfg.HTTPAddr) == "" {
 		problems = append(problems, "HTTP_ADDR is required")
 	}

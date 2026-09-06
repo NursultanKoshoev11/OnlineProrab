@@ -19,6 +19,15 @@ func TestValidateRequiresProductionSafeSigningKey(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUnknownEnvironment(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = "prod"
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected unknown APP_ENV to be rejected")
+	}
+}
+
 func TestValidateRejectsShortProductionSigningKey(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.JWTSecret = "short"

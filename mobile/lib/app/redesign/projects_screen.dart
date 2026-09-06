@@ -12,12 +12,15 @@ class _ProjectsScreen extends StatefulWidget {
 
 class _ProjectsScreenState extends State<_ProjectsScreen> {
   final _search = TextEditingController();
+  bool _showArchived = false;
   late Future<List<RemoteProject>> _future;
 
   @override
   void initState() {
     super.initState();
-    _future = widget.deps.projectRepository.listProjects();
+    _future = widget.deps.projectRepository.listProjects(
+      includeArchived: _showArchived,
+    );
   }
 
   @override
@@ -27,9 +30,16 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   }
 
   Future<void> _reload() async {
-    final future = widget.deps.projectRepository.listProjects();
+    final future = widget.deps.projectRepository.listProjects(
+      includeArchived: _showArchived,
+    );
     setState(() => _future = future);
-    await future;
+    try {
+      await future;
+    } catch (_) {
+      // FutureBuilder displays the error state; refresh callbacks should not
+      // surface a second unhandled exception.
+    }
   }
 
   @override
@@ -70,10 +80,19 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                   }
                   final all = snapshot.data ?? const <RemoteProject>[];
                   final query = _search.text.trim().toLowerCase();
+                  final hasArchived = all.any(
+                    (project) => project.status.toLowerCase() == 'archived',
+                  );
+                  final sourceEmpty = _showArchived
+                      ? !hasArchived
+                      : all.isEmpty;
                   final projects = all.where((project) {
-                    return query.isEmpty ||
-                        project.name.toLowerCase().contains(query) ||
-                        project.address.toLowerCase().contains(query);
+                    final archived = project.status.toLowerCase() == 'archived';
+                    final matchesArchive = _showArchived ? archived : !archived;
+                    return matchesArchive &&
+                        (query.isEmpty ||
+                            project.name.toLowerCase().contains(query) ||
+                            project.address.toLowerCase().contains(query));
                   }).toList();
                   return RefreshIndicator(
                     onRefresh: _reload,
@@ -81,69 +100,104 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
                       children: [
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                'Объекты',
-                                style: TextStyle(
-                                  fontSize: 31,
-                                  height: 1.05,
-                                  fontWeight: FontWeight.w900,
-                                  color: _ink,
-                                ),
-                              ),
-                            ),
-                            IconButton.filled(
-                              style: IconButton.styleFrom(
-                                backgroundColor: _brand,
-                                foregroundColor: Colors.white,
-                                minimumSize: const Size(46, 46),
-                              ),
-                              tooltip: 'Добавить объект',
-                              onPressed: _createProject,
-                              icon: const Icon(Icons.add_rounded, size: 25),
-                            ),
-                          ],
+                        _PageHeader(
+                          title: _showArchived ? 'Архив объектов' : 'Объекты',
+                          action: !_showArchived
+                              ? IconButton.filled(
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: _brand,
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(44, 44),
+                                  ),
+                                  tooltip: 'Добавить объект',
+                                  onPressed: _createProject,
+                                  icon: const Icon(Icons.add_rounded, size: 23),
+                                )
+                              : null,
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 16),
                         TextField(
                           controller: _search,
                           onChanged: (_) => setState(() {}),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: 'Поиск объектов',
-                            prefixIcon: Icon(Icons.search_rounded),
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            fillColor: const Color(0xFFEDF1EE),
+                            border: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(11),
+                              ),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(11),
+                              ),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(11),
+                              ),
+                              borderSide: BorderSide(
+                                color: _brand,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: FilterChip(
+                            selected: _showArchived,
+                            label: const Text('Архивные объекты'),
+                            avatar: const Icon(Icons.archive_outlined),
+                            showCheckmark: false,
+                            backgroundColor: Colors.transparent,
+                            selectedColor: _brandSoft,
+                            side: const BorderSide(color: _line),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            visualDensity: VisualDensity.compact,
+                            onSelected: _toggleArchived,
                           ),
                         ),
                         const SizedBox(height: 18),
                         if (projects.isEmpty)
                           _EmptyCard(
                             icon: Icons.home_work_outlined,
-                            title: all.isEmpty
-                                ? 'Пока нет объектов'
+                            title: sourceEmpty
+                                ? (_showArchived
+                                      ? 'Архив пуст'
+                                      : 'Пока нет объектов')
                                 : 'Ничего не найдено',
-                            message: all.isEmpty
-                                ? 'Нажмите «+», чтобы создать первый объект.'
+                            message: sourceEmpty
+                                ? (_showArchived
+                                      ? 'Здесь появятся объекты, которые вы архивировали.'
+                                      : 'Нажмите «+», чтобы создать первый объект.')
                                 : 'Попробуйте изменить поисковый запрос.',
                           )
                         else
-                          ...projects.map(
-                            (project) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _ProjectCard(
-                                project: project,
-                                apiClient: widget.deps.apiClient,
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => _ProjectWorkspace(
-                                      project: project,
-                                      deps: widget.deps,
-                                    ),
+                          ...List.generate(projects.length, (index) {
+                            final project = projects[index];
+                            return _ProjectCard(
+                              project: project,
+                              apiClient: widget.deps.apiClient,
+                              showDivider: index < projects.length - 1,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => _ProjectWorkspace(
+                                    project: project,
+                                    deps: widget.deps,
+                                    session: widget.session,
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
+                              onEdit: () => _editProject(project),
+                            );
+                          }),
                       ],
                     ),
                   );
@@ -153,23 +207,43 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (index) {
-          if (index == 1) _showProfile();
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_work_outlined),
-            selectedIcon: Icon(Icons.home_work_rounded),
-            label: 'Объекты',
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          navigationBarTheme: NavigationBarThemeData(
+            height: 68,
+            backgroundColor: Colors.white,
+            indicatorColor: _ink,
+            selectedIconTheme: const IconThemeData(color: Colors.white),
+            unselectedIconTheme: const IconThemeData(color: _muted),
+            labelTextStyle: WidgetStateProperty.resolveWith(
+              (states) => TextStyle(
+                color: states.contains(WidgetState.selected) ? _ink : _muted,
+                fontSize: 12,
+                fontWeight: states.contains(WidgetState.selected)
+                    ? FontWeight.w700
+                    : FontWeight.w500,
+              ),
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Профиль',
-          ),
-        ],
+        ),
+        child: NavigationBar(
+          selectedIndex: 0,
+          onDestinationSelected: (index) {
+            if (index == 1) _showProfile();
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_work_outlined),
+              selectedIcon: Icon(Icons.home_work_rounded),
+              label: 'Объекты',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'Профиль',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -177,10 +251,31 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   Future<void> _createProject() async {
     final created = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => _ProjectForm(repository: widget.deps.projectRepository),
+        builder: (_) => _ProjectForm(
+          repository: widget.deps.projectRepository,
+          fileRepository: widget.deps.fileRepository,
+        ),
       ),
     );
     if (created == true) await _reload();
+  }
+
+  Future<void> _toggleArchived(bool value) async {
+    setState(() => _showArchived = value);
+    await _reload();
+  }
+
+  Future<void> _editProject(RemoteProject project) async {
+    final updated = await Navigator.of(context).push<RemoteProject>(
+      MaterialPageRoute(
+        builder: (_) => _ProjectForm(
+          repository: widget.deps.projectRepository,
+          fileRepository: widget.deps.fileRepository,
+          initial: project,
+        ),
+      ),
+    );
+    if (updated != null) await _reload();
   }
 
   Future<void> _showProfile() async {
@@ -216,13 +311,6 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                 onPressed: () async {
                   Navigator.of(context).pop();
                   await widget.deps.authRepository.signOut();
-                  if (!mounted) return;
-                  Navigator.of(this.context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) => _LoginScreen(deps: widget.deps),
-                    ),
-                    (_) => false,
-                  );
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('Выйти'),

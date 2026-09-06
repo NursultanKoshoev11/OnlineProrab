@@ -1,5 +1,53 @@
 part of '../online_prorab_redesign.dart';
 
+String _normalizePhone(String value) => value.replaceAll(RegExp(r'\D'), '');
+
+String _auditLogTitle(RemoteAuditLog log) {
+  final action = _auditActionLabel(log.action);
+  final entity = _auditEntityLabel(log.entityType);
+  return '$action: $entity';
+}
+
+String _auditActionLabel(String value) {
+  switch (value.toLowerCase()) {
+    case 'create':
+      return 'Создание';
+    case 'update':
+      return 'Изменение';
+    case 'delete':
+      return 'Удаление';
+    case 'upload':
+      return 'Загрузка';
+    case 'archive':
+      return 'Архивирование';
+    case 'invite':
+      return 'Приглашение';
+    case 'accept_invite':
+      return 'Принятие приглашения';
+    case 'update_role':
+      return 'Изменение роли';
+    default:
+      return value.isEmpty ? 'Действие' : value;
+  }
+}
+
+String _auditEntityLabel(String value) {
+  switch (value.toLowerCase()) {
+    case 'project':
+      return 'объект';
+    case 'cost_item':
+      return 'расход';
+    case 'daily_report':
+      return 'отчёт';
+    case 'file':
+      return 'файл';
+    case 'project_member':
+      return 'участник';
+    default:
+      return value.isEmpty ? 'запись' : value;
+  }
+}
+
 String _projectStatusLabel(String value) {
   switch (value.toLowerCase()) {
     case 'active':
@@ -11,6 +59,8 @@ String _projectStatusLabel(String value) {
     case 'done':
     case 'completed':
       return 'Завершён';
+    case 'archived':
+      return 'В архиве';
     default:
       return value.isEmpty ? 'Статус не указан' : value;
   }
@@ -165,6 +215,24 @@ String _displayDate(DateTime value) {
   return '$day.$month.${value.year}';
 }
 
+String _displayLongDate(DateTime value) {
+  const months = [
+    'января',
+    'февраля',
+    'марта',
+    'апреля',
+    'мая',
+    'июня',
+    'июля',
+    'августа',
+    'сентября',
+    'октября',
+    'ноября',
+    'декабря',
+  ];
+  return '${value.day} ${months[value.month - 1]} ${value.year}';
+}
+
 String _apiDate(DateTime value) {
   final month = value.month.toString().padLeft(2, '0');
   final day = value.day.toString().padLeft(2, '0');
@@ -212,22 +280,66 @@ String _dayWord(int value) {
 }
 
 String _money(double value, String currency) {
-  final rounded = value.round().toString();
-  final chars = rounded.split('').reversed.toList();
+  final safeValue = value.isFinite ? value : 0;
+  final negative = safeValue < 0;
+  final cents = (safeValue.abs() * 100).round();
+  final whole = (cents ~/ 100).toString();
+  final fraction = cents % 100;
+  final chars = whole.split('').reversed.toList();
   final buffer = StringBuffer();
   for (var i = 0; i < chars.length; i++) {
     if (i > 0 && i % 3 == 0) buffer.write(' ');
     buffer.write(chars[i]);
   }
-  final formatted = buffer.toString().split('').reversed.join();
+  final formattedWhole = buffer.toString().split('').reversed.join();
+  final formatted = fraction == 0
+      ? formattedWhole
+      : '$formattedWhole.${fraction.toString().padLeft(2, '0')}';
   final suffix = currency.toUpperCase() == 'KGS' ? 'сом' : currency;
-  return '$formatted $suffix';
+  return '${negative ? '-' : ''}$formatted $suffix';
+}
+
+const _maxMoneyAmount = 999999999999.99;
+
+bool _isValidMoney(double value, {bool allowZero = true}) {
+  if (!value.isFinite || value < 0 || (!allowZero && value == 0)) {
+    return false;
+  }
+  return value <= _maxMoneyAmount &&
+      ((value * 100).round() / 100) <= _maxMoneyAmount;
+}
+
+Map<String, double> _totalsByCurrency(Iterable<RemoteCostItem> items) {
+  final totals = <String, double>{};
+  for (final item in items) {
+    final currency = item.currency.trim().toUpperCase().isEmpty
+        ? 'KGS'
+        : item.currency.trim().toUpperCase();
+    totals[currency] = (totals[currency] ?? 0) + item.amount;
+  }
+  return totals;
+}
+
+String _moneyTotals(Iterable<RemoteCostItem> items) {
+  final totals = _totalsByCurrency(items);
+  if (totals.isEmpty) return _money(0, 'KGS');
+  return totals.entries
+      .map((entry) => _money(entry.value, entry.key))
+      .join(' • ');
 }
 
 String _fileSize(int bytes) {
   if (bytes < 1024) return '$bytes Б';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} КБ';
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
+}
+
+String _displayDateTime(String value) {
+  final parsed = DateTime.tryParse(value)?.toLocal();
+  if (parsed == null) return value.isEmpty ? 'Дата неизвестна' : value;
+  String pad(int number) => number.toString().padLeft(2, '0');
+  return '${pad(parsed.day)}.${pad(parsed.month)}.${parsed.year} '
+      '${pad(parsed.hour)}:${pad(parsed.minute)}';
 }
 
 String _errorText(Object? error) {

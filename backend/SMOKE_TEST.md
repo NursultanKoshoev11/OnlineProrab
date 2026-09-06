@@ -1,6 +1,6 @@
 # Backend Smoke Test
 
-Run the stack:
+Run the full local stack from the repository root:
 
 ```bash
 docker compose up --build
@@ -41,7 +41,7 @@ Create a project:
 curl -s -X POST http://localhost:8080/api/v1/projects \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Demo house","address":"Bishkek"}'
+  -d '{"name":"Demo house","address":"Bishkek","budget_amount":250000,"currency":"KGS"}'
 ```
 
 Set project id:
@@ -150,14 +150,18 @@ curl -s -X PATCH "http://localhost:8080/api/v1/tasks/$TASK_ID" \
   -d '{"title":"Buy cement","description":"Delivery confirmed","status":"done"}'
 ```
 
-Create file metadata:
+Upload a real file (prepare `./receipt.jpg` locally):
 
 ```bash
-curl -s -X POST http://localhost:8080/api/v1/files \
+curl -s -X POST http://localhost:8080/api/v1/files/upload \
   -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"project_id":"'$PROJECT_ID'","kind":"receipt","original_name":"receipt.jpg","storage_path":"local/receipt.jpg","content_type":"image/jpeg","size_bytes":120000}'
+  -F "project_id=$PROJECT_ID" \
+  -F 'kind=receipt' \
+  -F 'file=@./receipt.jpg'
 ```
+
+The production API intentionally rejects direct file metadata creation. The
+metadata endpoint is retained only for local compatibility tooling.
 
 Audit log:
 

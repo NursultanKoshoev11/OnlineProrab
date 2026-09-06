@@ -40,6 +40,8 @@ void main() {
           expect(body['name'], 'Demo');
           expect(body['address'], 'Bishkek');
           expect(body['start_date'], '2026-09-06');
+          expect(body['budget_amount'], 250000);
+          expect(body['currency'], 'USD');
           return http.Response(
             jsonEncode({
               'id': 'project-1',
@@ -55,6 +57,8 @@ void main() {
         'Demo',
         'Bishkek',
         startDate: '2026-09-06',
+        budgetAmount: 250000,
+        currency: 'USD',
       );
 
       expect(data['id'], 'project-1');
@@ -80,6 +84,19 @@ void main() {
 
     expect(items.length, 1);
     expect((items.first as Map<String, dynamic>)['id'], 'project-1');
+  });
+
+  test('listProjects can request archived projects', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.url.queryParameters['include_archived'], 'true');
+        return http.Response('[]', 200);
+      }),
+    );
+
+    final items = await client.listProjects(includeArchived: true);
+
+    expect(items, isEmpty);
   });
 
   test('listTasks supports tasks wrapper response', () async {

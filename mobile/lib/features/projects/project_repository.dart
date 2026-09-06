@@ -8,6 +8,9 @@ class RemoteProject {
     required this.status,
     required this.coverFileId,
     required this.startDate,
+    this.budgetAmount = 0,
+    this.currency = 'KGS',
+    this.role = '',
   });
 
   final String id;
@@ -16,6 +19,9 @@ class RemoteProject {
   final String status;
   final String coverFileId;
   final String startDate;
+  final double budgetAmount;
+  final String currency;
+  final String role;
 
   factory RemoteProject.fromJson(Map<String, dynamic> json) {
     return RemoteProject(
@@ -25,8 +31,16 @@ class RemoteProject {
       status: json['status']?.toString() ?? 'active',
       coverFileId: json['cover_file_id']?.toString() ?? '',
       startDate: json['start_date']?.toString() ?? '',
+      budgetAmount: _asDouble(json['budget_amount']),
+      currency: json['currency']?.toString() ?? 'KGS',
+      role: json['role']?.toString() ?? '',
     );
   }
+}
+
+double _asDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 class ProjectRepository {
@@ -35,8 +49,12 @@ class ProjectRepository {
 
   final ApiClient _apiClient;
 
-  Future<List<RemoteProject>> listProjects() async {
-    final items = await _apiClient.listProjects();
+  Future<List<RemoteProject>> listProjects({
+    bool includeArchived = false,
+  }) async {
+    final items = await _apiClient.listProjects(
+      includeArchived: includeArchived,
+    );
     return items
         .whereType<Map<String, dynamic>>()
         .map(RemoteProject.fromJson)
@@ -48,11 +66,15 @@ class ProjectRepository {
     required String name,
     required String address,
     required String startDate,
+    double budgetAmount = 0,
+    String currency = 'KGS',
   }) async {
     final data = await _apiClient.createProject(
       name,
       address,
       startDate: startDate,
+      budgetAmount: budgetAmount,
+      currency: currency,
     );
     return RemoteProject.fromJson(data);
   }
@@ -63,6 +85,8 @@ class ProjectRepository {
     required String startDate,
     required String filePath,
     required String fileName,
+    double budgetAmount = 0,
+    String currency = 'KGS',
   }) async {
     final data = await _apiClient.createProjectWithCover(
       name: name,
@@ -70,6 +94,8 @@ class ProjectRepository {
       startDate: startDate,
       filePath: filePath,
       fileName: fileName,
+      budgetAmount: budgetAmount,
+      currency: currency,
     );
     return RemoteProject.fromJson(data);
   }
@@ -80,6 +106,8 @@ class ProjectRepository {
     required String address,
     required String startDate,
     String status = 'active',
+    double? budgetAmount,
+    String? currency,
   }) async {
     final data = await _apiClient.updateProject(
       projectId,
@@ -87,6 +115,8 @@ class ProjectRepository {
       address,
       status: status,
       startDate: startDate,
+      budgetAmount: budgetAmount,
+      currency: currency,
     );
     return RemoteProject.fromJson(data);
   }

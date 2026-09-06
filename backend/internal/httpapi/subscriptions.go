@@ -3,6 +3,10 @@ package httpapi
 import "net/http"
 
 func ListPlans(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"plans": []map[string]any{
 			{"id": "free", "name": "Free", "price_kgs": 0, "max_projects": 1},
@@ -13,6 +17,10 @@ func ListPlans(w http.ResponseWriter, r *http.Request) {
 }
 
 func SubscriptionStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{
 		"user_id": userIDFromContext(r.Context()),
 		"plan":    "free",

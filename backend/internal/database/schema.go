@@ -91,9 +91,15 @@ CREATE TABLE IF NOT EXISTS projects (
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     address TEXT,
+    budget_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'KGS',
     status TEXT NOT NULL DEFAULT 'active',
+    start_date DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT projects_status_check CHECK (status IN ('active', 'archived')),
+    CONSTRAINT projects_budget_amount_check CHECK (budget_amount >= 0),
+    CONSTRAINT projects_currency_check CHECK (currency IN ('KGS', 'USD', 'KZT'))
 );
 
 CREATE TABLE IF NOT EXISTS project_members (
@@ -198,6 +204,15 @@ CREATE INDEX IF NOT EXISTS idx_sms_login_codes_expires_at ON sms_login_codes(exp
 `
 
 const productionConstraintsSQL = `
+ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS budget_amount NUMERIC(14,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'KGS';
+
+ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS start_date DATE NOT NULL DEFAULT CURRENT_DATE;
+
 UPDATE users
 SET role = 'owner'
 WHERE role NOT IN ('owner', 'manager', 'worker', 'viewer');
@@ -210,13 +225,38 @@ UPDATE projects
 SET status = 'active'
 WHERE status NOT IN ('active', 'archived');
 
+UPDATE projects
+SET budget_amount = 0
+WHERE budget_amount IS NULL OR budget_amount < 0;
+
+UPDATE projects
+SET currency = 'KGS'
+WHERE currency IS NULL OR currency NOT IN ('KGS', 'USD', 'KZT');
+
+ALTER TABLE projects
+    ALTER COLUMN budget_amount SET DEFAULT 0,
+    ALTER COLUMN budget_amount SET NOT NULL;
+
+ALTER TABLE projects
+    ALTER COLUMN currency SET DEFAULT 'KGS',
+    ALTER COLUMN currency SET NOT NULL;
+
+INSERT INTO project_members (project_id, user_id, role)
+SELECT p.id, p.owner_id, 'owner'
+FROM projects p
+WHERE p.deleted_at IS NULL
+  AND p.owner_id IS NOT NULL
+ON CONFLICT (project_id, user_id) DO UPDATE
+SET role = 'owner'
+WHERE project_members.role <> 'owner';
+
 UPDATE tasks
 SET status = 'open'
 WHERE status NOT IN ('open', 'in_progress', 'done', 'cancelled');
 
 UPDATE files
 SET kind = 'document'
-WHERE kind NOT IN ('receipt', 'photo', 'document');
+WHERE kind NOT IN ('receipt', 'photo', 'document', 'project_cover');
 
 DO $$
 BEGIN
@@ -232,12 +272,20 @@ BEGIN
         ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK (status IN ('active', 'archived')) NOT VALID;
         ALTER TABLE projects VALIDATE CONSTRAINT projects_status_check;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'projects_budget_amount_check') THEN
+        ALTER TABLE projects ADD CONSTRAINT projects_budget_amount_check CHECK (budget_amount >= 0) NOT VALID;
+        ALTER TABLE projects VALIDATE CONSTRAINT projects_budget_amount_check;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'projects_currency_check') THEN
+        ALTER TABLE projects ADD CONSTRAINT projects_currency_check CHECK (currency IN ('KGS', 'USD', 'KZT')) NOT VALID;
+        ALTER TABLE projects VALIDATE CONSTRAINT projects_currency_check;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tasks_status_check') THEN
         ALTER TABLE tasks ADD CONSTRAINT tasks_status_check CHECK (status IN ('open', 'in_progress', 'done', 'cancelled')) NOT VALID;
         ALTER TABLE tasks VALIDATE CONSTRAINT tasks_status_check;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'files_kind_check') THEN
-        ALTER TABLE files ADD CONSTRAINT files_kind_check CHECK (kind IN ('receipt', 'photo', 'document')) NOT VALID;
+        ALTER TABLE files ADD CONSTRAINT files_kind_check CHECK (kind IN ('receipt', 'photo', 'document', 'project_cover')) NOT VALID;
         ALTER TABLE files VALIDATE CONSTRAINT files_kind_check;
     END IF;
 END $$;

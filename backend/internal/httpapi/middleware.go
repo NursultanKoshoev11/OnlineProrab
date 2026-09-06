@@ -51,12 +51,28 @@ func shouldLimitJSONBody(r *http.Request) bool {
 func requestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimSpace(r.Header.Get("X-Request-ID"))
-		if id == "" || len(id) > 128 {
+		if !isSafeRequestID(id) {
 			id = newRequestID()
 		}
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestIDContextKey{}, id)))
 	})
+}
+
+func isSafeRequestID(value string) bool {
+	if value == "" || len(value) > 128 {
+		return false
+	}
+	for _, char := range value {
+		if (char >= 'a' && char <= 'z') ||
+			(char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') ||
+			strings.ContainsRune("._:-", char) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func requestIDFromContext(ctx context.Context) string {

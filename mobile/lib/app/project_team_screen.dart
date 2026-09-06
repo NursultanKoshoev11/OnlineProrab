@@ -6,11 +6,13 @@ class ProjectTeamScreen extends StatefulWidget {
   const ProjectTeamScreen({
     required this.projectId,
     required this.repository,
+    this.canManage = true,
     super.key,
   });
 
   final String projectId;
   final ProjectTeamRepository repository;
+  final bool canManage;
 
   @override
   State<ProjectTeamScreen> createState() => _ProjectTeamScreenState();
@@ -28,13 +30,19 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
   Future<void> _refresh() async {
     final future = widget.repository.listMembers(widget.projectId);
     setState(() => membersFuture = future);
-    await future;
+    try {
+      await future;
+    } catch (_) {
+      // FutureBuilder owns the error state; refresh callbacks should settle
+      // without producing an unhandled exception.
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         title: const Text('Команда'),
         actions: [
           IconButton(
@@ -71,7 +79,12 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
               children: [
                 Text(
                   'Команда объекта',
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: const TextStyle(
+                    fontSize: 30,
+                    height: 1.05,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.6,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -87,10 +100,10 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _ProjectMemberCard(
                         member: member,
-                        onChangeRole: member.role == 'owner'
+                        onChangeRole: !widget.canManage || member.role == 'owner'
                             ? null
                             : () => _changeRole(member),
-                        onRemove: member.role == 'owner'
+                        onRemove: !widget.canManage || member.role == 'owner'
                             ? null
                             : () => _removeMember(member),
                       ),
@@ -101,17 +114,19 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        elevation: 0,
-        backgroundColor: OnlineProrabColors.primary,
-        foregroundColor: Colors.white,
-        onPressed: _inviteMember,
-        icon: const Icon(Icons.person_add_alt_1_rounded),
-        label: const Text(
-          'Добавить участника',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
+      floatingActionButton: widget.canManage
+          ? FloatingActionButton.extended(
+              elevation: 0,
+              backgroundColor: OnlineProrabColors.primary,
+              foregroundColor: Colors.white,
+              onPressed: _inviteMember,
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text(
+                'Добавить участника',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            )
+          : null,
     );
   }
 
@@ -462,7 +477,7 @@ class _TeamEmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 34),
       decoration: BoxDecoration(
         color: OnlineProrabColors.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: OnlineProrabColors.border),
       ),
       child: Column(

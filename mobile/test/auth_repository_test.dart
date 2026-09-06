@@ -62,6 +62,78 @@ void main() {
     expect(restored.refreshToken, 'refresh-123');
   });
 
+  test(
+    'AuthRepository clears partial tokens when refresh session fails',
+    () async {
+      final apiClient = ApiClient(
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/v1/auth/sms/verify') {
+            return http.Response(
+              jsonEncode({'access_token': 'token-123'}),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'error': 'session unavailable'}),
+            503,
+          );
+        }),
+      );
+      final repository = AuthRepository(
+        apiClient: apiClient,
+        sessionStore: SessionStore(storage: MemorySecureStore()),
+      );
+
+      await expectLater(
+        repository.verifyCode('+996700000000', '123456'),
+        throwsA(isA<ApiException>()),
+      );
+      expect(apiClient.accessToken, isNull);
+      expect(apiClient.refreshToken, isNull);
+      await repository.dispose();
+    },
+  );
+
+  test(
+    'AuthRepository exposes development SMS code when backend returns it',
+    () async {
+      final apiClient = ApiClient(
+        httpClient: MockClient((request) async {
+          expect(request.url.path, '/api/v1/auth/sms/request');
+          return http.Response(
+            jsonEncode({'status': 'code_sent', 'dev_code': '123456'}),
+            202,
+          );
+        }),
+      );
+      final repository = AuthRepository(
+        apiClient: apiClient,
+        sessionStore: SessionStore(storage: MemorySecureStore()),
+      );
+
+      expect(await repository.requestCode('+996700000000'), '123456');
+      await repository.dispose();
+    },
+  );
+
+  test(
+    'AuthRepository returns no development code in production response',
+    () async {
+      final apiClient = ApiClient(
+        httpClient: MockClient((request) async {
+          return http.Response(jsonEncode({'status': 'code_sent'}), 202);
+        }),
+      );
+      final repository = AuthRepository(
+        apiClient: apiClient,
+        sessionStore: SessionStore(storage: MemorySecureStore()),
+      );
+
+      expect(await repository.requestCode('+996700000000'), isNull);
+      await repository.dispose();
+    },
+  );
+
   test('AuthRepository restores saved access and refresh tokens', () async {
     final store = SessionStore(storage: MemorySecureStore());
     await store.save(
@@ -188,4 +260,43 @@ void main() {
       );
     },
   );
+
+  test('AuthRepository notifies the auth gate when refresh fails', () async {
+    final storage = MemorySecureStore();
+    final store = SessionStore(storage: storage);
+    await store.save(
+      const SessionData(
+        phone: '+996700000000',
+        accessToken: 'expired-access',
+        refreshToken: 'expired-refresh',
+      ),
+    );
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/v1/projects') {
+          return http.Response(jsonEncode({'error': 'invalid token'}), 401);
+        }
+        if (request.url.path == '/api/v1/auth/session/refresh') {
+          return http.Response(jsonEncode({'error': 'expired session'}), 401);
+        }
+        return http.Response(jsonEncode({'error': 'not found'}), 404);
+      }),
+    );
+    final repository = AuthRepository(
+      apiClient: apiClient,
+      sessionStore: store,
+    );
+    await repository.loadSession();
+    final expired = repository.sessionExpired.first;
+
+    await expectLater(
+      apiClient.listProjects(),
+      throwsA(isA<ApiException>()),
+    );
+    await expired;
+    expect(await store.load(), isNull);
+    expect(apiClient.accessToken, isNull);
+    expect(apiClient.refreshToken, isNull);
+    await repository.dispose();
+  });
 }

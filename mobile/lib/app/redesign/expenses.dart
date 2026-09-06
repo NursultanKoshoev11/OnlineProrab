@@ -1,19 +1,36 @@
 part of '../online_prorab_redesign.dart';
 
+String _expenseWord(int count) {
+  final lastTwo = count % 100;
+  final last = count % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'расходов';
+  if (last == 1) return 'расход';
+  if (last >= 2 && last <= 4) return 'расхода';
+  return 'расходов';
+}
+
 class _ExpensesTab extends StatefulWidget {
   const _ExpensesTab({
     required this.project,
     required this.repository,
+    required this.fileRepository,
+    required this.onOpenFile,
     required this.speechToText,
     required this.initial,
     required this.onChanged,
+    required this.canContribute,
+    required this.canManage,
   });
 
   final RemoteProject project;
   final CostItemRepository repository;
+  final ProjectFileRepository fileRepository;
+  final ValueChanged<RemoteProjectFile> onOpenFile;
   final stt.SpeechToText speechToText;
   final List<RemoteCostItem> initial;
   final ValueChanged<List<RemoteCostItem>> onChanged;
+  final bool canContribute;
+  final bool canManage;
 
   @override
   State<_ExpensesTab> createState() => _ExpensesTabState();
@@ -49,10 +66,6 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    final total = filtered.fold<double>(0, (sum, item) => sum + item.amount);
-    final currency = filtered.isEmpty
-        ? (_items.isEmpty ? 'KGS' : _items.first.currency)
-        : filtered.first.currency;
 
     return Column(
       children: [
@@ -61,21 +74,49 @@ class _ExpensesTabState extends State<_ExpensesTab> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
             children: [
               const Text(
-                'Расходы',
+                'РАСХОДЫ',
                 style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  color: _ink,
+                  color: _muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: .8,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(widget.project.name, style: const TextStyle(color: _muted)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 7),
+              Text(
+                widget.project.name.isEmpty ? 'Объект' : widget.project.name,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 27,
+                  height: 1.08,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (widget.project.address.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 18,
+                      color: _brand,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        widget.project.address,
+                        style: const TextStyle(color: _muted, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 20),
               TextField(
                 controller: _search,
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
-                  hintText: 'Например: окна за май 2026',
+                  hintText: 'Поиск расходов',
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: Padding(
                     padding: const EdgeInsets.all(6),
@@ -99,22 +140,28 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Найдено по запросу',
-                        style: TextStyle(color: _muted, fontSize: 13),
+                        'Всего потрачено',
+                        style: TextStyle(
+                          color: _muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        _money(total, currency),
+                        _moneyTotals(filtered),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
-                          color: _ink,
+                          color: Colors.black,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '${filtered.length} записей',
-                        style: const TextStyle(color: _muted),
+                        '${filtered.length} ${_expenseWord(filtered.length)}',
+                        style: const TextStyle(color: _muted, fontSize: 13),
                       ),
                     ],
                   ),
@@ -133,12 +180,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Card(
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => _CostDetails(item: item),
-                          ),
-                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => _openDetails(item),
                         child: Padding(
                           padding: const EdgeInsets.all(13),
                           child: Row(
@@ -164,7 +207,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                                       item.title,
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w800,
-                                        color: _ink,
+                                        color: Colors.black,
                                       ),
                                     ),
                                     if (item.spentAt.isNotEmpty) ...[
@@ -185,7 +228,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                                 _money(item.amount, item.currency),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w800,
-                                  color: _ink,
+                                  color: Colors.black,
                                 ),
                               ),
                             ],
@@ -198,14 +241,15 @@ class _ExpensesTabState extends State<_ExpensesTab> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
-          child: FilledButton.icon(
-            onPressed: _addExpense,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Добавить расход'),
+        if (widget.canContribute)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+            child: FilledButton.icon(
+              onPressed: _addExpense,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Добавить расход'),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -241,14 +285,46 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     setState(() {});
   }
 
+  Future<void> _openDetails(RemoteCostItem item) async {
+    final result = await Navigator.of(context).push<Object?>(
+      MaterialPageRoute(
+        builder: (_) => _CostDetails(
+          item: item,
+          repository: widget.repository,
+          fileRepository: widget.fileRepository,
+          onOpenFile: widget.onOpenFile,
+          canContribute: widget.canContribute,
+          canManage: widget.canManage,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (result is RemoteCostItem) {
+      final next = _items
+          .map((candidate) => candidate.id == result.id ? result : candidate)
+          .toList();
+      setState(() => _items = next);
+      widget.onChanged(next);
+      return;
+    }
+    if (result == true) {
+      final next = _items
+          .where((candidate) => candidate.id != item.id)
+          .toList();
+      setState(() => _items = next);
+      widget.onChanged(next);
+    }
+  }
+
   Future<void> _addExpense() async {
     final result = await showModalBottomSheet<RemoteCostItem>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => _CreateExpenseSheet(
-        project: widget.project,
+        projectId: widget.project.id,
         repository: widget.repository,
+        fileRepository: widget.fileRepository,
       ),
     );
     if (result == null) return;

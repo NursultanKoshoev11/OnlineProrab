@@ -1,9 +1,10 @@
 part of '../online_prorab_redesign.dart';
 
 class _LoginScreen extends StatefulWidget {
-  const _LoginScreen({required this.deps});
+  const _LoginScreen({required this.deps, required this.onAuthenticated});
 
   final _Dependencies deps;
+  final ValueChanged<SessionData> onAuthenticated;
 
   @override
   State<_LoginScreen> createState() => _LoginScreenState();
@@ -15,6 +16,7 @@ class _LoginScreenState extends State<_LoginScreen> {
   bool _requested = false;
   bool _busy = false;
   String? _error;
+  String? _devCode;
 
   @override
   void dispose() {
@@ -93,6 +95,34 @@ class _LoginScreenState extends State<_LoginScreen> {
                       prefixIcon: Icon(Icons.lock_outline),
                     ),
                   ),
+                  if (_devCode != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _brandSoft,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.developer_mode, color: _brand),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Код для разработки: $_devCode',
+                              style: const TextStyle(
+                                color: _brand,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
@@ -125,6 +155,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                             _requested = false;
                             _code.clear();
                             _error = null;
+                            _devCode = null;
                           }),
                     child: const Text('Изменить номер'),
                   ),
@@ -149,9 +180,12 @@ class _LoginScreenState extends State<_LoginScreen> {
     });
     try {
       if (!_requested) {
-        await widget.deps.authRepository.requestCode(phone);
+        final devCode = await widget.deps.authRepository.requestCode(phone);
         if (!mounted) return;
-        setState(() => _requested = true);
+        setState(() {
+          _requested = true;
+          _devCode = devCode;
+        });
         return;
       }
       if (_code.text.trim().length != 6) {
@@ -163,11 +197,7 @@ class _LoginScreenState extends State<_LoginScreen> {
         _code.text.trim(),
       );
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => _ProjectsScreen(session: session, deps: widget.deps),
-        ),
-      );
+      widget.onAuthenticated(session);
     } catch (error) {
       if (mounted) setState(() => _error = _errorText(error));
     } finally {

@@ -64,6 +64,43 @@ void main() {
     expect(file.isPDF, isTrue);
   });
 
+  test('refreshes the access token directly before retrying a 401', () async {
+    var refreshCalls = 0;
+    var downloadCalls = 0;
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        refreshCalls++;
+        expect(request.url.path, '/api/v1/auth/session/refresh');
+        return http.Response(
+          jsonEncode({
+            'access_token': 'access-new',
+            'refresh_token': 'refresh-new',
+          }),
+          200,
+        );
+      }),
+    )..setTokens(accessToken: 'access-old', refreshToken: 'refresh-old');
+    final service = ProjectFileDownloadService(
+      apiClient: apiClient,
+      httpClient: MockClient((request) async {
+        downloadCalls++;
+        if (downloadCalls == 1) return http.Response('{}', 401);
+        expect(request.headers['Authorization'], 'Bearer access-new');
+        return http.Response.bytes(<int>[1], 200);
+      }),
+    );
+
+    final file = await service.download(
+      fileId: 'file-3',
+      fallbackFileName: 'file.bin',
+      fallbackContentType: 'application/octet-stream',
+    );
+
+    expect(file.bytes, <int>[1]);
+    expect(refreshCalls, 1);
+    expect(downloadCalls, 2);
+  });
+
   test('throws ApiException when backend returns error', () async {
     final apiClient = ApiClient(
       httpClient: MockClient((request) async => http.Response('{}', 200)),
@@ -82,12 +119,64 @@ void main() {
         fallbackContentType: 'application/pdf',
       ),
       throwsA(
-        isA<ApiException>().having(
-          (error) => error.statusCode,
-          'statusCode',
-          404,
-        ),
+        isA<ApiException>()
+            .having((error) => error.statusCode, 'statusCode', 404)
+            .having((error) => error.message, 'message', 'not found'),
       ),
     );
+  });
+
+  test('sanitizes response filename before returning it', () async {
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async => http.Response('{}', 200)),
+    );
+    final service = ProjectFileDownloadService(
+      apiClient: apiClient,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(
+          <int>[1],
+          200,
+          headers: {
+            'content-disposition':
+                'attachment; filename="../receipt\\private.jpg"',
+          },
+        );
+      }),
+    );
+
+    final file = await service.download(
+      fileId: 'file-4',
+      fallbackFileName: 'fallback.jpg',
+      fallbackContentType: 'image/jpeg',
+    );
+
+    expect(file.fileName, 'private.jpg');
+  });
+
+  test('reads lower-case RFC 5987 and unquoted filenames', () async {
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async => http.Response('{}', 200)),
+    );
+    final service = ProjectFileDownloadService(
+      apiClient: apiClient,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(
+          <int>[1],
+          200,
+          headers: {
+            'content-disposition':
+                "attachment; filename*=utf-8''receipt%20may.pdf",
+          },
+        );
+      }),
+    );
+
+    final file = await service.download(
+      fileId: 'file-5',
+      fallbackFileName: 'fallback.pdf',
+      fallbackContentType: 'application/pdf',
+    );
+
+    expect(file.fileName, 'receipt_may.pdf');
   });
 }

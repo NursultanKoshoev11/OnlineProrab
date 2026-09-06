@@ -28,6 +28,14 @@ class ApiClient {
     this.refreshToken = refreshToken;
   }
 
+  Future<bool> refreshAccessToken() async {
+    final refreshed = await _refreshTokens();
+    if (!refreshed) await _expireSession();
+    return refreshed;
+  }
+
+  Future<void> expireSession() => _expireSession();
+
   void setSessionHandlers({
     Future<void> Function(String accessToken, String refreshToken)?
     onTokensUpdated,
@@ -79,17 +87,26 @@ class ApiClient {
     await _expireSession();
   }
 
-  Future<List<dynamic>> listProjects() async =>
-      _asList(await getJson('/api/v1/projects'));
+  Future<List<dynamic>> listProjects({bool includeArchived = false}) async =>
+      _asList(
+        await getJson(
+          '/api/v1/projects',
+          includeArchived ? {'include_archived': 'true'} : null,
+        ),
+      );
 
   Future<Map<String, dynamic>> createProject(
     String name,
     String address, {
     required String startDate,
+    double budgetAmount = 0,
+    String currency = 'KGS',
   }) => postJson('/api/v1/projects', {
     'name': name,
     'address': address,
     'start_date': startDate,
+    'budget_amount': budgetAmount,
+    'currency': currency,
   });
 
   Future<Map<String, dynamic>> createProjectWithCover({
@@ -98,6 +115,8 @@ class ApiClient {
     required String startDate,
     required String filePath,
     required String fileName,
+    double budgetAmount = 0,
+    String currency = 'KGS',
   }) async {
     Future<http.Response> sendUpload() async {
       final request = http.MultipartRequest(
@@ -112,6 +131,8 @@ class ApiClient {
       request.fields['name'] = name;
       request.fields['address'] = address;
       request.fields['start_date'] = startDate;
+      request.fields['budget_amount'] = budgetAmount.toString();
+      request.fields['currency'] = currency;
       request.files.add(
         await http.MultipartFile.fromPath(
           'cover',
@@ -133,11 +154,15 @@ class ApiClient {
     String address, {
     String status = 'active',
     String? startDate,
+    double? budgetAmount,
+    String? currency,
   }) => patchJson('/api/v1/projects/$projectId', {
     'name': name,
     'address': address,
     'status': status,
     if (startDate != null) 'start_date': startDate,
+    if (budgetAmount != null) 'budget_amount': budgetAmount,
+    if (currency != null) 'currency': currency,
   });
 
   Future<void> deleteProject(String projectId) async {
@@ -155,6 +180,7 @@ class ApiClient {
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
+    String? receiptFileId,
   }) => postJson('/api/v1/cost-items', {
     'project_id': projectId,
     'title': title,
@@ -163,6 +189,7 @@ class ApiClient {
     'currency': currency,
     'vendor': vendor,
     'spent_at': spentAt,
+    if (receiptFileId != null) 'receipt_file_id': receiptFileId,
   });
 
   Future<Map<String, dynamic>> updateCostItem({
@@ -173,6 +200,7 @@ class ApiClient {
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
+    String? receiptFileId,
   }) => patchJson('/api/v1/cost-items/$costItemId', {
     'title': title,
     'amount': amount,
@@ -180,6 +208,7 @@ class ApiClient {
     'currency': currency,
     'vendor': vendor,
     'spent_at': spentAt,
+    if (receiptFileId != null) 'receipt_file_id': receiptFileId,
   });
 
   Future<void> deleteCostItem(String costItemId) async {
@@ -195,11 +224,13 @@ class ApiClient {
     required String summary,
     required int workersCount,
     String issues = '',
+    String? reportDate,
   }) => postJson('/api/v1/daily-reports', {
     'project_id': projectId,
     'summary': summary,
     'workers_count': workersCount,
     'issues': issues,
+    if (reportDate != null) 'report_date': reportDate,
   });
 
   Future<Map<String, dynamic>> updateDailyReport({
@@ -207,10 +238,12 @@ class ApiClient {
     required String summary,
     required int workersCount,
     String issues = '',
+    String? reportDate,
   }) => patchJson('/api/v1/daily-reports/$reportId', {
     'summary': summary,
     'workers_count': workersCount,
     'issues': issues,
+    if (reportDate != null) 'report_date': reportDate,
   });
 
   Future<void> deleteDailyReport(String reportId) async {
@@ -225,11 +258,13 @@ class ApiClient {
     required String title,
     String description = '',
     String status = 'open',
+    String? dueDate,
   }) => postJson('/api/v1/tasks', {
     'project_id': projectId,
     'title': title,
     'description': description,
     'status': status,
+    if (dueDate != null) 'due_date': dueDate,
   });
 
   Future<Map<String, dynamic>> updateTask({
@@ -237,10 +272,12 @@ class ApiClient {
     required String title,
     String description = '',
     String status = 'open',
+    String? dueDate,
   }) => patchJson('/api/v1/tasks/$taskId', {
     'title': title,
     'description': description,
     'status': status,
+    if (dueDate != null) 'due_date': dueDate,
   });
 
   Future<void> deleteTask(String taskId) async {

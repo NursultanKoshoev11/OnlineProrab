@@ -64,6 +64,21 @@ func TestRequestIDPreservesValidClientValue(t *testing.T) {
 	}
 }
 
+func TestRequestIDReplacesUnsafeClientValue(t *testing.T) {
+	handler := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("X-Request-ID", "request id with spaces")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("X-Request-ID"); got == "request id with spaces" || got == "" {
+		t.Fatalf("expected unsafe request id to be replaced, got %q", got)
+	}
+}
+
 func TestBodyLimitRejectsOversizedJSON(t *testing.T) {
 	handler := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := io.ReadAll(r.Body)

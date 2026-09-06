@@ -37,6 +37,10 @@ type updateProjectMemberRequest struct {
 }
 
 func ProjectMembers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
 	if appState.DB == nil || appState.DB.Pool == nil {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
@@ -87,6 +91,10 @@ func ProjectMembers(w http.ResponseWriter, r *http.Request) {
 func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
 	}
 	var req createProjectInviteRequest
@@ -168,6 +176,10 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 func AcceptProjectInvite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
 	}
 	var req acceptProjectInviteRequest

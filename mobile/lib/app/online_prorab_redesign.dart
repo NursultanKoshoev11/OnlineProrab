@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:online_prorab/app/project_team_screen.dart';
 import 'package:online_prorab/features/projects/project_data_repositories.dart';
 import 'package:online_prorab/features/projects/project_repository.dart';
 import 'package:online_prorab/features/projects/project_team_repository.dart';
 import 'package:online_prorab/services/api_client.dart';
-import 'package:online_prorab/services/api_config.dart';
 import 'package:online_prorab/services/auth_repository.dart';
 import 'package:online_prorab/services/session_store.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 part 'redesign/auth_login.dart';
@@ -17,6 +20,8 @@ part 'redesign/project_card.dart';
 part 'redesign/workspace.dart';
 part 'redesign/overview.dart';
 part 'redesign/expenses.dart';
+part 'redesign/reports.dart';
+part 'redesign/files.dart';
 part 'redesign/more_analytics.dart';
 part 'redesign/cost_project_form.dart';
 part 'redesign/expense_form.dart';
@@ -25,7 +30,7 @@ part 'redesign/helpers.dart';
 
 const _ink = Color(0xFF111815);
 const _muted = Color(0xFF6F7C75);
-const _surface = Color(0xFFF6F8F6);
+const _surface = Color(0xFFF4F7F4);
 const _brand = Color(0xFF087A3D);
 const _brandSoft = Color(0xFFE5F5EB);
 const _line = Color(0xFFE8ECE9);
@@ -48,6 +53,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final DailyReportRepository _dailyReportRepository;
   late final ProjectFileRepository _fileRepository;
   late final ProjectTeamRepository _teamRepository;
+  late final AuditLogRepository _auditLogRepository;
   late final stt.SpeechToText _speechToText;
 
   @override
@@ -63,11 +69,13 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     _dailyReportRepository = DailyReportRepository(apiClient: _apiClient);
     _fileRepository = ProjectFileRepository(apiClient: _apiClient);
     _teamRepository = ProjectTeamRepository(apiClient: _apiClient);
+    _auditLogRepository = AuditLogRepository(apiClient: _apiClient);
     _speechToText = stt.SpeechToText();
   }
 
   @override
   void dispose() {
+    _authRepository.dispose();
     _apiClient.close();
     _speechToText.cancel();
     super.dispose();
@@ -78,14 +86,20 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     final scheme = ColorScheme.fromSeed(
       seedColor: _brand,
       brightness: Brightness.light,
-      surface: Colors.white,
+      surface: _surface,
     );
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'OnlinePRorab',
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: scheme.copyWith(primary: _brand),
+        colorScheme: scheme.copyWith(
+          primary: _brand,
+          onPrimary: Colors.white,
+          surface: _surface,
+          onSurface: _ink,
+          outline: _line,
+        ),
         scaffoldBackgroundColor: _surface,
         fontFamily: 'Roboto',
         appBarTheme: const AppBarTheme(
@@ -95,6 +109,11 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           scrolledUnderElevation: 0,
           centerTitle: false,
           surfaceTintColor: Colors.transparent,
+          titleTextStyle: TextStyle(
+            color: _ink,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         cardTheme: CardThemeData(
           elevation: 0,
@@ -102,7 +121,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           color: Colors.white,
           surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             side: const BorderSide(color: _line),
           ),
         ),
@@ -112,42 +131,100 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           labelStyle: const TextStyle(color: _muted),
           hintStyle: const TextStyle(color: Color(0xFF9AA49F)),
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
+            horizontal: 14,
+            vertical: 14,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(13),
             borderSide: const BorderSide(color: _line),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(13),
             borderSide: const BorderSide(color: _line),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(13),
             borderSide: const BorderSide(color: _brand, width: 1.5),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide: const BorderSide(color: Colors.redAccent),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: _brand,
             foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(54),
+            minimumSize: const Size.fromHeight(50),
             textStyle: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(13),
             ),
           ),
         ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _brand,
+            minimumSize: const Size.fromHeight(50),
+            side: const BorderSide(color: _line),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(13),
+            ),
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: _brand,
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
+          backgroundColor: _brand,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _ink,
+          contentTextStyle: const TextStyle(color: Colors.white),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        chipTheme: ChipThemeData(
+          backgroundColor: Colors.white,
+          selectedColor: _brandSoft,
+          side: const BorderSide(color: _line),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(11),
+          ),
+          labelStyle: const TextStyle(
+            color: _ink,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         navigationBarTheme: NavigationBarThemeData(
-          height: 72,
+          height: 68,
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
           elevation: 0,
           indicatorColor: _brandSoft,
+          indicatorShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(13),
+          ),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           labelTextStyle: WidgetStateProperty.resolveWith(
             (states) => TextStyle(
               color: states.contains(WidgetState.selected) ? _brand : _muted,
@@ -158,6 +235,18 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
             ),
           ),
         ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          showDragHandle: true,
+        ),
       ),
       home: _AuthGate(
         apiClient: _apiClient,
@@ -167,6 +256,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         dailyReportRepository: _dailyReportRepository,
         fileRepository: _fileRepository,
         teamRepository: _teamRepository,
+        auditLogRepository: _auditLogRepository,
         speechToText: _speechToText,
       ),
     );
@@ -182,6 +272,7 @@ class _Dependencies {
     required this.dailyReportRepository,
     required this.fileRepository,
     required this.teamRepository,
+    required this.auditLogRepository,
     required this.speechToText,
   });
 
@@ -192,6 +283,7 @@ class _Dependencies {
   final DailyReportRepository dailyReportRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
+  final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
 }
 
@@ -204,6 +296,7 @@ class _AuthGate extends StatefulWidget {
     required this.dailyReportRepository,
     required this.fileRepository,
     required this.teamRepository,
+    required this.auditLogRepository,
     required this.speechToText,
   });
 
@@ -214,6 +307,7 @@ class _AuthGate extends StatefulWidget {
   final DailyReportRepository dailyReportRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
+  final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
 
   @override
@@ -221,7 +315,8 @@ class _AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<_AuthGate> {
-  late final Future<SessionData?> _sessionFuture;
+  late Future<SessionData?> _sessionFuture;
+  StreamSubscription<void>? _sessionExpiredSubscription;
 
   _Dependencies get _deps => _Dependencies(
     apiClient: widget.apiClient,
@@ -231,6 +326,7 @@ class _AuthGateState extends State<_AuthGate> {
     dailyReportRepository: widget.dailyReportRepository,
     fileRepository: widget.fileRepository,
     teamRepository: widget.teamRepository,
+    auditLogRepository: widget.auditLogRepository,
     speechToText: widget.speechToText,
   );
 
@@ -238,6 +334,19 @@ class _AuthGateState extends State<_AuthGate> {
   void initState() {
     super.initState();
     _sessionFuture = widget.authRepository.loadSession();
+    _sessionExpiredSubscription = widget.authRepository.sessionExpired.listen((
+      _,
+    ) {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() => _sessionFuture = Future<SessionData?>.value(null));
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionExpiredSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -251,7 +360,12 @@ class _AuthGateState extends State<_AuthGate> {
         if (snapshot.data case final session?) {
           return _ProjectsScreen(session: session, deps: _deps);
         }
-        return _LoginScreen(deps: _deps);
+        return _LoginScreen(
+          deps: _deps,
+          onAuthenticated: (session) => setState(
+            () => _sessionFuture = Future<SessionData?>.value(session),
+          ),
+        );
       },
     );
   }

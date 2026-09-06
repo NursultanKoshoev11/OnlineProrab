@@ -1,8 +1,18 @@
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE cost_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE cost_items ADD COLUMN IF NOT EXISTS receipt_file_id UUID;
 ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+UPDATE cost_items
+SET receipt_file_id = NULL
+WHERE receipt_file_id IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM files
+      WHERE files.id = cost_items.receipt_file_id
+  );
 
 DO $$
 BEGIN
@@ -26,11 +36,17 @@ BEGIN
         ALTER TABLE cost_items ADD CONSTRAINT cost_items_currency_check
             CHECK (currency IN ('KGS', 'USD', 'KZT')) NOT VALID;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cost_items_receipt_file_fk') THEN
+        ALTER TABLE cost_items ADD CONSTRAINT cost_items_receipt_file_fk
+            FOREIGN KEY (receipt_file_id) REFERENCES files(id) ON DELETE SET NULL NOT VALID;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'files_kind_check') THEN
         ALTER TABLE files ADD CONSTRAINT files_kind_check
-            CHECK (kind IN ('receipt', 'photo', 'document')) NOT VALID;
+            CHECK (kind IN ('receipt', 'photo', 'document', 'project_cover')) NOT VALID;
     END IF;
 END $$;
+
+ALTER TABLE cost_items VALIDATE CONSTRAINT cost_items_receipt_file_fk;
 
 DO $$
 BEGIN

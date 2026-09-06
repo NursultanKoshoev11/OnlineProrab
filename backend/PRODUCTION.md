@@ -17,15 +17,15 @@ The API refuses unsafe production configuration when `APP_ENV=production` and th
 
 ## Current production blockers
 
-1. Apply database migrations automatically or through a release script.
-2. Replace placeholder SMS auth with real code generation, expiry, verification, and rate limiting.
-3. Replace demo API responses with database-backed project, expense, report, file, and task handlers.
-4. Add authenticated project access checks for every project-owned resource.
-5. Add object storage for uploaded photos and receipts, or keep local uploads only for single-server beta testing.
-6. Add structured logs and external monitoring before public launch.
-7. Add backup and restore process for PostgreSQL and uploaded files.
+1. Configure durable object storage for uploaded photos, receipts and documents.
+2. Add structured logs, alerting and external uptime monitoring.
+3. Test PostgreSQL and upload-storage backup/restore in staging.
+4. Configure the real SMS provider and complete an auth-to-project smoke test.
+5. Run mobile release builds and test the full flow on real Android and iOS devices.
 
 ## Local smoke test
+
+Run this from the repository root; the root compose file starts the API and PostgreSQL services.
 
 ```bash
 docker compose up --build

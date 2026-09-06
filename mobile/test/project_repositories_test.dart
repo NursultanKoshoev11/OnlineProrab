@@ -22,6 +22,9 @@ void main() {
                 'address': 'Bishkek',
                 'status': 'active',
                 'start_date': '2026-09-01',
+                'budget_amount': 250000,
+                'currency': 'KGS',
+                'role': 'manager',
               },
               {'id': '', 'name': 'Invalid'},
             ]),
@@ -38,6 +41,9 @@ void main() {
       expect(projects.first.id, 'project-1');
       expect(projects.first.name, 'House');
       expect(projects.first.startDate, '2026-09-01');
+      expect(projects.first.budgetAmount, 250000);
+      expect(projects.first.currency, 'KGS');
+      expect(projects.first.role, 'manager');
     },
   );
 
@@ -57,6 +63,8 @@ void main() {
               'currency': 'KGS',
               'vendor': '',
               'spent_at': '2026-09-06',
+              'receipt_file_id': 'file-1',
+              'created_at': '2026-09-06T10:00:00Z',
             },
           ]),
           200,
@@ -72,6 +80,7 @@ void main() {
     expect(items.first.amount, 1200);
     expect(items.first.currency, 'KGS');
     expect(items.first.spentAt, '2026-09-06');
+    expect(items.first.receiptFileId, 'file-1');
   });
 
   test('DailyReportRepository handles numeric workers count safely', () async {
@@ -85,6 +94,8 @@ void main() {
               'summary': 'Work done',
               'workers_count': 4.0,
               'issues': '',
+              'report_date': '2026-09-05',
+              'created_at': '2026-09-05T18:00:00Z',
             },
           ]),
           200,
@@ -98,6 +109,8 @@ void main() {
 
     expect(reports.length, 1);
     expect(reports.first.workersCount, 4);
+    expect(reports.first.reportDate, '2026-09-05');
+    expect(reports.first.createdAt, '2026-09-05T18:00:00Z');
   });
 
   test('TaskRepository markDone sends done status', () async {
@@ -107,6 +120,7 @@ void main() {
       title: 'Buy cement',
       description: 'Call supplier',
       status: 'open',
+      dueDate: '2026-09-10',
     );
     final apiClient = ApiClient(
       httpClient: MockClient((request) async {
@@ -121,6 +135,7 @@ void main() {
             'title': 'Buy cement',
             'description': 'Call supplier',
             'status': 'done',
+            'due_date': '2026-09-10',
           }),
           200,
         );
@@ -130,5 +145,66 @@ void main() {
     final updated = await TaskRepository(apiClient: apiClient).markDone(task);
 
     expect(updated.status, 'done');
+    expect(updated.dueDate, '2026-09-10');
+  });
+
+  test('TaskRepository create sends the selected status', () async {
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/tasks');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['status'], 'cancelled');
+        return http.Response(
+          jsonEncode({
+            'id': 'task-2',
+            'project_id': 'project-1',
+            'title': 'Stop delivery',
+            'description': '',
+            'status': 'cancelled',
+          }),
+          201,
+        );
+      }),
+    );
+
+    final created = await TaskRepository(apiClient: apiClient).create(
+      projectId: 'project-1',
+      title: 'Stop delivery',
+      status: 'cancelled',
+    );
+
+    expect(created.status, 'cancelled');
+  });
+
+  test('AuditLogRepository maps wrapped audit log responses', () async {
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/v1/audit-logs');
+        expect(request.url.queryParameters['project_id'], 'project-1');
+        return http.Response(
+          jsonEncode({
+            'audit_logs': [
+              {
+                'id': 'log-1',
+                'action': 'create',
+                'entity_type': 'task',
+                'entity_id': 'task-1',
+                'created_at': '2026-09-06T10:00:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }),
+    );
+
+    final logs = await AuditLogRepository(apiClient: apiClient).list(
+      'project-1',
+    );
+
+    expect(logs.length, 1);
+    expect(logs.first.action, 'create');
+    expect(logs.first.entityType, 'task');
   });
 }

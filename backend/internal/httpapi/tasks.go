@@ -106,7 +106,10 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	normalizeTaskRequest(&req)
+	if err := normalizeTaskRequest(&req); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if req.ProjectID == "" || req.Title == "" {
 		Error(w, http.StatusBadRequest, "project_id and title are required")
 		return
@@ -150,7 +153,10 @@ func updateTask(w http.ResponseWriter, r *http.Request, taskID string) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	normalizeTaskRequest(&req)
+	if err := normalizeTaskRequest(&req); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if req.Title == "" {
 		Error(w, http.StatusBadRequest, "title is required")
 		return
@@ -234,7 +240,7 @@ func isValidTaskStatus(status string) bool {
 	return status == "open" || status == "in_progress" || status == "done" || status == "cancelled"
 }
 
-func normalizeTaskRequest(req *createTaskRequest) {
+func normalizeTaskRequest(req *createTaskRequest) error {
 	req.ProjectID = strings.TrimSpace(req.ProjectID)
 	req.Title = strings.TrimSpace(req.Title)
 	req.Description = strings.TrimSpace(req.Description)
@@ -243,4 +249,10 @@ func normalizeTaskRequest(req *createTaskRequest) {
 	if req.Status == "" {
 		req.Status = "open"
 	}
+	date, err := normalizeISODate(req.DueDate, false, "due_date")
+	if err != nil {
+		return err
+	}
+	req.DueDate = date
+	return nil
 }

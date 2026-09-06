@@ -1,6 +1,10 @@
 package httpapi
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestRoleAllowsReadForAllProjectRoles(t *testing.T) {
 	roles := []string{ProjectRoleOwner, ProjectRoleManager, ProjectRoleWorker, ProjectRoleViewer}
@@ -41,5 +45,25 @@ func TestRoleAllowsManagementOnlyForOwnerAndManager(t *testing.T) {
 func TestUnknownRoleHasNoPermissions(t *testing.T) {
 	if roleAllows("unknown", PermissionRead) || roleAllows("unknown", PermissionContribute) || roleAllows("unknown", PermissionManage) {
 		t.Fatal("unknown role must not have permissions")
+	}
+}
+
+func TestProjectMutationRBACRejectsUnsupportedMethods(t *testing.T) {
+	called := false
+	handler := withProjectMutationRBAC(
+		func(http.ResponseWriter, *http.Request) { called = true },
+		"/api/v1/items/",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/items/item-1", nil)
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", recorder.Code)
+	}
+	if called {
+		t.Fatal("unsupported method must not reach the wrapped handler")
 	}
 }

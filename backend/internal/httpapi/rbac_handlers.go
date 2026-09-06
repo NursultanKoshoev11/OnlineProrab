@@ -18,6 +18,10 @@ func withProjectMutationRBAC(next http.HandlerFunc, itemPathPrefix string, resol
 			next(w, r)
 			return
 		}
+		if r.Method != http.MethodPost && r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+			Error(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
@@ -46,8 +50,8 @@ func withProjectMutationRBAC(next http.HandlerFunc, itemPathPrefix string, resol
 
 func mutationProjectID(r *http.Request, itemPathPrefix string, resolver entityProjectResolver) (string, bool) {
 	if r.Method == http.MethodPost {
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-		if err != nil {
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxJSONBodyBytes+1))
+		if err != nil || int64(len(body)) > maxJSONBodyBytes {
 			return "", false
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))

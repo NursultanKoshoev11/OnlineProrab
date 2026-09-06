@@ -7,6 +7,11 @@ class _MoreTab extends StatelessWidget {
     required this.files,
     required this.members,
     required this.costs,
+    required this.auditLogs,
+    required this.onOpenTeam,
+    required this.onAddFile,
+    required this.onOpenFile,
+    required this.onDeleteFile,
   });
 
   final RemoteProject project;
@@ -14,27 +19,28 @@ class _MoreTab extends StatelessWidget {
   final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
   final List<RemoteCostItem> costs;
+  final List<RemoteAuditLog> auditLogs;
+  final VoidCallback onOpenTeam;
+  final VoidCallback? onAddFile;
+  final ValueChanged<RemoteProjectFile> onOpenFile;
+  final ValueChanged<RemoteProjectFile>? onDeleteFile;
 
   @override
   Widget build(BuildContext context) {
+    final visibleAuditLogs = auditLogs
+        .where((log) => log.entityType.toLowerCase() != 'task')
+        .toList();
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
       children: [
-        const Text(
-          'Ещё',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            color: _ink,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(project.name, style: const TextStyle(color: _muted)),
-        const SizedBox(height: 18),
+        _PageHeader(title: 'Разделы', subtitle: project.name),
+        const SizedBox(height: 16),
         _SectionCard(
           icon: Icons.groups_outlined,
           title: 'Команда',
           subtitle: '${members.length} участников',
+          onTap: onOpenTeam,
           children: members.isEmpty
               ? const [
                   Text(
@@ -70,8 +76,12 @@ class _MoreTab extends StatelessWidget {
                         title: report.summary.isEmpty
                             ? 'Отчёт'
                             : report.summary,
-                        subtitle:
-                            '${report.workersCount} работников${report.issues.isEmpty ? '' : ' • есть замечания'}',
+                        subtitle: [
+                          if (report.reportDate.isNotEmpty)
+                            _displayIsoDate(report.reportDate),
+                          '${report.workersCount} работников',
+                          if (report.issues.isNotEmpty) 'есть замечания',
+                        ].join(' • '),
                       ),
                     )
                     .toList(),
@@ -81,6 +91,13 @@ class _MoreTab extends StatelessWidget {
           icon: Icons.folder_outlined,
           title: 'Фото и документы',
           subtitle: '${files.length} файлов',
+          action: onAddFile == null
+              ? null
+              : TextButton.icon(
+                  onPressed: onAddFile,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Добавить'),
+                ),
           children: files.isEmpty
               ? const [
                   Text(
@@ -91,21 +108,110 @@ class _MoreTab extends StatelessWidget {
               : files
                     .take(5)
                     .map(
-                      (file) => _InfoRow(
-                        icon: file.contentType.startsWith('image/')
-                            ? Icons.image_outlined
-                            : Icons.insert_drive_file_outlined,
-                        title: file.originalName.isEmpty
-                            ? 'Файл'
-                            : file.originalName,
-                        subtitle: _fileSize(file.sizeBytes),
+                      (file) => _FileRow(
+                        file: file,
+                        onOpen: () => onOpenFile(file),
+                        onDelete: onDeleteFile == null
+                            ? null
+                            : () => onDeleteFile!(file),
                       ),
                     )
                     .toList(),
         ),
         const SizedBox(height: 12),
         _ExpenseSummaryCard(costs: costs),
+        const SizedBox(height: 12),
+        _SectionCard(
+          icon: Icons.history_rounded,
+          title: 'Журнал действий',
+          subtitle: '${visibleAuditLogs.length} событий',
+          children: visibleAuditLogs.isEmpty
+              ? const [
+                  Text(
+                    'Действий пока нет.',
+                    style: TextStyle(color: _muted),
+                  ),
+                ]
+              : visibleAuditLogs
+                    .take(6)
+                    .map(
+                      (log) => _InfoRow(
+                        icon: Icons.bolt_outlined,
+                        title: _auditLogTitle(log),
+                        subtitle: _displayDateTime(log.createdAt),
+                      ),
+                    )
+                    .toList(),
+        ),
       ],
+    );
+  }
+}
+
+class _FileRow extends StatelessWidget {
+  const _FileRow({
+    required this.file,
+    required this.onOpen,
+    this.onDelete,
+  });
+
+  final RemoteProjectFile file;
+  final VoidCallback onOpen;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: onOpen,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Icon(
+                file.contentType.startsWith('image/')
+                    ? Icons.image_outlined
+                    : Icons.insert_drive_file_outlined,
+                size: 21,
+                color: _muted,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: InkWell(
+              onTap: onOpen,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      file.originalName.isEmpty ? 'Файл' : file.originalName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      _fileSize(file.sizeBytes),
+                      style: const TextStyle(color: _muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (onDelete != null)
+            IconButton(
+              tooltip: 'Удалить файл',
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded, color: _muted),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -116,16 +222,14 @@ class _ExpenseSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = costs.fold<double>(0, (sum, item) => sum + item.amount);
     final now = DateTime.now();
-    final thisMonth = costs.fold<double>(0, (sum, item) {
+    final thisMonthItems = costs.where((item) {
       final date = DateTime.tryParse(item.spentAt);
       if (date == null || date.year != now.year || date.month != now.month) {
-        return sum;
+        return false;
       }
-      return sum + item.amount;
+      return true;
     });
-    final currency = costs.isEmpty ? 'KGS' : costs.first.currency;
 
     return Card(
       child: Padding(
@@ -145,7 +249,9 @@ class _ExpenseSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              _money(total, currency),
+              _moneyTotals(costs),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
             ),
             const Text('Всего потрачено', style: TextStyle(color: _muted)),
@@ -162,7 +268,7 @@ class _ExpenseSummaryCard extends StatelessWidget {
                 Expanded(
                   child: _SummaryValue(
                     label: 'За этот месяц',
-                    value: _money(thisMonth, currency),
+                    value: _moneyTotals(thisMonthItems),
                   ),
                 ),
               ],

@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const maxWorkersCount = 2147483647
+
 type DailyReportDTO struct {
 	ID           string `json:"id"`
 	ProjectID    string `json:"project_id"`
@@ -132,8 +134,11 @@ func createDailyReport(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	normalizeDailyReportRequest(&req)
-	if req.ProjectID == "" || req.Summary == "" || req.WorkersCount < 0 {
+	if err := normalizeDailyReportRequest(&req); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.ProjectID == "" || req.Summary == "" || !isValidWorkersCount(req.WorkersCount) {
 		Error(w, http.StatusBadRequest, "project_id, summary and non-negative workers_count are required")
 		return
 	}
@@ -172,8 +177,11 @@ func updateDailyReport(w http.ResponseWriter, r *http.Request, reportID string) 
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	normalizeDailyReportRequest(&req)
-	if req.Summary == "" || req.WorkersCount < 0 {
+	if err := normalizeDailyReportUpdateRequest(&req); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Summary == "" || !isValidWorkersCount(req.WorkersCount) {
 		Error(w, http.StatusBadRequest, "summary and non-negative workers_count are required")
 		return
 	}
@@ -189,7 +197,7 @@ func updateDailyReport(w http.ResponseWriter, r *http.Request, reportID string) 
 	var item DailyReportDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
 		UPDATE daily_reports
-		SET report_date = $2, summary = $3, workers_count = $4,
+		SET report_date = COALESCE(NULLIF($2, '')::date, report_date), summary = $3, workers_count = $4,
 		    issues = NULLIF($5, ''), updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id::text, project_id::text, report_date::text, summary, workers_count,
@@ -206,6 +214,10 @@ func updateDailyReport(w http.ResponseWriter, r *http.Request, reportID string) 
 	`, userID, projectID, reportID)
 
 	JSON(w, http.StatusOK, item)
+}
+
+func isValidWorkersCount(value int) bool {
+	return value >= 0 && value <= maxWorkersCount
 }
 
 func deleteDailyReport(w http.ResponseWriter, r *http.Request, reportID string) {
@@ -248,12 +260,23 @@ func dailyReportProjectID(ctx context.Context, reportID string) (string, bool) {
 	return projectID, err == nil
 }
 
-func normalizeDailyReportRequest(req *createDailyReportRequest) {
+func normalizeDailyReportRequest(req *createDailyReportRequest) error {
+	return normalizeDailyReportRequestWithDateFallback(req, true)
+}
+
+func normalizeDailyReportUpdateRequest(req *createDailyReportRequest) error {
+	return normalizeDailyReportRequestWithDateFallback(req, false)
+}
+
+func normalizeDailyReportRequestWithDateFallback(req *createDailyReportRequest, fallbackToday bool) error {
 	req.ProjectID = strings.TrimSpace(req.ProjectID)
 	req.ReportDate = strings.TrimSpace(req.ReportDate)
 	req.Summary = strings.TrimSpace(req.Summary)
 	req.Issues = strings.TrimSpace(req.Issues)
-	if req.ReportDate == "" {
-		req.ReportDate = time.Now().UTC().Format("2006-01-02")
+	reportDate, err := normalizeISODate(req.ReportDate, fallbackToday, "report_date")
+	if err != nil {
+		return err
 	}
+	req.ReportDate = reportDate
+	return nil
 }

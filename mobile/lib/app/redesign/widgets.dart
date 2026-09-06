@@ -1,8 +1,9 @@
 part of '../online_prorab_redesign.dart';
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({required this.size});
+  const _BrandMark({required this.size, this.color = _brand});
   final double size;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -10,7 +11,7 @@ class _BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: _brand,
+        color: color,
         borderRadius: BorderRadius.circular(size * .24),
       ),
       child: Icon(
@@ -28,7 +29,7 @@ class _BrandWordmark extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Row(
       children: [
-        _BrandMark(size: 36),
+        _BrandMark(size: 36, color: _ink),
         SizedBox(width: 9),
         Text.rich(
           TextSpan(
@@ -39,12 +40,59 @@ class _BrandWordmark extends StatelessWidget {
               ),
               TextSpan(
                 text: 'PRorab',
-                style: TextStyle(color: _brand),
+                style: TextStyle(color: _ink),
               ),
             ],
           ),
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
+      ],
+    );
+  }
+}
+
+class _PageHeader extends StatelessWidget {
+  const _PageHeader({required this.title, this.subtitle, this.action});
+
+  final String title;
+  final String? subtitle;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 30,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.6,
+                  color: _ink,
+                ),
+              ),
+              if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _muted, fontSize: 13),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (action != null) ...[
+          const SizedBox(width: 12),
+          action!,
+        ],
       ],
     );
   }
@@ -143,11 +191,10 @@ class _QuickAction extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 5),
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 5),
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: _line),
-          borderRadius: BorderRadius.circular(16),
+          color: _brandSoft,
+          borderRadius: BorderRadius.circular(13),
         ),
         child: Column(
           children: [
@@ -171,55 +218,64 @@ class _SectionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.children,
+    this.onTap,
+    this.action,
   });
   final IconData icon;
   final String title;
   final String subtitle;
   final List<Widget> children;
+  final VoidCallback? onTap;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: _brandSoft,
-                    borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _brandSoft,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(icon, color: _brand),
                   ),
-                  child: Icon(icon, color: _brand),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(color: _muted, fontSize: 13),
-                      ),
-                    ],
+                        Text(
+                          subtitle,
+                          style: const TextStyle(color: _muted, fontSize: 13),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            ...children,
-          ],
+                  if (action != null) action!,
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...children,
+            ],
+          ),
         ),
       ),
     );
@@ -305,15 +361,15 @@ class _EmptyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 34),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
         child: Column(
           children: [
-            Icon(icon, size: 48, color: _brand),
+            Icon(icon, size: 42, color: _brand),
             const SizedBox(height: 12),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             Text(
@@ -400,7 +456,7 @@ class _CoverPlaceholder extends StatelessWidget {
   }
 }
 
-class _ProjectCoverImage extends StatelessWidget {
+class _ProjectCoverImage extends StatefulWidget {
   const _ProjectCoverImage({
     required this.apiClient,
     required this.fileId,
@@ -416,45 +472,87 @@ class _ProjectCoverImage extends StatelessWidget {
   final double borderRadius;
 
   @override
+  State<_ProjectCoverImage> createState() => _ProjectCoverImageState();
+}
+
+class _ProjectCoverImageState extends State<_ProjectCoverImage> {
+  late Future<DownloadedProjectFile>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProjectCoverImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.fileId != widget.fileId ||
+        oldWidget.apiClient != widget.apiClient) {
+      _future = _load();
+    }
+  }
+
+  Future<DownloadedProjectFile>? _load() {
+    if (widget.fileId.isEmpty) return null;
+    return _download();
+  }
+
+  Future<DownloadedProjectFile> _download() async {
+    final service = ProjectFileDownloadService(apiClient: widget.apiClient);
+    try {
+      return await service.download(
+        fileId: widget.fileId,
+        fallbackFileName: 'project-cover.jpg',
+        fallbackContentType: 'image/jpeg',
+      );
+    } finally {
+      service.close();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (fileId.isEmpty) {
+    if (widget.fileId.isEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(widget.borderRadius),
         child: SizedBox(
-          width: width,
-          height: height,
+          width: widget.width,
+          height: widget.height,
           child: const _CoverPlaceholder(),
         ),
       );
     }
 
-    final token = apiClient.accessToken;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
+      borderRadius: BorderRadius.circular(widget.borderRadius),
       child: SizedBox(
-        width: width,
-        height: height,
-        child: Image.network(
-          ApiConfig.endpoint('/api/v1/files/download', {
-            'file_id': fileId,
-          }).toString(),
-          headers: {
-            if (token != null && token.isNotEmpty)
-              'Authorization': 'Bearer $token',
-          },
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.medium,
-          errorBuilder: (_, _, _) => const _CoverPlaceholder(),
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              color: _brandSoft,
-              alignment: Alignment.center,
-              child: const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: _brand),
-              ),
+        width: widget.width,
+        height: widget.height,
+        child: FutureBuilder<DownloadedProjectFile>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return Container(
+                color: _brandSoft,
+                alignment: Alignment.center,
+                child: const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _brand,
+                  ),
+                ),
+              );
+            }
+            final file = snapshot.data;
+            if (file == null || !file.isImage) return const _CoverPlaceholder();
+            return Image.memory(
+              file.bytes,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, _, _) => const _CoverPlaceholder(),
             );
           },
         ),

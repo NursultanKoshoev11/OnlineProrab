@@ -23,7 +23,10 @@ Run this checklist after deploying backend to staging and before any production 
 - Create project returns a project id.
 - List projects returns the created project.
 - Update project changes name, address or status.
-- Delete project removes it from the list.
+- Archive project removes it from the active list.
+- `include_archived=true` returns archived projects.
+- Restore project returns it to the active list.
+- A viewer can read the project but cannot mutate it.
 
 ## 4. Cost items
 
@@ -43,14 +46,20 @@ Run this checklist after deploying backend to staging and before any production 
 
 - Create task with title and description.
 - List tasks returns only tasks for the project.
-- Mark task as done.
+- Move a task to in-progress, done or cancelled.
+- Cancelled tasks remain visible in their own section.
 - Delete task removes it from the list.
 
 ## 7. Files and audit logs
 
-- Create file metadata for a receipt or project document.
+- Upload a real receipt, photo or document through the multipart upload endpoint.
+- Protected download returns the file only for a project member.
+- A receipt can be attached to a cost item and remains linked after refresh.
+- Deleting an attached receipt clears the link from the cost item.
 - List files returns only files for the project.
 - Audit log records project and related changes.
+
+Direct file metadata creation is disabled in production.
 
 ## 8. Negative checks
 

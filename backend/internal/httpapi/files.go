@@ -16,7 +16,7 @@ type FileDTO struct {
 	ProjectID    string `json:"project_id,omitempty"`
 	Kind         string `json:"kind"`
 	OriginalName string `json:"original_name"`
-	StoragePath  string `json:"storage_path"`
+	StoragePath  string `json:"-"`
 	ContentType  string `json:"content_type"`
 	SizeBytes    int64  `json:"size_bytes"`
 	CreatedAt    string `json:"created_at,omitempty"`
@@ -136,6 +136,10 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "unsupported file type")
 		return
 	}
+	if req.Kind == "project_cover" && !isAllowedProjectCoverType(req.ContentType) {
+		Error(w, http.StatusBadRequest, "project cover must be a JPEG, PNG or WebP image")
+		return
+	}
 	if appState.MaxUploadBytes > 0 && req.SizeBytes > appState.MaxUploadBytes {
 		Error(w, http.StatusBadRequest, "file is too large")
 		return
@@ -143,6 +147,10 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
+	if req.Kind == "project_cover" && !canManageProject(ctx, userID, req.ProjectID) {
+		Error(w, http.StatusForbidden, "project management permission required")
+		return
+	}
 	if !canContributeToProject(ctx, userID, req.ProjectID) {
 		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
@@ -164,6 +172,9 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
 		VALUES ($1, $2, 'upload', 'file', $3)
 	`, userID, req.ProjectID, item.ID)
+	if req.Kind == "project_cover" {
+		archivePreviousProjectCovers(ctx, req.ProjectID, item.ID)
+	}
 
 	JSON(w, http.StatusCreated, item)
 }
@@ -210,6 +221,14 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 		return
 	}
 	if _, err := tx.Exec(ctx, `
+		UPDATE cost_items
+		SET receipt_file_id = NULL, updated_at = now()
+		WHERE receipt_file_id = $1 AND deleted_at IS NULL
+	`, fileID); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to detach file from cost items")
+		return
+	}
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
 		VALUES ($1, $2, 'delete', 'file', $3, jsonb_build_object('storage_path', $4))
 	`, userID, projectID, fileID, storagePath); err != nil {
@@ -227,6 +246,38 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+func archivePreviousProjectCovers(ctx context.Context, projectID, currentFileID string) {
+	rows, err := appState.DB.Pool.Query(ctx, `
+		UPDATE files
+		SET deleted_at = now()
+		WHERE project_id = $1
+		  AND kind = 'project_cover'
+		  AND deleted_at IS NULL
+		  AND id <> $2
+		  AND created_at < (SELECT created_at FROM files WHERE id = $2)
+		RETURNING storage_path
+	`, projectID, currentFileID)
+	if err != nil {
+		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var storagePath string
+		if err := rows.Scan(&storagePath); err != nil {
+			log.Printf("request_id=%s failed_to_read_archived_cover project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+			continue
+		}
+		if err := removeStoredFile(storagePath); err != nil && !os.IsNotExist(err) {
+			log.Printf("request_id=%s failed_to_remove_previous_cover=%q error=%v", requestIDFromContext(ctx), storagePath, err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+	}
+}
+
 func removeStoredFile(storagePath string) error {
 	absolutePath, ok := resolveStoredFilePath(appState.UploadDir, storagePath)
 	if !ok {
@@ -237,7 +288,8 @@ func removeStoredFile(storagePath string) error {
 
 func resolveStoredFilePath(root, storagePath string) (string, bool) {
 	root = filepath.Clean(strings.TrimSpace(root))
-	storagePath = filepath.ToSlash(strings.TrimSpace(storagePath))
+	storagePath = strings.ReplaceAll(strings.TrimSpace(storagePath), "\\", "/")
+	storagePath = filepath.ToSlash(storagePath)
 	if root == "" || root == "." || !isSafeStoragePath(storagePath) {
 		return "", false
 	}
@@ -275,16 +327,33 @@ func isValidFileKind(kind string) bool {
 }
 
 func isSafeStoragePath(value string) bool {
-	if value == "" || strings.HasPrefix(value, "/") || filepath.IsAbs(value) {
+	value = strings.ReplaceAll(strings.TrimSpace(value), "\\", "/")
+	if value == "" || strings.HasPrefix(value, "/") || filepath.IsAbs(filepath.FromSlash(value)) {
 		return false
 	}
-	cleaned := filepath.ToSlash(filepath.Clean(value))
+	if len(value) >= 2 && isASCIIAlpha(value[0]) && value[1] == ':' {
+		return false
+	}
+	cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(value)))
 	return cleaned != "." && cleaned != ".." && !strings.HasPrefix(cleaned, "../") && !strings.Contains(cleaned, "/../")
+}
+
+func isASCIIAlpha(value byte) bool {
+	return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
 }
 
 func isAllowedFileType(contentType string) bool {
 	switch contentType {
 	case "image/jpeg", "image/png", "image/webp", "application/pdf":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAllowedProjectCoverType(contentType string) bool {
+	switch contentType {
+	case "image/jpeg", "image/png", "image/webp":
 		return true
 	default:
 		return false

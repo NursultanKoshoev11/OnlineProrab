@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -40,9 +41,15 @@ class ProjectFileDownloadService {
   }) async {
     var response = await _request(fileId);
     if (response.statusCode == 401) {
-      // Trigger the ApiClient refresh flow, then retry with the rotated token.
-      await _apiClient.listProjects();
+      final refreshed = await _apiClient.refreshAccessToken();
+      if (!refreshed) {
+        throw const ApiException(401, 'Session expired. Please sign in again.');
+      }
       response = await _request(fileId);
+      if (response.statusCode == 401) {
+        await _apiClient.expireSession();
+        throw const ApiException(401, 'Session expired. Please sign in again.');
+      }
     }
 
     if (response.statusCode >= 400) {
@@ -85,19 +92,48 @@ class ProjectFileDownloadService {
   String _fileName(http.Response response, String fallback) {
     final disposition = response.headers['content-disposition'] ?? '';
     final utf8Match = RegExp(
-      "filename\\*=UTF-8''([^;]+)",
+      "filename\\*=utf-8''([^;]+)",
+      caseSensitive: false,
     ).firstMatch(disposition);
     if (utf8Match != null) {
-      return Uri.decodeComponent(utf8Match.group(1)!);
+      try {
+        return _safeFileName(Uri.decodeComponent(utf8Match.group(1)!));
+      } on FormatException {
+        return _safeFileName(fallback);
+      }
     }
     final quotedMatch = RegExp('filename="([^"]+)"').firstMatch(disposition);
-    if (quotedMatch != null) return quotedMatch.group(1)!;
-    return fallback;
+    if (quotedMatch != null) return _safeFileName(quotedMatch.group(1)!);
+    final unquotedMatch = RegExp(
+      r'filename=([^;]+)',
+      caseSensitive: false,
+    ).firstMatch(disposition);
+    if (unquotedMatch != null) return _safeFileName(unquotedMatch.group(1)!);
+    return _safeFileName(fallback);
+  }
+
+  String _safeFileName(String value) {
+    final baseName = value.replaceAll('\\', '/').split('/').last.trim();
+    final cleaned = baseName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    return cleaned.isEmpty || cleaned == '.' || cleaned == '..'
+        ? 'download'
+        : cleaned;
   }
 
   String _readErrorMessage(http.Response response) {
     final text = response.body.trim();
     if (text.isEmpty) return 'File download failed';
+    try {
+      final data = jsonDecode(text);
+      if (data is Map<String, dynamic>) {
+        final message = data['error']?.toString().trim();
+        if (message != null && message.isNotEmpty && message.length <= 300) {
+          return message;
+        }
+      }
+    } on FormatException {
+      // Fall back to the raw response below.
+    }
     if (text.length > 300) return 'File download failed';
     return text;
   }

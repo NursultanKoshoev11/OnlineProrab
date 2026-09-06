@@ -9,25 +9,27 @@ import (
 )
 
 type CostItemDTO struct {
-	ID        string  `json:"id"`
-	ProjectID string  `json:"project_id"`
-	Title     string  `json:"title"`
-	Category  string  `json:"category"`
-	Amount    float64 `json:"amount"`
-	Currency  string  `json:"currency"`
-	Vendor    string  `json:"vendor,omitempty"`
-	SpentAt   string  `json:"spent_at"`
-	CreatedAt string  `json:"created_at,omitempty"`
+	ID            string  `json:"id"`
+	ProjectID     string  `json:"project_id"`
+	Title         string  `json:"title"`
+	Category      string  `json:"category"`
+	Amount        float64 `json:"amount"`
+	Currency      string  `json:"currency"`
+	Vendor        string  `json:"vendor,omitempty"`
+	ReceiptFileID string `json:"receipt_file_id,omitempty"`
+	SpentAt       string  `json:"spent_at"`
+	CreatedAt     string  `json:"created_at,omitempty"`
 }
 
 type createCostItemRequest struct {
-	ProjectID string  `json:"project_id"`
-	Title     string  `json:"title"`
-	Category  string  `json:"category"`
-	Amount    float64 `json:"amount"`
-	Currency  string  `json:"currency"`
-	Vendor    string  `json:"vendor"`
-	SpentAt   string  `json:"spent_at"`
+	ProjectID     string  `json:"project_id"`
+	Title         string  `json:"title"`
+	Category      string  `json:"category"`
+	Amount        float64 `json:"amount"`
+	Currency      string  `json:"currency"`
+	Vendor        string  `json:"vendor"`
+	ReceiptFileID string `json:"receipt_file_id"`
+	SpentAt       string  `json:"spent_at"`
 }
 
 func CostItems(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +80,8 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := appState.DB.Pool.Query(ctx, `
 		SELECT id::text, project_id::text, title, category, amount::float8, currency,
-		       COALESCE(vendor, ''), spent_at::text, created_at::text
+		       COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
+		       spent_at::text, created_at::text
 		FROM cost_items
 		WHERE project_id = $1 AND deleted_at IS NULL
 		ORDER BY spent_at DESC, created_at DESC
@@ -92,7 +95,7 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 	items := []CostItemDTO{}
 	for rows.Next() {
 		var item CostItemDTO
-		if err := rows.Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to scan cost item")
 			return
 		}
@@ -118,10 +121,11 @@ func getCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
 		SELECT id::text, project_id::text, title, category, amount::float8, currency,
-		       COALESCE(vendor, ''), spent_at::text, created_at::text
+		       COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
+		       spent_at::text, created_at::text
 		FROM cost_items
 		WHERE id = $1 AND deleted_at IS NULL
-	`, costItemID).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
+	`, costItemID).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "cost item not found")
 		return
@@ -136,7 +140,10 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	normalizeCostItemRequest(&req)
+	if err := normalizeCostItemRequest(&req); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if req.ProjectID == "" || req.Title == "" || req.Amount < 0 {
 		Error(w, http.StatusBadRequest, "project_id, title and non-negative amount are required")
 		return
@@ -148,14 +155,19 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
 	}
+	if req.ReceiptFileID != "" && !receiptBelongsToProject(ctx, req.ReceiptFileID, req.ProjectID) {
+		Error(w, http.StatusBadRequest, "receipt_file_id must reference a receipt from this project")
+		return
+	}
 
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
-		INSERT INTO cost_items (project_id, created_by, title, category, amount, currency, vendor, spent_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8)
+		INSERT INTO cost_items (project_id, created_by, title, category, amount, currency, vendor, receipt_file_id, spent_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, '')::uuid, $9)
 		RETURNING id::text, project_id::text, title, category, amount::float8, currency,
-		          COALESCE(vendor, ''), spent_at::text, created_at::text
-	`, req.ProjectID, userID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
+		          COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
+		          spent_at::text, created_at::text
+	`, req.ProjectID, userID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.ReceiptFileID, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create cost item")
 		return
@@ -176,7 +188,10 @@ func updateCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 		Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	normalizeCostItemRequest(&req)
+	if err := normalizeCostItemUpdateRequest(&req); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if req.Title == "" || req.Amount < 0 {
 		Error(w, http.StatusBadRequest, "title and non-negative amount are required")
 		return
@@ -189,16 +204,23 @@ func updateCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 		Error(w, http.StatusForbidden, "project contribution permission required")
 		return
 	}
+	if req.ReceiptFileID != "" && !receiptBelongsToProject(ctx, req.ReceiptFileID, projectID) {
+		Error(w, http.StatusBadRequest, "receipt_file_id must reference a receipt from this project")
+		return
+	}
 
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
 		UPDATE cost_items
 		SET title = $2, category = $3, amount = $4, currency = $5,
-		    vendor = NULLIF($6, ''), spent_at = $7, updated_at = now()
+		    vendor = NULLIF($6, ''),
+		    receipt_file_id = COALESCE(NULLIF($7, '')::uuid, receipt_file_id),
+		    spent_at = COALESCE(NULLIF($8, '')::date, spent_at), updated_at = now()
 		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id::text, project_id::text, title, category, amount::float8, currency,
-		          COALESCE(vendor, ''), spent_at::text, created_at::text
-	`, costItemID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.SpentAt, &item.CreatedAt)
+		          COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
+		          spent_at::text, created_at::text
+	`, costItemID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.ReceiptFileID, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "cost item not found")
 		return
@@ -256,12 +278,21 @@ func costItemProjectID(ctx context.Context, costItemID string) (string, bool) {
 	return projectID, err == nil
 }
 
-func normalizeCostItemRequest(req *createCostItemRequest) {
+func normalizeCostItemRequest(req *createCostItemRequest) error {
+	return normalizeCostItemRequestWithDateFallback(req, true)
+}
+
+func normalizeCostItemUpdateRequest(req *createCostItemRequest) error {
+	return normalizeCostItemRequestWithDateFallback(req, false)
+}
+
+func normalizeCostItemRequestWithDateFallback(req *createCostItemRequest, fallbackToday bool) error {
 	req.ProjectID = strings.TrimSpace(req.ProjectID)
 	req.Title = strings.TrimSpace(req.Title)
 	req.Category = strings.TrimSpace(req.Category)
 	req.Currency = strings.ToUpper(strings.TrimSpace(req.Currency))
 	req.Vendor = strings.TrimSpace(req.Vendor)
+	req.ReceiptFileID = strings.TrimSpace(req.ReceiptFileID)
 	req.SpentAt = strings.TrimSpace(req.SpentAt)
 	if req.Category == "" {
 		req.Category = "other"
@@ -269,7 +300,34 @@ func normalizeCostItemRequest(req *createCostItemRequest) {
 	if req.Currency == "" {
 		req.Currency = "KGS"
 	}
-	if req.SpentAt == "" {
+	if req.SpentAt == "" && fallbackToday {
 		req.SpentAt = time.Now().UTC().Format("2006-01-02")
 	}
+	if _, err := normalizeProjectCurrency(req.Currency); err != nil {
+		return err
+	}
+	if err := validateMoneyAmount(req.Amount, "amount"); err != nil {
+		return err
+	}
+	spentAt, err := normalizeISODate(req.SpentAt, fallbackToday, "spent_at")
+	if err != nil {
+		return err
+	}
+	req.SpentAt = spentAt
+	return nil
+}
+
+func receiptBelongsToProject(ctx context.Context, fileID, projectID string) bool {
+	var exists bool
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM files
+			WHERE id = $1
+			  AND project_id = $2
+			  AND kind = 'receipt'
+			  AND deleted_at IS NULL
+		)
+	`, fileID, projectID).Scan(&exists)
+	return err == nil && exists
 }

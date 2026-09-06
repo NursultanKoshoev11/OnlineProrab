@@ -2,12 +2,24 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"mime/multipart"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestFileDTODoesNotExposeStoragePath(t *testing.T) {
+	payload, err := json.Marshal(FileDTO{ID: "file-1", StoragePath: "private/secret.jpg"})
+	if err != nil {
+		t.Fatalf("marshal FileDTO: %v", err)
+	}
+	if strings.Contains(string(payload), "storage_path") || strings.Contains(string(payload), "secret.jpg") {
+		t.Fatalf("FileDTO exposed internal storage path: %s", payload)
+	}
+}
 
 func TestSanitizeOriginalName(t *testing.T) {
 	cases := map[string]string{
@@ -35,6 +47,17 @@ func TestExtensionForContentType(t *testing.T) {
 		if got := extensionForContentType(contentType); got != expected {
 			t.Fatalf("extensionForContentType(%q)=%q, expected %q", contentType, got, expected)
 		}
+	}
+}
+
+func TestProjectCoverAcceptsImagesOnly(t *testing.T) {
+	for _, contentType := range []string{"image/jpeg", "image/png", "image/webp"} {
+		if !isAllowedProjectCoverType(contentType) {
+			t.Errorf("expected project cover type %q to be accepted", contentType)
+		}
+	}
+	if isAllowedProjectCoverType("application/pdf") {
+		t.Fatal("project cover must reject PDF files")
 	}
 }
 
@@ -90,6 +113,21 @@ func TestMultipartUploadBypassesJSONBodyLimit(t *testing.T) {
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=test")
 	if shouldLimitJSONBody(req) {
 		t.Fatal("expected multipart upload to bypass JSON body limit")
+	}
+}
+
+func TestResolveStoredFilePathRejectsTraversalAndAcceptsNestedPath(t *testing.T) {
+	root := t.TempDir()
+	if resolved, ok := resolveStoredFilePath(root, `project\2026\receipt.jpg`); !ok {
+		t.Fatal("expected normalized nested path to be accepted")
+	} else if !strings.HasPrefix(resolved, filepath.Clean(root)+string(filepath.Separator)) {
+		t.Fatalf("resolved path escaped upload root: %q", resolved)
+	}
+
+	for _, value := range []string{"../secret.jpg", `project\..\secret.jpg`, "/tmp/secret.jpg", "C:\\secret.jpg"} {
+		if _, ok := resolveStoredFilePath(root, value); ok {
+			t.Fatalf("expected unsafe storage path %q to be rejected", value)
+		}
 	}
 }
 

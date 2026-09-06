@@ -21,7 +21,7 @@ Backend release gates:
 - Auth flow works in staging.
 - CORS is restricted for production.
 - Logs do not contain private user data.
-- Smoke test flow passes: auth, project, cost item, report, task, file metadata and audit log.
+- Smoke test flow passes: auth, project, cost item, report, task, file upload and audit log.
 
 ## Mobile
 
@@ -41,7 +41,8 @@ Mobile release gates:
 - Network errors show clear user messages.
 - Projects load from backend.
 - Cost items, reports and tasks sync with backend.
-- File upload is implemented or disabled in UI.
+- Project cover can be replaced from the edit screen.
+- File upload and protected download work on a real device.
 - APK is tested on a real Android device.
 
 ## Release decision
@@ -57,6 +58,5 @@ Ship only when:
 
 ## Known gaps
 
-- Mobile UI still needs full backend wiring.
-- File upload needs final storage implementation.
+- Local disk uploads are suitable for a single-server beta only; production needs durable object storage.
 - Staging and production runtime settings must be configured before public launch.
