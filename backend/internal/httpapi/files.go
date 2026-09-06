@@ -334,6 +334,11 @@ func isSafeStoragePath(value string) bool {
 	if len(value) >= 2 && isASCIIAlpha(value[0]) && value[1] == ':' {
 		return false
 	}
+	for _, part := range strings.Split(value, "/") {
+		if part == ".." {
+			return false
+		}
+	}
 	cleaned := filepath.ToSlash(filepath.Clean(filepath.FromSlash(value)))
 	return cleaned != "." && cleaned != ".." && !strings.HasPrefix(cleaned, "../") && !strings.Contains(cleaned, "/../")
 }
