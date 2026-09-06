@@ -64,7 +64,7 @@ class _FileUploadFormState extends State<_FileUploadForm> {
           if (_selectedFile != null) ...[
             const SizedBox(height: 8),
             Text(
-              _fileSize(_selectedFile!.size),
+              _fileSize(_selectedFile!.lengthSync() ?? 0),
               style: const TextStyle(color: _muted, fontSize: 13),
             ),
           ],
@@ -98,11 +98,9 @@ class _FileUploadFormState extends State<_FileUploadForm> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        allowMultiple: false,
-        withData: false,
       );
-      if (!mounted || result == null || result.files.isEmpty) return;
-      final file = result.files.single;
+      if (!mounted || result.isEmpty) return;
+      final file = result.single;
       if (file.path == null || file.path!.isEmpty) {
         setState(() => _error = 'Выбранный файл недоступен.');
         return;

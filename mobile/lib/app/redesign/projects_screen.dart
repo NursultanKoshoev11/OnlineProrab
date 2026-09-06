@@ -213,8 +213,13 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
             height: 68,
             backgroundColor: Colors.white,
             indicatorColor: _ink,
-            selectedIconTheme: const IconThemeData(color: Colors.white),
-            unselectedIconTheme: const IconThemeData(color: _muted),
+            iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
+              (states) => IconThemeData(
+                color: states.contains(WidgetState.selected)
+                    ? Colors.white
+                    : _muted,
+              ),
+            ),
             labelTextStyle: WidgetStateProperty.resolveWith(
               (states) => TextStyle(
                 color: states.contains(WidgetState.selected) ? _ink : _muted,

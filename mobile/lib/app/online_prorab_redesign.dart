@@ -9,6 +9,7 @@ import 'package:online_prorab/features/projects/project_repository.dart';
 import 'package:online_prorab/features/projects/project_team_repository.dart';
 import 'package:online_prorab/services/api_client.dart';
 import 'package:online_prorab/services/auth_repository.dart';
+import 'package:online_prorab/services/project_file_download_service.dart';
 import 'package:online_prorab/services/session_store.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';

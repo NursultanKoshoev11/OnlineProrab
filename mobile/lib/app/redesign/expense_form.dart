@@ -155,7 +155,7 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
               if (_receiptFile != null) ...[
                 const SizedBox(height: 6),
                 Text(
-                  _fileSize(_receiptFile!.size),
+                  _fileSize(_receiptFile!.lengthSync() ?? 0),
                   style: const TextStyle(color: _muted, fontSize: 12),
                 ),
               ],
@@ -263,11 +263,9 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        allowMultiple: false,
-        withData: false,
       );
-      if (!mounted || result == null || result.files.isEmpty) return;
-      final file = result.files.single;
+      if (!mounted || result.isEmpty) return;
+      final file = result.single;
       if (file.path == null || file.path!.isEmpty) {
         _toast(context, 'Выбранный файл недоступен');
         return;
