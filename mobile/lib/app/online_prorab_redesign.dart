@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:online_prorab/app/project_team_screen.dart';
 import 'package:online_prorab/features/projects/project_data_repositories.dart';
 import 'package:online_prorab/features/projects/project_repository.dart';
@@ -11,6 +12,7 @@ import 'package:online_prorab/services/api_client.dart';
 import 'package:online_prorab/services/auth_repository.dart';
 import 'package:online_prorab/services/project_file_download_service.dart';
 import 'package:online_prorab/services/session_store.dart';
+import 'package:online_prorab/services/demo_mode.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -37,6 +39,10 @@ const _brandSoft = Color(0xFFE5F5EB);
 const _line = Color(0xFFE8ECE9);
 const _warningSoft = Color(0xFFFFF0D6);
 const _warning = Color(0xFFC27A16);
+const _offlineDemo = bool.fromEnvironment(
+  'OFFLINE_DEMO',
+  defaultValue: false,
+);
 
 class OnlineProrabRedesignApp extends StatefulWidget {
   const OnlineProrabRedesignApp({super.key});
@@ -56,11 +62,13 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final ProjectTeamRepository _teamRepository;
   late final AuditLogRepository _auditLogRepository;
   late final stt.SpeechToText _speechToText;
+  late final http.Client? _demoHttpClient;
 
   @override
   void initState() {
     super.initState();
-    _apiClient = ApiClient();
+    _demoHttpClient = _offlineDemo ? DemoHttpClient() : null;
+    _apiClient = ApiClient(httpClient: _demoHttpClient);
     _authRepository = AuthRepository(
       apiClient: _apiClient,
       sessionStore: SessionStore(),
@@ -259,6 +267,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         teamRepository: _teamRepository,
         auditLogRepository: _auditLogRepository,
         speechToText: _speechToText,
+        offlineDemo: _offlineDemo,
       ),
     );
   }
@@ -275,6 +284,7 @@ class _Dependencies {
     required this.teamRepository,
     required this.auditLogRepository,
     required this.speechToText,
+    required this.offlineDemo,
   });
 
   final ApiClient apiClient;
@@ -286,6 +296,7 @@ class _Dependencies {
   final ProjectTeamRepository teamRepository;
   final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
+  final bool offlineDemo;
 }
 
 class _AuthGate extends StatefulWidget {
@@ -299,6 +310,7 @@ class _AuthGate extends StatefulWidget {
     required this.teamRepository,
     required this.auditLogRepository,
     required this.speechToText,
+    required this.offlineDemo,
   });
 
   final ApiClient apiClient;
@@ -310,6 +322,7 @@ class _AuthGate extends StatefulWidget {
   final ProjectTeamRepository teamRepository;
   final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
+  final bool offlineDemo;
 
   @override
   State<_AuthGate> createState() => _AuthGateState();
@@ -329,12 +342,21 @@ class _AuthGateState extends State<_AuthGate> {
     teamRepository: widget.teamRepository,
     auditLogRepository: widget.auditLogRepository,
     speechToText: widget.speechToText,
+    offlineDemo: widget.offlineDemo,
   );
 
   @override
   void initState() {
     super.initState();
-    _sessionFuture = widget.authRepository.loadSession();
+    _sessionFuture = widget.offlineDemo
+        ? Future<SessionData?>.value(
+            const SessionData(
+              phone: '+996700000001',
+              accessToken: 'demo-access-token',
+              refreshToken: 'demo-refresh-token',
+            ),
+          )
+        : widget.authRepository.loadSession();
     _sessionExpiredSubscription = widget.authRepository.sessionExpired.listen((
       _,
     ) {

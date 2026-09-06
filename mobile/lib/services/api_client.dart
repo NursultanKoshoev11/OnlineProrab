@@ -14,6 +14,8 @@ class ApiClient {
   final http.Client _httpClient;
   final Duration _timeout;
 
+  http.Client get httpClient => _httpClient;
+
   String? accessToken;
   String? refreshToken;
   Future<void> Function(String accessToken, String refreshToken)?

@@ -334,6 +334,9 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   Future<void> _openFile(RemoteProjectFile file) async {
     final service = ProjectFileDownloadService(
       apiClient: widget.deps.apiClient,
+      httpClient: widget.deps.offlineDemo
+          ? widget.deps.apiClient.httpClient
+          : null,
     );
     try {
       final downloaded = await service.download(

@@ -28,10 +28,12 @@ class ProjectFileDownloadService {
     Duration timeout = const Duration(seconds: 30),
   }) : _apiClient = apiClient,
        _httpClient = httpClient ?? http.Client(),
+       _ownsHttpClient = httpClient == null,
        _timeout = timeout;
 
   final ApiClient _apiClient;
   final http.Client _httpClient;
+  final bool _ownsHttpClient;
   final Duration _timeout;
 
   Future<DownloadedProjectFile> download({
@@ -138,5 +140,7 @@ class ProjectFileDownloadService {
     return text;
   }
 
-  void close() => _httpClient.close();
+  void close() {
+    if (_ownsHttpClient) _httpClient.close();
+  }
 }
