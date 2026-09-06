@@ -2,6 +2,12 @@ name: Mobile CI
 
 on:
   workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'API URL for the test APK'
+        required: true
+        default: 'http://127.0.0.1:8080'
+        type: string
   push:
     branches: [main]
     paths:
@@ -51,7 +57,19 @@ jobs:
         run: flutter test
 
       - name: Build debug APK
-        run: flutter build apk --debug --dart-define=API_BASE_URL=http://127.0.0.1:8080
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url || 'http://127.0.0.1:8080' }}
+        run: flutter build apk --debug --dart-define=API_BASE_URL="$API_BASE_URL"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: online-prorab-debug-apk-${{ github.run_number }}
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build release APK compile check
-        run: flutter build apk --release --dart-define=API_BASE_URL=http://127.0.0.1:8080
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url || 'http://127.0.0.1:8080' }}
+        run: flutter build apk --release --dart-define=API_BASE_URL="$API_BASE_URL"
