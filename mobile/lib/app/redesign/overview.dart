@@ -208,7 +208,7 @@ class _OverviewSectionRow extends StatelessWidget {
             const Icon(Icons.chevron_right_rounded, color: _muted),
           ],
         ),
-      ],
+      ),
     );
   }
 }
