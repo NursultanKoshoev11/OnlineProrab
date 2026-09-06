@@ -336,12 +336,28 @@ class DemoDataState {
       return _json(members);
     }
     if (path == '/api/v1/project-invites' && method == 'POST') {
+      final phone = body['phone']?.toString() ?? '';
+      members.removeWhere((item) => item['phone'] == phone);
+      members.add({
+        'user_id': _nextId('user'),
+        'phone': phone,
+        'name': phone,
+        'role': body['role']?.toString() ?? 'viewer',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
       return _json({'status': 'invited', 'expires_in': 86400, 'invite_token': 'demo-invite-token'}, status: 201);
     }
     if (path.startsWith('/api/v1/project-members/') && method == 'PATCH') {
-      return _json({'status': 'updated'});
+      final memberId = _idAfter(path, '/api/v1/project-members/');
+      final member = memberId == null ? null : _find(members, memberId);
+      if (member == null) return _notFound();
+      member['role'] = body['role']?.toString() ?? member['role'];
+      return _json(member);
     }
     if (path.startsWith('/api/v1/project-members/') && method == 'DELETE') {
+      final memberId = _idAfter(path, '/api/v1/project-members/');
+      if (memberId == null) return _notFound();
+      members.removeWhere((item) => item['user_id'] == memberId);
       return _json({'status': 'removed'});
     }
     if (path == '/api/v1/audit-logs' && method == 'GET') {
