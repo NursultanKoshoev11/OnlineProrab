@@ -349,7 +349,9 @@ class DemoDataState {
     }
     if (path.startsWith('/api/v1/project-members/') && method == 'PATCH') {
       final memberId = _idAfter(path, '/api/v1/project-members/');
-      final member = memberId == null ? null : _find(members, memberId);
+      final member = memberId == null
+          ? null
+          : _findByField(members, 'user_id', memberId);
       if (member == null) return _notFound();
       member['role'] = body['role']?.toString() ?? member['role'];
       return _json(member);
@@ -385,6 +387,17 @@ class DemoDataState {
   Map<String, dynamic>? _find(List<Map<String, dynamic>> items, String id) {
     for (final item in items) {
       if (item['id'] == id) return item;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _findByField(
+    List<Map<String, dynamic>> items,
+    String field,
+    String value,
+  ) {
+    for (final item in items) {
+      if (item[field] == value) return item;
     }
     return null;
   }
