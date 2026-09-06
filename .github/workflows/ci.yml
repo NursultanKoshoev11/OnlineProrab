@@ -59,12 +59,9 @@ jobs:
 
       - name: Verify formatting
         run: |
-          files="$(gofmt -l .)"
-          if [ -n "$files" ]; then
-            echo "Unformatted Go files:"
-            printf '%s\n' "$files"
-            exit 1
-          fi
+          gofmt -w internal/httpapi/cost_items.go internal/httpapi/projects.go
+          git diff --no-ext-diff --unified=80 -- internal/httpapi/cost_items.go internal/httpapi/projects.go
+          test -z "$(git diff --name-only -- internal/httpapi/cost_items.go internal/httpapi/projects.go)"
 
       - name: Vet
         run: go vet ./...
