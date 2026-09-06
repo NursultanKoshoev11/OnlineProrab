@@ -305,7 +305,7 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
               category: _category,
               currency: _currency,
               vendor: _vendor.text.trim(),
-              receiptFileId: initial?.receiptFileId,
+              receiptFileId: initial.receiptFileId,
             );
       final receiptFile = _receiptFile;
       if (receiptFile != null) {
