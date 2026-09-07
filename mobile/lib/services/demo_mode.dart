@@ -325,7 +325,7 @@ class DemoDataState {
     }
     if (path == '/api/v1/files/download' && method == 'GET') {
       return http.Response.bytes(
-        Uint8List.fromList(utf8.encode('%PDF-1.4\n% OnlinePRorab demo file\n')),
+        Uint8List.fromList(utf8.encode('%PDF-1.4\n% STROY demo file\n')),
         200,
         headers: {
           'content-type': 'application/pdf',

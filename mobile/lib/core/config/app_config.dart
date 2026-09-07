@@ -1,5 +1,5 @@
 class AppConfig {
-  static const appName = 'Online Prorab';
+  static const appName = 'STROY';
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://localhost:8080',

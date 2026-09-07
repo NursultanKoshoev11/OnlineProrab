@@ -4,13 +4,14 @@ import subprocess
 
 def ensure_android_platform() -> None:
     android_dir = Path("android")
-    if android_dir.exists():
+    ios_dir = Path("ios")
+    if android_dir.exists() and ios_dir.exists():
         return
     subprocess.run(
         [
             "flutter",
             "create",
-            "--platforms=android",
+            "--platforms=android,ios",
             "--org=com.onlineprorab",
             "--project-name=online_prorab",
             ".",
@@ -97,10 +98,46 @@ def configure_main_manifest() -> None:
     manifest.write_text(text, encoding="utf-8")
 
 
+def configure_app_labels() -> None:
+    strings = Path("android/app/src/main/res/values/strings.xml")
+    if strings.exists():
+        text = strings.read_text(encoding="utf-8")
+        text = text.replace(
+            '<string name="app_name">online_prorab</string>',
+            '<string name="app_name">STROY</string>',
+        )
+        strings.write_text(text, encoding="utf-8")
+
+    plist = Path("ios/Runner/Info.plist")
+    if plist.exists():
+        text = plist.read_text(encoding="utf-8")
+        text = text.replace(
+            '<key>CFBundleDisplayName</key>\n\t<string>online_prorab</string>',
+            '<key>CFBundleDisplayName</key>\n\t<string>STROY</string>',
+        )
+        text = text.replace(
+            '<key>CFBundleName</key>\n\t<string>online_prorab</string>',
+            '<key>CFBundleName</key>\n\t<string>STROY</string>',
+        )
+        plist.write_text(text, encoding="utf-8")
+
+
+def configure_ios_printing() -> None:
+    podfile = Path("ios/Podfile")
+    if not podfile.exists():
+        return
+    text = podfile.read_text(encoding="utf-8")
+    if "use_frameworks!" not in text:
+        text = text.replace("target 'Runner' do", "target 'Runner' do\n  use_frameworks!")
+        podfile.write_text(text, encoding="utf-8")
+
+
 def main() -> None:
     ensure_android_platform()
     configure_min_sdk()
     configure_main_manifest()
+    configure_app_labels()
+    configure_ios_printing()
 
 
 if __name__ == "__main__":

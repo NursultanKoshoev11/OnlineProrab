@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,9 @@ import 'package:online_prorab/services/session_store.dart';
 import 'package:online_prorab/services/demo_mode.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:online_prorab/features/reports/expense_report_pdf.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 part 'redesign/auth_login.dart';
@@ -57,7 +61,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final AuthRepository _authRepository;
   late final ProjectRepository _projectRepository;
   late final CostItemRepository _costItemRepository;
-  late final DailyReportRepository _dailyReportRepository;
   late final ProjectFileRepository _fileRepository;
   late final ProjectTeamRepository _teamRepository;
   late final AuditLogRepository _auditLogRepository;
@@ -75,7 +78,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     );
     _projectRepository = ProjectRepository(apiClient: _apiClient);
     _costItemRepository = CostItemRepository(apiClient: _apiClient);
-    _dailyReportRepository = DailyReportRepository(apiClient: _apiClient);
     _fileRepository = ProjectFileRepository(apiClient: _apiClient);
     _teamRepository = ProjectTeamRepository(apiClient: _apiClient);
     _auditLogRepository = AuditLogRepository(apiClient: _apiClient);
@@ -99,7 +101,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     );
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'OnlinePRorab',
+      title: 'STROY',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: scheme.copyWith(
@@ -262,7 +264,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         authRepository: _authRepository,
         projectRepository: _projectRepository,
         costItemRepository: _costItemRepository,
-        dailyReportRepository: _dailyReportRepository,
         fileRepository: _fileRepository,
         teamRepository: _teamRepository,
         auditLogRepository: _auditLogRepository,
@@ -279,7 +280,6 @@ class _Dependencies {
     required this.authRepository,
     required this.projectRepository,
     required this.costItemRepository,
-    required this.dailyReportRepository,
     required this.fileRepository,
     required this.teamRepository,
     required this.auditLogRepository,
@@ -291,7 +291,6 @@ class _Dependencies {
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
   final CostItemRepository costItemRepository;
-  final DailyReportRepository dailyReportRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
   final AuditLogRepository auditLogRepository;
@@ -305,7 +304,6 @@ class _AuthGate extends StatefulWidget {
     required this.authRepository,
     required this.projectRepository,
     required this.costItemRepository,
-    required this.dailyReportRepository,
     required this.fileRepository,
     required this.teamRepository,
     required this.auditLogRepository,
@@ -317,7 +315,6 @@ class _AuthGate extends StatefulWidget {
   final AuthRepository authRepository;
   final ProjectRepository projectRepository;
   final CostItemRepository costItemRepository;
-  final DailyReportRepository dailyReportRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
   final AuditLogRepository auditLogRepository;
@@ -337,7 +334,6 @@ class _AuthGateState extends State<_AuthGate> {
     authRepository: widget.authRepository,
     projectRepository: widget.projectRepository,
     costItemRepository: widget.costItemRepository,
-    dailyReportRepository: widget.dailyReportRepository,
     fileRepository: widget.fileRepository,
     teamRepository: widget.teamRepository,
     auditLogRepository: widget.auditLogRepository,

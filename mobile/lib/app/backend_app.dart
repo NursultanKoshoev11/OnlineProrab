@@ -40,7 +40,7 @@ class _BackendOnlineProrabAppState extends State<BackendOnlineProrabApp> {
       projectRepository: projectRepository,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Online Prorab',
+        title: 'STROY',
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
@@ -145,7 +145,7 @@ class _BackendLoginScreenState extends State<BackendLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Online Prorab')),
+      appBar: AppBar(title: const Text('STROY')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),

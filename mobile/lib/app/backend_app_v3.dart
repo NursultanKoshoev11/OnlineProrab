@@ -56,7 +56,7 @@ class _BackendOnlineProrabAppV3State extends State<BackendOnlineProrabAppV3> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'OnlinePRorab',
+      title: 'STROY',
       theme: buildOnlineProrabTheme(),
       home: _AuthGate(
         dependencies: _AppDependencies(
@@ -147,7 +147,7 @@ class _SplashScreen extends StatelessWidget {
             _BrandMark(size: 64),
             SizedBox(height: 18),
             Text(
-              'OnlinePRorab',
+              'STROY',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
@@ -371,7 +371,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
             _BrandMark(size: 34),
             SizedBox(width: 10),
             Text(
-              'OnlinePRorab',
+              'STROY',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
             ),
           ],

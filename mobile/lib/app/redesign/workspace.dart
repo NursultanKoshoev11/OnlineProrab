@@ -21,7 +21,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   bool _loading = true;
   List<String> _sectionErrors = const [];
   List<RemoteCostItem> _costs = const [];
-  List<RemoteDailyReport> _reports = const [];
   List<RemoteProjectFile> _files = const [];
   List<RemoteProjectMember> _members = const [];
   List<RemoteAuditLog> _auditLogs = const [];
@@ -60,7 +59,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     final generation = ++_loadGeneration;
 
     final costs = List<RemoteCostItem>.of(_costs);
-    final reports = List<RemoteDailyReport>.of(_reports);
     final files = List<RemoteProjectFile>.of(_files);
     final members = List<RemoteProjectMember>.of(_members);
     final auditLogs = List<RemoteAuditLog>.of(_auditLogs);
@@ -73,16 +71,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
         load: () => widget.deps.costItemRepository.list(projectId),
         assign: (value) {
           costs
-            ..clear()
-            ..addAll(value);
-        },
-        errors: errors,
-      ),
-      _loadSection(
-        label: 'Отчёты',
-        load: () => widget.deps.dailyReportRepository.list(projectId),
-        assign: (value) {
-          reports
             ..clear()
             ..addAll(value);
         },
@@ -123,7 +111,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     if (generation != _loadGeneration) return;
     setState(() {
       _costs = costs;
-      _reports = reports;
       _files = files;
       _members = members;
       _auditLogs = auditLogs;
@@ -189,7 +176,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                       _OverviewTab(
                         project: widget.project,
                         costs: _costs,
-                        reports: _reports,
                         files: _files,
                         members: _members,
                         openTab: (index) => setState(() => _tab = index),
@@ -210,19 +196,17 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                         canManage: _canManage,
                       ),
                       _ReportsTab(
-                        reports: _reports,
-                        onAdd: _canContribute ? _addReport : null,
-                        onDelete: _canManage ? _deleteReport : null,
-                        onEdit: _canContribute ? _editReport : null,
+                        project: widget.project,
+                        costs: _costs,
                       ),
                       _MoreTab(
                         project: widget.project,
-                        reports: _reports,
                         files: _files,
                         members: _members,
                         costs: _costs,
                         auditLogs: _auditLogs,
                         onOpenTeam: _openTeam,
+                        onOpenReport: () => setState(() => _tab = 2),
                         onAddMember: _canManage
                             ? () => _openTeam(openInvite: true)
                             : null,
@@ -261,55 +245,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
         ],
       ),
     );
-  }
-
-  Future<void> _addReport() async {
-    final report = await Navigator.of(context).push<RemoteDailyReport>(
-      MaterialPageRoute(
-        builder: (_) => _ReportForm(
-          projectId: widget.project.id,
-          repository: widget.deps.dailyReportRepository,
-        ),
-      ),
-    );
-    if (!mounted || report == null) return;
-    setState(() => _reports = [report, ..._reports]);
-  }
-
-  Future<void> _deleteReport(RemoteDailyReport report) async {
-    final confirmed = await _confirmDelete(
-      title: 'Удалить отчёт?',
-      message: 'Этот ежедневный отчёт будет удалён из объекта.',
-    );
-    if (confirmed != true) return;
-    try {
-      await widget.deps.dailyReportRepository.delete(report.id);
-      if (!mounted) return;
-      setState(
-        () => _reports = _reports.where((item) => item.id != report.id).toList(),
-      );
-      _toast(context, 'Отчёт удалён');
-    } catch (error) {
-      if (mounted) _toast(context, _errorText(error));
-    }
-  }
-
-  Future<void> _editReport(RemoteDailyReport report) async {
-    final updated = await Navigator.of(context).push<RemoteDailyReport>(
-      MaterialPageRoute(
-        builder: (_) => _ReportForm(
-          projectId: widget.project.id,
-          repository: widget.deps.dailyReportRepository,
-          initial: report,
-        ),
-      ),
-    );
-    if (!mounted || updated == null) return;
-    setState(() {
-      _reports = _reports
-          .map((item) => item.id == updated.id ? updated : item)
-          .toList();
-    });
   }
 
   Future<void> _openTeam({bool openInvite = false}) async {

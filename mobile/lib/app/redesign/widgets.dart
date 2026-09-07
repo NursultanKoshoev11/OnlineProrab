@@ -14,10 +14,10 @@ class _BrandMark extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(size * .24),
       ),
-      child: Icon(
-        Icons.home_work_rounded,
-        size: size * .58,
-        color: Colors.white,
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        'assets/branding/stroy_icon.png',
+        fit: BoxFit.cover,
       ),
     );
   }
@@ -29,22 +29,16 @@ class _BrandWordmark extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Row(
       children: [
-        _BrandMark(size: 36, color: _ink),
+        _BrandMark(size: 36),
         SizedBox(width: 9),
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: 'Online',
-                style: TextStyle(color: _ink),
-              ),
-              TextSpan(
-                text: 'PRorab',
-                style: TextStyle(color: _ink),
-              ),
-            ],
+        Text(
+          'STROY',
+          style: TextStyle(
+            color: _ink,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
           ),
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
       ],
     );

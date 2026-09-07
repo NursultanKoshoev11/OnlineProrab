@@ -39,7 +39,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                 const Center(child: _BrandMark(size: 78)),
                 const SizedBox(height: 18),
                 const Text(
-                  'OnlinePRorab',
+                  'STROY',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 28,

@@ -65,7 +65,7 @@ func (s *TwilioSender) SendLoginCode(ctx context.Context, phone, code string) er
 
 	form := url.Values{}
 	form.Set("To", phone)
-	form.Set("Body", fmt.Sprintf("OnlinePRorab: код входа %s. Действует 5 минут.", code))
+	form.Set("Body", fmt.Sprintf("STROY: код входа %s. Действует 5 минут.", code))
 	if s.config.MessagingServiceSID != "" {
 		form.Set("MessagingServiceSid", s.config.MessagingServiceSID)
 	} else {

@@ -3,12 +3,12 @@ part of '../online_prorab_redesign.dart';
 class _MoreTab extends StatelessWidget {
   const _MoreTab({
     required this.project,
-    required this.reports,
     required this.files,
     required this.members,
     required this.costs,
     required this.auditLogs,
     required this.onOpenTeam,
+    required this.onOpenReport,
     required this.onAddMember,
     required this.onAddFile,
     required this.onOpenFile,
@@ -16,12 +16,12 @@ class _MoreTab extends StatelessWidget {
   });
 
   final RemoteProject project;
-  final List<RemoteDailyReport> reports;
   final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
   final List<RemoteCostItem> costs;
   final List<RemoteAuditLog> auditLogs;
   final VoidCallback onOpenTeam;
+  final VoidCallback onOpenReport;
   final VoidCallback? onAddMember;
   final VoidCallback? onAddFile;
   final ValueChanged<RemoteProjectFile> onOpenFile;
@@ -70,30 +70,17 @@ class _MoreTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _SectionCard(
-          icon: Icons.assignment_outlined,
-          title: 'Ежедневные отчёты',
-          subtitle: '${reports.length} отчётов',
-          children: reports.isEmpty
-              ? const [
-                  Text('Отчётов пока нет.', style: TextStyle(color: _muted)),
-                ]
-              : reports
-                    .take(4)
-                    .map(
-                      (report) => _InfoRow(
-                        icon: Icons.description_outlined,
-                        title: report.summary.isEmpty
-                            ? 'Отчёт'
-                            : report.summary,
-                        subtitle: [
-                          if (report.reportDate.isNotEmpty)
-                            _displayIsoDate(report.reportDate),
-                          '${report.workersCount} работников',
-                          if (report.issues.isNotEmpty) 'есть замечания',
-                        ].join(' • '),
-                      ),
-                    )
-                    .toList(),
+          icon: Icons.picture_as_pdf_outlined,
+          title: 'Отчёт расходов',
+          subtitle: 'Автоматический PDF по объекту',
+          onTap: onOpenReport,
+          children: const [
+            _InfoRow(
+              icon: Icons.sync_rounded,
+              title: 'Обновляется автоматически',
+              subtitle: 'Все текущие расходы и общий итог',
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         _SectionCard(

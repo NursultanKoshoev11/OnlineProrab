@@ -14,12 +14,27 @@ dependencies:
   http: ^1.2.2
   open_filex: ^4.7.0
   path_provider: ^2.1.5
+  pdf: ^3.13.0
+  printing: ^5.15.0
   shared_preferences: ^2.3.2
   speech_to_text: ^7.4.0
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.14.4
   flutter_test:
     sdk: flutter
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/stroy_icon.png
+    - assets/fonts/DejaVuSans.ttf
+
+flutter_launcher_icons:
+  android: launcher_icon
+  ios: true
+  image_path: assets/branding/stroy_icon.png
+  adaptive_icon_background: '#087A3D'
+  adaptive_icon_foreground: assets/branding/stroy_icon.png
+  min_sdk_android: 23
+  remove_alpha_ios: true

@@ -4,7 +4,6 @@ class _OverviewTab extends StatelessWidget {
   const _OverviewTab({
     required this.project,
     required this.costs,
-    required this.reports,
     required this.files,
     required this.members,
     required this.openTab,
@@ -14,7 +13,6 @@ class _OverviewTab extends StatelessWidget {
 
   final RemoteProject project;
   final List<RemoteCostItem> costs;
-  final List<RemoteDailyReport> reports;
   final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
   final ValueChanged<int> openTab;
@@ -114,10 +112,10 @@ class _OverviewTab extends StatelessWidget {
               ),
               const Divider(height: 1, color: _line),
               _OverviewSectionRow(
-                icon: Icons.assignment_outlined,
-                title: 'Отчёты',
-                subtitle: 'Ежедневные отчёты со стройки',
-                count: reports.length,
+                icon: Icons.picture_as_pdf_outlined,
+                title: 'Отчёт',
+                subtitle: 'Автоматический PDF по расходам',
+                count: 1,
                 onTap: () => openTab(2),
               ),
               const Divider(height: 1, color: _line),

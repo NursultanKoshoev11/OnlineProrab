@@ -31,7 +31,7 @@ class _OnlineProrabAppState extends State<OnlineProrabApp> {
       state: appState,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Online Prorab',
+        title: 'STROY',
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
@@ -442,7 +442,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return const ProjectsScreen();
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Online Prorab')),
+      appBar: AppBar(title: const Text('STROY')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
