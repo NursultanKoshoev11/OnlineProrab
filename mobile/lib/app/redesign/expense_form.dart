@@ -19,9 +19,7 @@ class _CreateExpenseSheet extends StatefulWidget {
 class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
   final _title = TextEditingController();
   final _amount = TextEditingController();
-  final _vendor = TextEditingController();
-  String _category = 'materials';
-  String _currency = 'KGS';
+  final _description = TextEditingController();
   DateTime _spentAt = DateTime.now();
   PlatformFile? _receiptFile;
   bool _busy = false;
@@ -33,9 +31,7 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
     if (initial == null) return;
     _title.text = initial.title;
     _amount.text = initial.amount.toStringAsFixed(2);
-    _vendor.text = initial.vendor;
-    _category = initial.category;
-    _currency = initial.currency;
+    _description.text = initial.description;
     final spentAt = DateTime.tryParse(initial.spentAt);
     if (spentAt != null) _spentAt = spentAt;
   }
@@ -44,26 +40,31 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
   void dispose() {
     _title.dispose();
     _amount.dispose();
-    _vendor.dispose();
+    _description.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final availableHeight =
+        MediaQuery.sizeOf(context).height - viewInsets.bottom;
+    final sheetHeight = (availableHeight * .86).clamp(
+      280.0,
+      700.0,
+    ).toDouble();
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          0,
-          20,
-          MediaQuery.viewInsetsOf(context).bottom + 24,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        padding: EdgeInsets.only(bottom: viewInsets.bottom),
+        child: SizedBox(
+          height: sheetHeight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Text(
                 widget.initial == null ? 'Добавить расход' : 'Изменить расход',
                 style: TextStyle(
@@ -101,39 +102,36 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
                 ),
                 decoration: InputDecoration(
                   hintText: '0',
-                  suffixText: _currency == 'KGS' ? 'сом' : _currency,
-                  prefixIcon: Icon(Icons.payments_outlined),
+                  suffixText: 'сом',
+                  prefixIcon: const Icon(Icons.payments_outlined),
                 ),
               ),
               const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
               const Text(
-                'Категория',
+                'Описание',
                 style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _category,
+              TextField(
+                controller: _description,
+                enabled: !_busy,
+                textCapitalization: TextCapitalization.sentences,
+                minLines: 3,
+                maxLines: 5,
                 decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.category_outlined),
+                  hintText: 'Например: доставка и разгрузка материала на объекте',
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.only(bottom: 42),
+                    child: Icon(Icons.notes_outlined),
+                  ),
+                  alignLabelWithHint: true,
                 ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'materials',
-                    child: Text('Материалы'),
-                  ),
-                  DropdownMenuItem(value: 'labor', child: Text('Работа')),
-                  DropdownMenuItem(
-                    value: 'delivery',
-                    child: Text('Доставка'),
-                  ),
-                  DropdownMenuItem(value: 'tools', child: Text('Инструменты')),
-                  DropdownMenuItem(value: 'other', child: Text('Другое')),
-                ],
-                onChanged: _busy
-                    ? null
-                    : (value) => setState(
-                          () => _category = value ?? 'other',
-                        ),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -161,43 +159,6 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
               ],
               const SizedBox(height: 16),
               const Text(
-                'Поставщик',
-                style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _vendor,
-                enabled: !_busy,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'Например: СтройМаркет',
-                  prefixIcon: Icon(Icons.storefront_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Валюта',
-                style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: _currency,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.currency_exchange_rounded),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'KGS', child: Text('Сом (KGS)')),
-                  DropdownMenuItem(value: 'USD', child: Text('Доллар (USD)')),
-                  DropdownMenuItem(value: 'KZT', child: Text('Тенге (KZT)')),
-                ],
-                onChanged: _busy
-                    ? null
-                    : (value) => setState(
-                          () => _currency = value ?? 'KGS',
-                        ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
                 'Дата',
                 style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
               ),
@@ -218,23 +179,45 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
                   ),
                 ),
               ),
-              const SizedBox(height: 22),
-              FilledButton(
-                onPressed: _busy ? null : _save,
-                child: _busy
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        widget.initial == null
-                            ? 'Сохранить расход'
-                            : 'Сохранить изменения',
-                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .07),
+                      blurRadius: 12,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _busy ? null : _save,
+                      child: _busy
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              widget.initial == null
+                                  ? 'Сохранить расход'
+                                  : 'Сохранить изменения',
+                            ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -292,19 +275,15 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
               projectId: widget.projectId,
               title: _title.text.trim(),
               amount: amount,
+              description: _description.text.trim(),
               spentAt: _apiDate(_spentAt),
-              category: _category,
-              currency: _currency,
-              vendor: _vendor.text.trim(),
             )
           : await widget.repository.update(
               costItemId: initial.id,
               title: _title.text.trim(),
               amount: amount,
+              description: _description.text.trim(),
               spentAt: _apiDate(_spentAt),
-              category: _category,
-              currency: _currency,
-              vendor: _vendor.text.trim(),
               receiptFileId: initial.receiptFileId,
             );
       final receiptFile = _receiptFile;
@@ -324,10 +303,8 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
             costItemId: item.id,
             title: item.title,
             amount: item.amount,
+            description: item.description,
             spentAt: item.spentAt,
-            category: item.category,
-            currency: item.currency,
-            vendor: item.vendor,
             receiptFileId: uploaded.id,
           );
         } catch (error) {

@@ -6,6 +6,7 @@ class RemoteCostItem {
     required this.projectId,
     required this.title,
     required this.amount,
+    this.description = '',
     required this.category,
     required this.currency,
     required this.vendor,
@@ -18,6 +19,7 @@ class RemoteCostItem {
   final String projectId;
   final String title;
   final double amount;
+  final String description;
   final String category;
   final String currency;
   final String vendor;
@@ -30,6 +32,7 @@ class RemoteCostItem {
     projectId: json['project_id']?.toString() ?? '',
     title: json['title']?.toString() ?? '',
     amount: (json['amount'] as num?)?.toDouble() ?? 0,
+    description: json['description']?.toString() ?? '',
     category: json['category']?.toString() ?? 'other',
     currency: json['currency']?.toString() ?? 'KGS',
     vendor: json['vendor']?.toString() ?? '',
@@ -175,6 +178,7 @@ class CostItemRepository {
     required String title,
     required double amount,
     required String spentAt,
+    String description = '',
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
@@ -184,6 +188,7 @@ class CostItemRepository {
       projectId: projectId,
       title: title,
       amount: amount,
+      description: description,
       category: category,
       currency: currency,
       vendor: vendor,
@@ -198,6 +203,7 @@ class CostItemRepository {
     required String title,
     required double amount,
     required String spentAt,
+    String description = '',
     String category = 'other',
     String currency = 'KGS',
     String vendor = '',
@@ -207,6 +213,7 @@ class CostItemRepository {
       costItemId: costItemId,
       title: title,
       amount: amount,
+      description: description,
       category: category,
       currency: currency,
       vendor: vendor,

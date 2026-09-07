@@ -12,6 +12,7 @@ type CostItemDTO struct {
 	ID            string  `json:"id"`
 	ProjectID     string  `json:"project_id"`
 	Title         string  `json:"title"`
+	Description   string  `json:"description,omitempty"`
 	Category      string  `json:"category"`
 	Amount        float64 `json:"amount"`
 	Currency      string  `json:"currency"`
@@ -24,6 +25,7 @@ type CostItemDTO struct {
 type createCostItemRequest struct {
 	ProjectID     string  `json:"project_id"`
 	Title         string  `json:"title"`
+	Description   string  `json:"description"`
 	Category      string  `json:"category"`
 	Amount        float64 `json:"amount"`
 	Currency      string  `json:"currency"`
@@ -79,8 +81,8 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := appState.DB.Pool.Query(ctx, `
-		SELECT id::text, project_id::text, title, category, amount::float8, currency,
-		       COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
+			SELECT id::text, project_id::text, title, COALESCE(description, ''), category, amount::float8, currency,
+			       COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
 		       spent_at::text, created_at::text
 		FROM cost_items
 		WHERE project_id = $1 AND deleted_at IS NULL
@@ -95,7 +97,7 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 	items := []CostItemDTO{}
 	for rows.Next() {
 		var item CostItemDTO
-		if err := rows.Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to scan cost item")
 			return
 		}
@@ -120,12 +122,12 @@ func getCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
-		SELECT id::text, project_id::text, title, category, amount::float8, currency,
+		SELECT id::text, project_id::text, title, COALESCE(description, ''), category, amount::float8, currency,
 		       COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
 		       spent_at::text, created_at::text
 		FROM cost_items
 		WHERE id = $1 AND deleted_at IS NULL
-	`, costItemID).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
+	`, costItemID).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "cost item not found")
 		return
@@ -162,12 +164,12 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
-		INSERT INTO cost_items (project_id, created_by, title, category, amount, currency, vendor, receipt_file_id, spent_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, '')::uuid, $9)
-		RETURNING id::text, project_id::text, title, category, amount::float8, currency,
-		          COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
-		          spent_at::text, created_at::text
-	`, req.ProjectID, userID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.ReceiptFileID, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
+			INSERT INTO cost_items (project_id, created_by, title, description, category, amount, currency, vendor, receipt_file_id, spent_at)
+			VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, NULLIF($8, ''), NULLIF($9, '')::uuid, $10)
+			RETURNING id::text, project_id::text, title, COALESCE(description, ''), category, amount::float8, currency,
+			          COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
+			          spent_at::text, created_at::text
+		`, req.ProjectID, userID, req.Title, req.Description, req.Category, req.Amount, req.Currency, req.Vendor, req.ReceiptFileID, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create cost item")
 		return
@@ -212,15 +214,15 @@ func updateCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 	var item CostItemDTO
 	err := appState.DB.Pool.QueryRow(ctx, `
 		UPDATE cost_items
-		SET title = $2, category = $3, amount = $4, currency = $5,
-		    vendor = NULLIF($6, ''),
-		    receipt_file_id = COALESCE(NULLIF($7, '')::uuid, receipt_file_id),
-		    spent_at = COALESCE(NULLIF($8, '')::date, spent_at), updated_at = now()
-		WHERE id = $1 AND deleted_at IS NULL
-		RETURNING id::text, project_id::text, title, category, amount::float8, currency,
-		          COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
-		          spent_at::text, created_at::text
-	`, costItemID, req.Title, req.Category, req.Amount, req.Currency, req.Vendor, req.ReceiptFileID, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
+			SET title = $2, description = NULLIF($3, ''), category = $4, amount = $5, currency = $6,
+			    vendor = NULLIF($7, ''),
+			    receipt_file_id = COALESCE(NULLIF($8, '')::uuid, receipt_file_id),
+			    spent_at = COALESCE(NULLIF($9, '')::date, spent_at), updated_at = now()
+			WHERE id = $1 AND deleted_at IS NULL
+			RETURNING id::text, project_id::text, title, COALESCE(description, ''), category, amount::float8, currency,
+			          COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''),
+			          spent_at::text, created_at::text
+		`, costItemID, req.Title, req.Description, req.Category, req.Amount, req.Currency, req.Vendor, req.ReceiptFileID, req.SpentAt).Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "cost item not found")
 		return
@@ -289,6 +291,7 @@ func normalizeCostItemUpdateRequest(req *createCostItemRequest) error {
 func normalizeCostItemRequestWithDateFallback(req *createCostItemRequest, fallbackToday bool) error {
 	req.ProjectID = strings.TrimSpace(req.ProjectID)
 	req.Title = strings.TrimSpace(req.Title)
+	req.Description = strings.TrimSpace(req.Description)
 	req.Category = strings.TrimSpace(req.Category)
 	req.Currency = strings.ToUpper(strings.TrimSpace(req.Currency))
 	req.Vendor = strings.TrimSpace(req.Vendor)

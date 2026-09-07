@@ -95,6 +95,7 @@ class ExpenseSearchQuery {
     final matchesText =
         normalizedTerm.isEmpty ||
         item.title.toLowerCase().contains(normalizedTerm) ||
+        item.description.toLowerCase().contains(normalizedTerm) ||
         item.vendor.toLowerCase().contains(normalizedTerm);
     if (!matchesText) return false;
     if (month == null && year == null) return true;

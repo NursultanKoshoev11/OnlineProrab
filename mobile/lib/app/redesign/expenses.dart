@@ -220,6 +220,18 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                                         ),
                                       ),
                                     ],
+                                    if (item.description.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        item.description,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _muted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

@@ -110,28 +110,14 @@ class _CostDetailsState extends State<_CostDetails> {
               ),
             ),
           ],
-          if (widget.item.category.isNotEmpty ||
-              widget.item.vendor.isNotEmpty) ...[
+          if (widget.item.description.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),
-                child: Column(
-                  children: [
-                    if (widget.item.category.isNotEmpty)
-                      _DetailRow(
-                        label: 'Категория',
-                        value: widget.item.category,
-                      ),
-                    if (widget.item.category.isNotEmpty &&
-                        widget.item.vendor.isNotEmpty)
-                      const SizedBox(height: 12),
-                    if (widget.item.vendor.isNotEmpty)
-                      _DetailRow(
-                        label: 'Поставщик',
-                        value: widget.item.vendor,
-                      ),
-                  ],
+                child: _DetailRow(
+                  label: 'Описание',
+                  value: widget.item.description,
                 ),
               ),
             ),

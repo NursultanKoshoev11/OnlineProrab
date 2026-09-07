@@ -71,11 +71,14 @@ jobs:
           OFFLINE_DEMO: ${{ inputs.offline_demo || 'true' }}
         run: flutter build apk --debug --dart-define=API_BASE_URL="$API_BASE_URL" --dart-define=OFFLINE_DEMO="$OFFLINE_DEMO"
 
-      - name: Upload debug APK
+      - name: Name debug APK for STROY
+        run: cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/stroy-debug.apk
+
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: online-prorab-debug-apk-${{ github.run_number }}
-          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          name: stroy-debug-apk-${{ github.run_number }}
+          path: mobile/build/app/outputs/flutter-apk/stroy-debug.apk
           if-no-files-found: error
           retention-days: 14
 

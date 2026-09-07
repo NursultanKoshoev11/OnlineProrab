@@ -210,14 +210,12 @@ Future<Uint8List> buildExpenseReportPdf({
             columnWidths: const {
               0: pw.FixedColumnWidth(23),
               1: pw.FixedColumnWidth(60),
-              2: pw.FlexColumnWidth(2.4),
-              3: pw.FlexColumnWidth(1.1),
-              4: pw.FlexColumnWidth(1.2),
-              5: pw.FlexColumnWidth(1.3),
+              2: pw.FlexColumnWidth(3.8),
+              3: pw.FlexColumnWidth(1.3),
             },
             children: [
               _tableRow(
-                const ['№', 'Дата', 'Расход', 'Категория', 'Поставщик', 'Сумма'],
+                const ['№', 'Дата', 'Расход / описание', 'Сумма'],
                 font: font,
                 header: true,
               ),
@@ -226,9 +224,7 @@ Future<Uint8List> buildExpenseReportPdf({
                       [
                         '${entry.key + 1}',
                         _formatDate(entry.value.spentAt),
-                        _fallback(entry.value.title),
-                        _categoryLabel(entry.value.category),
-                        _fallback(entry.value.vendor),
+                        _expenseDetails(entry.value),
                         _formatMoney(entry.value.amount, entry.value.currency),
                       ],
                       font: font,
@@ -261,7 +257,7 @@ pw.TableRow _tableRow(
             padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 6),
             child: pw.Text(
               value,
-              maxLines: header ? 2 : 4,
+              maxLines: header ? 2 : 5,
               overflow: pw.TextOverflow.clip,
               style: pw.TextStyle(
                 font: font,
@@ -274,6 +270,13 @@ pw.TableRow _tableRow(
         )
         .toList(),
   );
+}
+
+String _expenseDetails(RemoteCostItem item) {
+  final title = _fallback(item.title);
+  final description = item.description.trim();
+  if (description.isEmpty) return title;
+  return '$title\n$description';
 }
 
 pw.Widget _metadataRow(String label, String value) {

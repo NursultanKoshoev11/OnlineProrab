@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -102,22 +103,39 @@ def configure_app_labels() -> None:
     strings = Path("android/app/src/main/res/values/strings.xml")
     if strings.exists():
         text = strings.read_text(encoding="utf-8")
-        text = text.replace(
-            '<string name="app_name">online_prorab</string>',
-            '<string name="app_name">STROY</string>',
+        text = re.sub(
+            r'(<string\s+name="app_name">).*?(</string>)',
+            r'\1STROY\2',
+            text,
+            count=1,
         )
         strings.write_text(text, encoding="utf-8")
+
+    manifest = Path("android/app/src/main/AndroidManifest.xml")
+    if manifest.exists():
+        text = manifest.read_text(encoding="utf-8")
+        text = re.sub(
+            r'android:label="[^"]*"',
+            'android:label="@string/app_name"',
+            text,
+            count=1,
+        )
+        manifest.write_text(text, encoding="utf-8")
 
     plist = Path("ios/Runner/Info.plist")
     if plist.exists():
         text = plist.read_text(encoding="utf-8")
-        text = text.replace(
-            '<key>CFBundleDisplayName</key>\n\t<string>online_prorab</string>',
-            '<key>CFBundleDisplayName</key>\n\t<string>STROY</string>',
+        text = re.sub(
+            r'(<key>CFBundleDisplayName</key>\s*<string>).*?(</string>)',
+            r'\1STROY\2',
+            text,
+            count=1,
         )
-        text = text.replace(
-            '<key>CFBundleName</key>\n\t<string>online_prorab</string>',
-            '<key>CFBundleName</key>\n\t<string>STROY</string>',
+        text = re.sub(
+            r'(<key>CFBundleName</key>\s*<string>).*?(</string>)',
+            r'\1STROY\2',
+            text,
+            count=1,
         )
         plist.write_text(text, encoding="utf-8")
 

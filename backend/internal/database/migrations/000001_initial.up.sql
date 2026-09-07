@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS cost_items (
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     title TEXT NOT NULL,
+    description TEXT,
     category TEXT NOT NULL DEFAULT 'other',
     amount NUMERIC(14,2) NOT NULL CHECK (amount >= 0),
     currency TEXT NOT NULL DEFAULT 'KGS',
