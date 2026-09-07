@@ -206,6 +206,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                         costs: _costs,
                         auditLogs: _auditLogs,
                         onOpenTeam: _openTeam,
+                        onOpenSubscription: _openSubscription,
                         onOpenReport: () => setState(() => _tab = 2),
                         onAddMember: _canManage
                             ? () => _openTeam(openInvite: true)
@@ -259,6 +260,18 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
       ),
     );
     if (mounted) await _load();
+  }
+
+  Future<void> _openSubscription() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _SubscriptionScreen(
+          project: widget.project,
+          members: _members,
+          canManage: _canManage,
+        ),
+      ),
+    );
   }
 
   Future<void> _addFile() async {

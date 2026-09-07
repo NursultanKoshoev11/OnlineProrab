@@ -30,6 +30,7 @@ part 'redesign/expenses.dart';
 part 'redesign/reports.dart';
 part 'redesign/files.dart';
 part 'redesign/more_analytics.dart';
+part 'redesign/subscription.dart';
 part 'redesign/cost_project_form.dart';
 part 'redesign/expense_form.dart';
 part 'redesign/widgets.dart';

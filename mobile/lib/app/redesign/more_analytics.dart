@@ -8,6 +8,7 @@ class _MoreTab extends StatelessWidget {
     required this.costs,
     required this.auditLogs,
     required this.onOpenTeam,
+    required this.onOpenSubscription,
     required this.onOpenReport,
     required this.onAddMember,
     required this.onAddFile,
@@ -21,6 +22,7 @@ class _MoreTab extends StatelessWidget {
   final List<RemoteCostItem> costs;
   final List<RemoteAuditLog> auditLogs;
   final VoidCallback onOpenTeam;
+  final VoidCallback onOpenSubscription;
   final VoidCallback onOpenReport;
   final VoidCallback? onAddMember;
   final VoidCallback? onAddFile;
@@ -70,15 +72,29 @@ class _MoreTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _SectionCard(
+          icon: Icons.workspace_premium_outlined,
+          title: 'Подписка и доступ',
+          subtitle: 'Владелец оплачивает доступ команды',
+          onTap: onOpenSubscription,
+          children: const [
+            _InfoRow(
+              icon: Icons.people_alt_outlined,
+              title: 'Pro · до 5 участников + владелец',
+              subtitle: 'MBANK, Optima Bank или QR-код',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
           icon: Icons.picture_as_pdf_outlined,
           title: 'Отчёт расходов',
-          subtitle: 'Автоматический PDF по объекту',
+          subtitle: 'Предпросмотр PDF по текущим расходам',
           onTap: onOpenReport,
           children: const [
             _InfoRow(
-              icon: Icons.sync_rounded,
-              title: 'Обновляется автоматически',
-              subtitle: 'Все текущие расходы и общий итог',
+              icon: Icons.picture_as_pdf_outlined,
+              title: 'Открыть предпросмотр PDF',
+              subtitle: 'Отправить или сохранить через меню предпросмотра',
             ),
           ],
         ),

@@ -114,7 +114,7 @@ class _OverviewTab extends StatelessWidget {
               _OverviewSectionRow(
                 icon: Icons.picture_as_pdf_outlined,
                 title: 'Отчёт',
-                subtitle: 'Автоматический PDF по расходам',
+                subtitle: 'Предпросмотр PDF по расходам',
                 count: 1,
                 onTap: () => openTab(2),
               ),

@@ -25,29 +25,6 @@ class _ReportsTab extends StatelessWidget {
     return buildExpenseReportPdf(project: project, costs: costs);
   }
 
-  Future<void> _share(BuildContext context) async {
-    try {
-      final bytes = await _build(PdfPageFormat.a4);
-      await Printing.sharePdf(bytes: bytes, filename: _fileName);
-    } catch (_) {
-      if (context.mounted) _toast(context, 'Не удалось поделиться PDF');
-    }
-  }
-
-  Future<void> _save(BuildContext context) async {
-    try {
-      final bytes = await _build(PdfPageFormat.a4);
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File('${directory.path}/$_fileName');
-      await file.writeAsBytes(bytes, flush: true);
-      if (!context.mounted) return;
-      _toast(context, 'PDF сохранён');
-      await OpenFilex.open(file.path);
-    } catch (_) {
-      if (context.mounted) _toast(context, 'Не удалось сохранить PDF');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final total = _moneyTotals(costs);
@@ -63,80 +40,45 @@ class _ReportsTab extends StatelessWidget {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(13),
-              child: Column(
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: _brandSoft,
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        child: const Icon(
-                          Icons.picture_as_pdf_outlined,
-                          color: _brand,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Автоматический PDF',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${costs.length} ${costs.length == 1 ? 'расход' : 'расходов'}',
-                        style: const TextStyle(color: _muted, fontSize: 12),
-                      ),
-                    ],
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: _brandSoft,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(
+                      Icons.picture_as_pdf_outlined,
+                      color: _brand,
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _ReportMetric(
-                          label: 'Общий итог',
-                          value: total,
-                        ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Предпросмотр PDF',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _save(context),
-                                icon: const Icon(Icons.download_outlined),
-                                label: const Text('Сохранить'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: () => _share(context),
-                                icon: const Icon(Icons.share_outlined),
-                                label: const Text('Отправить'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ),
+                  ),
+                  Text(
+                    '${costs.length} ${costs.length == 1 ? 'расход' : 'расходов'}',
+                    style: const TextStyle(color: _muted, fontSize: 12),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 10),
+          _ReportMetric(label: 'Общий итог', value: total),
+          const SizedBox(height: 10),
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'Предпросмотр PDF',
+              'Предпросмотр',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
           ),

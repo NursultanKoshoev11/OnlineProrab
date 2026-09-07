@@ -77,7 +77,7 @@ Future<Uint8List> buildExpenseReportPdf({
               ),
             ),
             pw.Text(
-              'Автоматический отчёт по расходам',
+              'Предпросмотр отчёта по расходам',
               style: mutedStyle,
             ),
           ],
@@ -234,7 +234,7 @@ Future<Uint8List> buildExpenseReportPdf({
           ),
         pw.SizedBox(height: 16),
         pw.Text(
-          'Отчёт формируется автоматически из текущих расходов объекта и обновляется сразу после изменений.',
+          'Предпросмотр собран из текущих расходов объекта.',
           style: smallStyle,
         ),
       ],

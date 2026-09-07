@@ -87,3 +87,14 @@ jobs:
           API_BASE_URL: ${{ inputs.api_base_url || 'http://127.0.0.1:8080' }}
           OFFLINE_DEMO: ${{ inputs.offline_demo || 'true' }}
         run: flutter build apk --release --dart-define=API_BASE_URL="$API_BASE_URL" --dart-define=OFFLINE_DEMO="$OFFLINE_DEMO"
+
+      - name: Name release APK for STROY
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/stroy-release.apk
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stroy-release-apk-${{ github.run_number }}
+          path: mobile/build/app/outputs/flutter-apk/stroy-release.apk
+          if-no-files-found: error
+          retention-days: 14

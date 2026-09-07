@@ -21,6 +21,7 @@ mobile/build/
 mobile/ios/Pods/
 mobile/ios/.symlinks/
 mobile/android/.gradle/
+mobile/tool/__pycache__/
 
 # IDE
 .idea/
