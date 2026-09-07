@@ -340,18 +340,3 @@ String _formatMoney(double value, String currency) {
       : '${groups.join(' ')}.${fraction.toString().padLeft(2, '0')}';
   return '${safe < 0 ? '-' : ''}$amount ${_currency(currency)}';
 }
-
-String _categoryLabel(String value) {
-  switch (value.trim().toLowerCase()) {
-    case 'materials':
-      return 'Материалы';
-    case 'labor':
-      return 'Работа';
-    case 'transport':
-      return 'Транспорт';
-    case 'equipment':
-      return 'Техника';
-    default:
-      return 'Другое';
-  }
-}

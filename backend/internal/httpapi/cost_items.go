@@ -97,7 +97,7 @@ func listCostItems(w http.ResponseWriter, r *http.Request) {
 	items := []CostItemDTO{}
 	for rows.Next() {
 		var item CostItemDTO
-			if err := rows.Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to scan cost item")
 			return
 		}
