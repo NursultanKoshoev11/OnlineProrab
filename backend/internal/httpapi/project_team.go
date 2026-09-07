@@ -135,6 +135,60 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If the phone already belongs to an account, grant access immediately.
+	// The invite table remains the fallback for people who have not logged in yet.
+	var targetUserID string
+	if err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT COALESCE((SELECT id::text FROM users WHERE phone = $1), '')
+	`, req.Phone).Scan(&targetUserID); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to find invited user")
+		return
+	}
+	if targetUserID != "" {
+		tx, err := appState.DB.Pool.Begin(ctx)
+		if err != nil {
+			Error(w, http.StatusInternalServerError, "failed to start member assignment")
+			return
+		}
+		defer tx.Rollback(ctx)
+		result, err := tx.Exec(ctx, `
+			INSERT INTO project_members (project_id, user_id, role)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (project_id, user_id) DO NOTHING
+		`, req.ProjectID, targetUserID, req.Role)
+		if err != nil {
+			Error(w, http.StatusInternalServerError, "failed to add project member")
+			return
+		}
+		if result.RowsAffected() == 0 {
+			Error(w, http.StatusConflict, "user is already a project member")
+			return
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE project_invites
+			SET revoked_at = now()
+			WHERE project_id = $1 AND phone = $2 AND accepted_at IS NULL AND revoked_at IS NULL
+		`, req.ProjectID, req.Phone); err != nil {
+			Error(w, http.StatusInternalServerError, "failed to close previous invitation")
+			return
+		}
+		_, _ = tx.Exec(ctx, `
+			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
+			VALUES ($1, $2, 'add_member', 'project_member', $3, jsonb_build_object('phone', $4, 'role', $5, 'source', 'phone'))
+		`, actorID, req.ProjectID, targetUserID, req.Phone, req.Role)
+		if err := tx.Commit(ctx); err != nil {
+			Error(w, http.StatusInternalServerError, "failed to commit project member")
+			return
+		}
+		JSON(w, http.StatusOK, map[string]any{
+			"status":     "added",
+			"project_id": req.ProjectID,
+			"user_id":    targetUserID,
+			"role":       req.Role,
+		})
+		return
+	}
+
 	token, err := newProjectInviteToken()
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create invitation")

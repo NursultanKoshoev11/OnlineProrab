@@ -169,8 +169,15 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to start login transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
 	var userID string
-	err = appState.DB.Pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO users (phone)
 		VALUES ($1)
 		ON CONFLICT (phone) DO UPDATE SET updated_at = now()
@@ -181,7 +188,74 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = appState.DB.Pool.Exec(ctx, `UPDATE sms_login_codes SET consumed_at = now() WHERE id = $1`, codeID)
+	// A phone invitation is intentionally completed during SMS verification.
+	// This keeps the normal flow to: manager enters a phone, partner logs in,
+	// and the object appears without exposing an invitation token in production.
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, project_id::text, role
+		FROM project_invites
+		WHERE phone = $1
+		  AND accepted_at IS NULL
+		  AND revoked_at IS NULL
+		  AND expires_at > now()
+		ORDER BY created_at
+		FOR UPDATE
+	`, req.Phone)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to load project invitations")
+		return
+	}
+	type pendingProjectInvite struct {
+		id        string
+		projectID string
+		role      string
+	}
+	pendingInvites := make([]pendingProjectInvite, 0)
+	for rows.Next() {
+		var invite pendingProjectInvite
+		if err := rows.Scan(&invite.id, &invite.projectID, &invite.role); err != nil {
+			rows.Close()
+			Error(w, http.StatusInternalServerError, "failed to read project invitation")
+			return
+		}
+		pendingInvites = append(pendingInvites, invite)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		Error(w, http.StatusInternalServerError, "failed to read project invitations")
+		return
+	}
+	rows.Close()
+
+	for _, invite := range pendingInvites {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO project_members (project_id, user_id, role)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (project_id, user_id) DO NOTHING
+		`, invite.projectID, userID, invite.role); err != nil {
+			Error(w, http.StatusInternalServerError, "failed to apply project invitation")
+			return
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE project_invites SET accepted_at = now() WHERE id = $1
+		`, invite.id); err != nil {
+			Error(w, http.StatusInternalServerError, "failed to complete project invitation")
+			return
+		}
+		_, _ = tx.Exec(ctx, `
+			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
+			VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3, 'source', 'sms_login'))
+		`, userID, invite.projectID, invite.role)
+	}
+
+	if _, err := tx.Exec(ctx, `UPDATE sms_login_codes SET consumed_at = now() WHERE id = $1`, codeID); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to complete login code")
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to complete login")
+		return
+	}
 
 	token, err := signAccessToken(userID)
 	if err != nil {

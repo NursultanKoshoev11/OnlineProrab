@@ -9,6 +9,7 @@ class _MoreTab extends StatelessWidget {
     required this.costs,
     required this.auditLogs,
     required this.onOpenTeam,
+    required this.onAddMember,
     required this.onAddFile,
     required this.onOpenFile,
     required this.onDeleteFile,
@@ -21,6 +22,7 @@ class _MoreTab extends StatelessWidget {
   final List<RemoteCostItem> costs;
   final List<RemoteAuditLog> auditLogs;
   final VoidCallback onOpenTeam;
+  final VoidCallback? onAddMember;
   final VoidCallback? onAddFile;
   final ValueChanged<RemoteProjectFile> onOpenFile;
   final ValueChanged<RemoteProjectFile>? onDeleteFile;
@@ -41,6 +43,13 @@ class _MoreTab extends StatelessWidget {
           title: 'Команда',
           subtitle: '${members.length} участников',
           onTap: onOpenTeam,
+          action: onAddMember == null
+              ? null
+              : TextButton.icon(
+                  onPressed: onAddMember,
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 17),
+                  label: const Text('Добавить'),
+                ),
           children: members.isEmpty
               ? const [
                   Text(

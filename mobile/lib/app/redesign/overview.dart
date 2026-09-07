@@ -8,6 +8,8 @@ class _OverviewTab extends StatelessWidget {
     required this.files,
     required this.members,
     required this.openTab,
+    required this.onOpenTeam,
+    required this.onAddMember,
   });
 
   final RemoteProject project;
@@ -16,6 +18,8 @@ class _OverviewTab extends StatelessWidget {
   final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
   final ValueChanged<int> openTab;
+  final VoidCallback onOpenTeam;
+  final VoidCallback? onAddMember;
 
   @override
   Widget build(BuildContext context) {
@@ -130,7 +134,8 @@ class _OverviewTab extends StatelessWidget {
                 title: 'Команда',
                 subtitle: 'Участники и доступ к объекту',
                 count: members.length,
-                onTap: () => openTab(3),
+                onTap: onOpenTeam,
+                trailingAction: onAddMember,
               ),
             ],
           ),
@@ -147,6 +152,7 @@ class _OverviewSectionRow extends StatelessWidget {
     required this.subtitle,
     required this.count,
     required this.onTap,
+    this.trailingAction,
   });
 
   final IconData icon;
@@ -154,6 +160,7 @@ class _OverviewSectionRow extends StatelessWidget {
   final String subtitle;
   final int count;
   final VoidCallback onTap;
+  final VoidCallback? trailingAction;
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +212,14 @@ class _OverviewSectionRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 7),
+            if (trailingAction != null)
+              IconButton(
+                tooltip: 'Добавить участника',
+                onPressed: trailingAction,
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                visualDensity: VisualDensity.compact,
+                color: _brand,
+              ),
             const Icon(Icons.chevron_right_rounded, color: _muted),
           ],
         ),

@@ -193,6 +193,10 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                         files: _files,
                         members: _members,
                         openTab: (index) => setState(() => _tab = index),
+                        onOpenTeam: _openTeam,
+                        onAddMember: _canManage
+                            ? () => _openTeam(openInvite: true)
+                            : null,
                       ),
                       _ExpensesTab(
                         project: widget.project,
@@ -219,6 +223,9 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                         costs: _costs,
                         auditLogs: _auditLogs,
                         onOpenTeam: _openTeam,
+                        onAddMember: _canManage
+                            ? () => _openTeam(openInvite: true)
+                            : null,
                         onAddFile: _canContribute ? _addFile : null,
                         onOpenFile: _openFile,
                         onDeleteFile: _canManage ? _deleteFile : null,
@@ -305,13 +312,14 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     });
   }
 
-  Future<void> _openTeam() async {
+  Future<void> _openTeam({bool openInvite = false}) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => ProjectTeamScreen(
           projectId: widget.project.id,
           repository: widget.deps.teamRepository,
           canManage: _canManage,
+          openInviteOnLoad: openInvite,
         ),
       ),
     );

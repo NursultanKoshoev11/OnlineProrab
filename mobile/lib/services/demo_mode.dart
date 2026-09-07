@@ -159,6 +159,7 @@ class DemoDataState {
       members = [
         {
           'user_id': 'demo-user-1',
+          'project_id': 'demo-project-1',
           'phone': '+996700000001',
           'name': 'Нурсултан',
           'role': 'owner',
@@ -166,6 +167,7 @@ class DemoDataState {
         },
         {
           'user_id': 'demo-user-2',
+          'project_id': 'demo-project-1',
           'phone': '+996555123456',
           'name': 'Айбек',
           'role': 'worker',
@@ -333,19 +335,39 @@ class DemoDataState {
     }
 
     if (path == '/api/v1/project-members' && method == 'GET') {
-      return _json(members);
+      final projectId = request.url.queryParameters['project_id'];
+      return _json(
+        members.where((item) => item['project_id'] == projectId).toList(),
+      );
     }
     if (path == '/api/v1/project-invites' && method == 'POST') {
+      final projectId = body['project_id']?.toString() ?? '';
       final phone = body['phone']?.toString() ?? '';
-      members.removeWhere((item) => item['phone'] == phone);
+      if (members.any(
+        (item) =>
+            item['project_id'] == projectId && item['phone'] == phone,
+      )) {
+        return _json(
+          {'error': 'user is already a project member'},
+          status: 409,
+        );
+      }
       members.add({
         'user_id': _nextId('user'),
+        'project_id': projectId,
         'phone': phone,
         'name': phone,
         'role': body['role']?.toString() ?? 'viewer',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
-      return _json({'status': 'invited', 'expires_in': 86400, 'invite_token': 'demo-invite-token'}, status: 201);
+      return _json(
+        {
+          'status': 'added',
+          'project_id': projectId,
+          'user_id': members.last['user_id'],
+          'role': members.last['role'],
+        },
+      );
     }
     if (path.startsWith('/api/v1/project-members/') && method == 'PATCH') {
       final memberId = _idAfter(path, '/api/v1/project-members/');
@@ -359,7 +381,11 @@ class DemoDataState {
     if (path.startsWith('/api/v1/project-members/') && method == 'DELETE') {
       final memberId = _idAfter(path, '/api/v1/project-members/');
       if (memberId == null) return _notFound();
-      members.removeWhere((item) => item['user_id'] == memberId);
+      final projectId = request.url.queryParameters['project_id'];
+      members.removeWhere(
+        (item) =>
+            item['user_id'] == memberId && item['project_id'] == projectId,
+      );
       return _json({'status': 'removed'});
     }
     if (path == '/api/v1/audit-logs' && method == 'GET') {

@@ -7,12 +7,14 @@ class ProjectTeamScreen extends StatefulWidget {
     required this.projectId,
     required this.repository,
     this.canManage = true,
+    this.openInviteOnLoad = false,
     super.key,
   });
 
   final String projectId;
   final ProjectTeamRepository repository;
   final bool canManage;
+  final bool openInviteOnLoad;
 
   @override
   State<ProjectTeamScreen> createState() => _ProjectTeamScreenState();
@@ -20,11 +22,17 @@ class ProjectTeamScreen extends StatefulWidget {
 
 class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
   late Future<List<RemoteProjectMember>> membersFuture;
+  bool _actionInProgress = false;
 
   @override
   void initState() {
     super.initState();
     membersFuture = widget.repository.listMembers(widget.projectId);
+    if (widget.openInviteOnLoad && widget.canManage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _inviteMember();
+      });
+    }
   }
 
   Future<void> _refresh() async {
@@ -45,11 +53,6 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
         centerTitle: true,
         title: const Text('Команда'),
         actions: [
-          IconButton(
-            tooltip: 'Принять приглашение',
-            onPressed: _acceptInvite,
-            icon: const Icon(Icons.mark_email_read_outlined),
-          ),
           IconButton(
             tooltip: 'Обновить',
             onPressed: _refresh,
@@ -119,7 +122,7 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
               elevation: 0,
               backgroundColor: OnlineProrabColors.primary,
               foregroundColor: Colors.white,
-              onPressed: _inviteMember,
+              onPressed: _actionInProgress ? null : _inviteMember,
               icon: const Icon(Icons.person_add_alt_1_rounded),
               label: const Text(
                 'Добавить участника',
@@ -137,6 +140,7 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
     );
     if (result == null) return;
 
+    setState(() => _actionInProgress = true);
     try {
       final invite = await widget.repository.invite(
         projectId: widget.projectId,
@@ -144,15 +148,20 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
         role: result.role,
       );
       if (!mounted) return;
+      final addedImmediately = invite.status == 'added';
       final tokenMessage = invite.inviteToken.isEmpty
           ? ''
-          : '\n\nТокен приглашения: ${invite.inviteToken}';
+          : '\n\nТокен для тестового режима: ${invite.inviteToken}';
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Приглашение создано'),
+          title: Text(
+            addedImmediately ? 'Участник добавлен' : 'Доступ подготовлен',
+          ),
           content: Text(
-            'Пользователь приглашён с ролью «${_roleLabel(result.role)}».$tokenMessage',
+            addedImmediately
+                ? 'Пользователь с этим номером уже зарегистрирован. Он сразу увидит объект с ролью «${_roleLabel(result.role)}».'
+                : 'После входа по этому номеру пользователь автоматически получит доступ к объекту с ролью «${_roleLabel(result.role)}».$tokenMessage',
           ),
           actions: [
             FilledButton(
@@ -166,47 +175,8 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
     } catch (error) {
       if (!mounted) return;
       _showTeamMessage(context, _friendlyTeamError(error));
-    }
-  }
-
-  Future<void> _acceptInvite() async {
-    final controller = TextEditingController();
-    final token = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Принять приглашение'),
-        content: TextField(
-          controller: controller,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: 'Токен приглашения',
-            prefixIcon: Icon(Icons.vpn_key_outlined),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            child: const Text('Принять'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (token == null || token.isEmpty) return;
-
-    try {
-      await widget.repository.acceptInvite(token);
-      if (!mounted) return;
-      _showTeamMessage(context, 'Приглашение принято.');
-      await _refresh();
-    } catch (error) {
-      if (!mounted) return;
-      _showTeamMessage(context, _friendlyTeamError(error));
+    } finally {
+      if (mounted) setState(() => _actionInProgress = false);
     }
   }
 
@@ -300,6 +270,7 @@ class _ProjectInviteDialogState extends State<ProjectInviteDialog> {
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(
               labelText: 'Номер телефона',
+              hintText: '+996 700 000 000',
               prefixIcon: Icon(Icons.phone_outlined),
             ),
           ),
@@ -330,8 +301,10 @@ class _ProjectInviteDialogState extends State<ProjectInviteDialog> {
         ),
         FilledButton(
           onPressed: () {
-            final phone = phoneController.text.trim();
-            if (phone.length < 9) {
+            final phone = phoneController.text
+                .replaceAll(RegExp(r'[ ()-]'), '')
+                .trim();
+            if (!RegExp(r'^\+?[0-9]{9,15}$').hasMatch(phone)) {
               setState(() => error = 'Введите корректный номер телефона.');
               return;
             }
