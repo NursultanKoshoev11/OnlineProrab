@@ -116,7 +116,7 @@ def configure_app_labels() -> None:
         text = manifest.read_text(encoding="utf-8")
         text = re.sub(
             r'android:label="[^"]*"',
-            'android:label="@string/app_name"',
+            'android:label="STROY"',
             text,
             count=1,
         )
