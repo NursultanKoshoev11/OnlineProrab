@@ -1,9 +1,8 @@
 part of '../online_prorab_redesign.dart';
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({required this.size, this.color = _brand});
+  const _BrandMark({required this.size});
   final double size;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -11,7 +10,7 @@ class _BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color,
+        color: _brand,
         borderRadius: BorderRadius.circular(size * .24),
       ),
       clipBehavior: Clip.antiAlias,

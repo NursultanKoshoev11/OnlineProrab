@@ -336,28 +336,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     return cleaned.isEmpty ? 'online_prorab_file' : cleaned;
   }
 
-  Future<bool?> _confirmDelete({
-    required String title,
-    required String message,
-  }) {
-    return showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _WorkspaceNotice extends StatelessWidget {
