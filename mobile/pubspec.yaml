@@ -34,7 +34,7 @@ flutter:
 
 flutter_launcher_icons:
   android: launcher_icon
-  ios: true
+  ios: false
   image_path: assets/branding/stroy_icon.png
   adaptive_icon_background: '#087A3D'
   adaptive_icon_foreground: assets/branding/stroy_icon.png
