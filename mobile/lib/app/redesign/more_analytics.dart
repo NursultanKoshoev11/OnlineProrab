@@ -3,40 +3,24 @@ part of '../online_prorab_redesign.dart';
 class _MoreTab extends StatelessWidget {
   const _MoreTab({
     required this.project,
-    required this.files,
     required this.members,
-    required this.costs,
-    required this.auditLogs,
     required this.onOpenTeam,
     required this.onOpenSubscription,
     required this.onOpenSupport,
     required this.onOpenReport,
     required this.onAddMember,
-    required this.onAddFile,
-    required this.onOpenFile,
-    required this.onDeleteFile,
   });
 
   final RemoteProject project;
-  final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
-  final List<RemoteCostItem> costs;
-  final List<RemoteAuditLog> auditLogs;
   final VoidCallback onOpenTeam;
   final VoidCallback onOpenSubscription;
   final VoidCallback onOpenSupport;
   final VoidCallback onOpenReport;
   final VoidCallback? onAddMember;
-  final VoidCallback? onAddFile;
-  final ValueChanged<RemoteProjectFile> onOpenFile;
-  final ValueChanged<RemoteProjectFile>? onDeleteFile;
 
   @override
   Widget build(BuildContext context) {
-    final visibleAuditLogs = auditLogs
-        .where((log) => log.entityType.toLowerCase() != 'task')
-        .toList();
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
       children: [
@@ -114,60 +98,6 @@ class _MoreTab extends StatelessWidget {
               subtitle: 'Отправить или сохранить через меню предпросмотра',
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        _SectionCard(
-          icon: Icons.folder_outlined,
-          title: 'Фото и документы',
-          subtitle: '${files.length} файлов',
-          action: onAddFile == null
-              ? null
-              : TextButton.icon(
-                  onPressed: onAddFile,
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Добавить'),
-                ),
-          children: files.isEmpty
-              ? const [
-                  Text(
-                    'Файлы пока не загружены.',
-                    style: TextStyle(color: _muted),
-                  ),
-                ]
-              : files
-                    .take(5)
-                    .map(
-                      (file) => _FileRow(
-                        file: file,
-                        onOpen: () => onOpenFile(file),
-                        onDelete: onDeleteFile == null
-                            ? null
-                            : () => onDeleteFile!(file),
-                      ),
-                    )
-                    .toList(),
-        ),
-        const SizedBox(height: 12),
-        _ExpenseSummaryCard(costs: costs),
-        const SizedBox(height: 12),
-        _SectionCard(
-          icon: Icons.history_rounded,
-          title: 'Журнал действий',
-          subtitle: '${visibleAuditLogs.length} событий',
-          children: visibleAuditLogs.isEmpty
-              ? const [
-                  Text('Действий пока нет.', style: TextStyle(color: _muted)),
-                ]
-              : visibleAuditLogs
-                    .take(6)
-                    .map(
-                      (log) => _InfoRow(
-                        icon: Icons.bolt_outlined,
-                        title: _auditLogTitle(log),
-                        subtitle: _displayDateTime(log.createdAt),
-                      ),
-                    )
-                    .toList(),
         ),
       ],
     );
