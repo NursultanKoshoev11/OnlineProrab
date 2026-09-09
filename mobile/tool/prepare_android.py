@@ -85,9 +85,17 @@ def configure_main_manifest() -> None:
     attributes = {
         "android:allowBackup": "false",
         "android:fullBackupContent": "false",
-        "android:usesCleartextTraffic": "false",
+        "android:usesCleartextTraffic": "true",
     }
     for attribute, value in attributes.items():
+        if attribute == "android:usesCleartextTraffic" and f"{attribute}=" in text:
+            text = re.sub(
+                rf'{re.escape(attribute)}="[^"]*"',
+                f'{attribute}="{value}"',
+                text,
+                count=1,
+            )
+            continue
         if f"{attribute}=" in text:
             continue
         text = text.replace(
