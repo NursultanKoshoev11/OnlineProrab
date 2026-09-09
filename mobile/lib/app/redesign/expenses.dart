@@ -357,25 +357,47 @@ class _VoiceExpenseSearchSheet extends StatefulWidget {
 
 class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
   String _words = '';
+  String _committedWords = '';
+  String _activeWords = '';
   String? _error;
   bool _starting = true;
+  bool _keepListening = true;
+  Timer? _restartTimer;
 
   bool get _listening => widget.speechToText.isListening;
 
   @override
   void initState() {
     super.initState();
+    _restartTimer = Timer.periodic(
+      const Duration(milliseconds: 600),
+      (_) => _ensureListening(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _startListening());
   }
 
   @override
   void dispose() {
+    _keepListening = false;
+    _restartTimer?.cancel();
     widget.speechToText.stop();
     super.dispose();
   }
 
+  void _ensureListening() {
+    if (!mounted || !_keepListening || _starting || _listening) return;
+    if (_activeWords.trim().isNotEmpty) {
+      _committedWords = [_committedWords, _activeWords]
+          .where((part) => part.trim().isNotEmpty)
+          .join(' ');
+      _activeWords = '';
+    }
+    _startListening();
+  }
+
   Future<void> _startListening() async {
     if (!mounted) return;
+    _keepListening = true;
     setState(() {
       _starting = true;
       _error = null;
@@ -385,20 +407,27 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
         onResult: (result) {
           if (!mounted) return;
           final recognized = result.recognizedWords.trim();
+          if (recognized.isEmpty) return;
+          _activeWords = recognized;
+          final combined = [
+            _committedWords,
+            _activeWords,
+          ].where((part) => part.trim().isNotEmpty).join(' ');
           setState(() {
-            _words = recognized;
+            _words = combined;
             _starting = false;
           });
-          if (result.finalResult && recognized.isNotEmpty && mounted) {
-            Navigator.of(context).pop(recognized);
+          if (result.finalResult) {
+            _committedWords = combined;
+            _activeWords = '';
           }
         },
         listenOptions: stt.SpeechListenOptions(
-          listenFor: const Duration(seconds: 15),
-          pauseFor: const Duration(seconds: 3),
-          cancelOnError: true,
+          listenFor: const Duration(minutes: 5),
+          pauseFor: const Duration(seconds: 45),
+          cancelOnError: false,
           partialResults: true,
-          listenMode: stt.ListenMode.confirmation,
+          listenMode: stt.ListenMode.dictation,
         ),
       );
       if (mounted) setState(() => _starting = false);
@@ -413,9 +442,11 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
 
   Future<void> _toggleListening() async {
     if (_listening) {
+      _keepListening = false;
       await widget.speechToText.stop();
       if (mounted) setState(() {});
     } else {
+      _keepListening = true;
       await _startListening();
     }
   }
@@ -423,6 +454,8 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
   Future<void> _useQuery() async {
     final value = _words.trim();
     if (value.isEmpty) return;
+    _keepListening = false;
+    _restartTimer?.cancel();
     await widget.speechToText.stop();
     if (mounted) Navigator.of(context).pop(value);
   }
