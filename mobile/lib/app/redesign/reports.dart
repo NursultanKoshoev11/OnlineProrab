@@ -32,57 +32,10 @@ class _ReportsTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Column(
         children: [
-          const _PageHeader(
-            title: 'Отчёт',
-            subtitle: 'Один PDF по текущим расходам объекта',
-          ),
-          const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(13),
-              child: Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: _brandSoft,
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: const Icon(
-                      Icons.picture_as_pdf_outlined,
-                      color: _brand,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'Предпросмотр PDF',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${costs.length} ${costs.length == 1 ? 'расход' : 'расходов'}',
-                    style: const TextStyle(color: _muted, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
+          const _PageHeader(title: 'Отчёт'),
+          const SizedBox(height: 8),
           _ReportMetric(label: 'Общий итог', value: total),
-          const SizedBox(height: 10),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Предпросмотр',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-          ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 6),
           Expanded(
             child: costs.isEmpty
                 ? Card(
@@ -90,7 +43,7 @@ class _ReportsTab extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          'Добавьте хотя бы один расход, чтобы открыть PDF-предпросмотр.',
+                          'Добавьте хотя бы один расход, чтобы открыть отчёт.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: _muted),
                         ),
