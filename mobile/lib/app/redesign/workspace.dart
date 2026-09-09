@@ -23,7 +23,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   List<RemoteCostItem> _costs = const [];
   List<RemoteProjectFile> _files = const [];
   List<RemoteProjectMember> _members = const [];
-  List<RemoteAuditLog> _auditLogs = const [];
   RemoteProject? _project;
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   Timer? _realtimeReloadDebounce;
@@ -83,7 +82,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     final costs = List<RemoteCostItem>.of(_costs);
     final files = List<RemoteProjectFile>.of(_files);
     final members = List<RemoteProjectMember>.of(_members);
-    final auditLogs = List<RemoteAuditLog>.of(_auditLogs);
     final errors = <String>[];
     final projectId = _currentProject.id;
 
@@ -128,16 +126,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
         },
         errors: errors,
       ),
-      _loadSection(
-        label: 'Журнал действий',
-        load: () => widget.deps.auditLogRepository.list(projectId),
-        assign: (value) {
-          auditLogs
-            ..clear()
-            ..addAll(value);
-        },
-        errors: errors,
-      ),
     ]);
     if (!mounted) return;
     if (generation != _loadGeneration) return;
@@ -146,7 +134,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
       _costs = costs;
       _files = files;
       _members = members;
-      _auditLogs = auditLogs;
       _sectionErrors = errors;
       _loading = false;
     });
@@ -206,7 +193,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                       _OverviewTab(
                         project: _currentProject,
                         costs: _costs,
-                        files: _files,
                         members: _members,
                         openTab: (index) => setState(() => _tab = index),
                         onOpenTeam: _openTeam,
@@ -228,10 +214,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                       _ReportsTab(project: _currentProject, costs: _costs),
                       _MoreTab(
                         project: _currentProject,
-                        files: _files,
                         members: _members,
-                        costs: _costs,
-                        auditLogs: _auditLogs,
                         onOpenTeam: _openTeam,
                         onOpenSubscription: _openSubscription,
                         onOpenSupport: _openSupport,
@@ -239,9 +222,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                         onAddMember: _canManage
                             ? () => _openTeam(openInvite: true)
                             : null,
-                        onAddFile: _canContribute ? _addFile : null,
-                        onOpenFile: _openFile,
-                        onDeleteFile: _canManage ? _deleteFile : null,
                       ),
                     ],
                   ),
