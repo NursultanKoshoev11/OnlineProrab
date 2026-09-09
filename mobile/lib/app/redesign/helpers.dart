@@ -2,6 +2,7 @@ part of '../online_prorab_redesign.dart';
 
 String _normalizePhone(String value) => value.replaceAll(RegExp(r'\D'), '');
 
+// ignore: unused_element
 String _auditLogTitle(RemoteAuditLog log) {
   final action = _auditActionLabel(log.action);
   final entity = _auditEntityLabel(log.entityType);
@@ -335,6 +336,7 @@ String _fileSize(int bytes) {
   return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} МБ';
 }
 
+// ignore: unused_element
 String _displayDateTime(String value) {
   final parsed = DateTime.tryParse(value)?.toLocal();
   if (parsed == null) return value.isEmpty ? 'Дата неизвестна' : value;
