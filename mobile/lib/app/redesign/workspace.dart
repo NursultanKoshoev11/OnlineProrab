@@ -291,19 +291,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     );
   }
 
-  Future<void> _addFile() async {
-    final file = await Navigator.of(context).push<RemoteProjectFile>(
-      MaterialPageRoute(
-        builder: (_) => _FileUploadForm(
-          projectId: _currentProject.id,
-          repository: widget.deps.fileRepository,
-        ),
-      ),
-    );
-    if (!mounted || file == null) return;
-    setState(() => _files = [file, ..._files]);
-  }
-
   Future<void> _openFile(RemoteProjectFile file) async {
     final service = ProjectFileDownloadService(
       apiClient: widget.deps.apiClient,
@@ -326,38 +313,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
       if (mounted) _toast(context, _errorText(error));
     } finally {
       service.close();
-    }
-  }
-
-  Future<void> _deleteFile(RemoteProjectFile file) async {
-    final name = file.originalName.isEmpty ? 'этот файл' : file.originalName;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Удалить файл?'),
-        content: Text('$name будет удалён из объекта.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await widget.deps.fileRepository.delete(file.id);
-      if (!mounted) return;
-      setState(
-        () => _files = _files.where((item) => item.id != file.id).toList(),
-      );
-      _toast(context, 'Файл удалён');
-    } catch (error) {
-      if (mounted) _toast(context, _errorText(error));
     }
   }
 
