@@ -140,9 +140,10 @@ func createTask(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = appState.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
-		VALUES ($1, $2, 'create', 'task', $3)
+	VALUES ($1, $2, 'create', 'task', $3)
 	`, userID, req.ProjectID, item.ID)
 
+	publishProjectEvent(req.ProjectID, "task", item.ID, "created")
 	JSON(w, http.StatusCreated, item)
 }
 
@@ -190,9 +191,10 @@ func updateTask(w http.ResponseWriter, r *http.Request, taskID string) {
 
 	_, _ = appState.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
-		VALUES ($1, $2, 'update', 'task', $3)
+	VALUES ($1, $2, 'update', 'task', $3)
 	`, userID, projectID, taskID)
 
+	publishProjectEvent(projectID, "task", taskID, "updated")
 	JSON(w, http.StatusOK, item)
 }
 
@@ -221,8 +223,9 @@ func deleteTask(w http.ResponseWriter, r *http.Request, taskID string) {
 	}
 	_, _ = appState.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
-		VALUES ($1, $2, 'delete', 'task', $3)
+	VALUES ($1, $2, 'delete', 'task', $3)
 	`, userID, projectID, taskID)
+	publishProjectEvent(projectID, "task", taskID, "deleted")
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

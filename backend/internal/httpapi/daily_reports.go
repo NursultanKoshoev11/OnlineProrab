@@ -167,6 +167,7 @@ func createDailyReport(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, 'create', 'daily_report', $3)
 	`, userID, req.ProjectID, item.ID)
 
+	publishProjectEvent(req.ProjectID, "daily_report", item.ID, "created")
 	JSON(w, http.StatusCreated, item)
 }
 
@@ -213,6 +214,7 @@ func updateDailyReport(w http.ResponseWriter, r *http.Request, reportID string) 
 		VALUES ($1, $2, 'update', 'daily_report', $3)
 	`, userID, projectID, reportID)
 
+	publishProjectEvent(projectID, "daily_report", reportID, "updated")
 	JSON(w, http.StatusOK, item)
 }
 
@@ -245,8 +247,9 @@ func deleteDailyReport(w http.ResponseWriter, r *http.Request, reportID string) 
 	}
 	_, _ = appState.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
-		VALUES ($1, $2, 'delete', 'daily_report', $3)
+	VALUES ($1, $2, 'delete', 'daily_report', $3)
 	`, userID, projectID, reportID)
+	publishProjectEvent(projectID, "daily_report", reportID, "deleted")
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

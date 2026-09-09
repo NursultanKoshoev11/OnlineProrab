@@ -25,12 +25,19 @@ services:
       JWT_SECRET: dev-only-change-me
       ACCESS_TOKEN_TTL_MINUTES: 60
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
-      UPLOAD_DIR: /app/uploads
+      UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: 10
+      SUPPORT_TELEGRAM_BOT_TOKEN: ${SUPPORT_TELEGRAM_BOT_TOKEN:-}
+      SUPPORT_TELEGRAM_CHAT_ID: ${SUPPORT_TELEGRAM_CHAT_ID:-}
+      SUPPORT_TELEGRAM_URL: ${SUPPORT_TELEGRAM_URL:-}
+      SUPPORT_WHATSAPP_ACCESS_TOKEN: ${SUPPORT_WHATSAPP_ACCESS_TOKEN:-}
+      SUPPORT_WHATSAPP_PHONE_NUMBER_ID: ${SUPPORT_WHATSAPP_PHONE_NUMBER_ID:-}
+      SUPPORT_WHATSAPP_TO: ${SUPPORT_WHATSAPP_TO:-}
+      SUPPORT_WHATSAPP_URL: ${SUPPORT_WHATSAPP_URL:-}
     ports:
       - "8080:8080"
     volumes:
-      - api_uploads:/app/uploads
+      - api_uploads:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy

@@ -24,9 +24,14 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   List<RemoteProjectFile> _files = const [];
   List<RemoteProjectMember> _members = const [];
   List<RemoteAuditLog> _auditLogs = const [];
+  RemoteProject? _project;
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  Timer? _realtimeReloadDebounce;
+
+  RemoteProject get _currentProject => _project ?? widget.project;
 
   String? get _currentRole {
-    final projectRole = widget.project.role.trim().toLowerCase();
+    final projectRole = _currentProject.role.trim().toLowerCase();
     if (projectRole.isNotEmpty) return projectRole;
     final phone = _normalizePhone(widget.session.phone);
     if (phone.isEmpty) return null;
@@ -38,34 +43,61 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     return null;
   }
 
-  bool get _archived => widget.project.status.toLowerCase() == 'archived';
+  bool get _archived => _currentProject.status.toLowerCase() == 'archived';
 
   bool get _canContribute =>
-      !_archived &&
-      const {'owner', 'manager', 'worker'}.contains(_currentRole);
+      !_archived && const {'owner', 'manager', 'worker'}.contains(_currentRole);
 
   bool get _canManage =>
-      !_archived &&
-      const {'owner', 'manager'}.contains(_currentRole);
+      !_archived && const {'owner', 'manager'}.contains(_currentRole);
 
   @override
   void initState() {
     super.initState();
+    _project = widget.project;
+    _realtimeSubscription = widget.deps.realtimeService.events
+        .where((event) => event.projectId == _currentProject.id)
+        .listen((_) => _scheduleRealtimeReload());
     _load();
+  }
+
+  @override
+  void dispose() {
+    _realtimeReloadDebounce?.cancel();
+    _realtimeSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleRealtimeReload() {
+    _realtimeReloadDebounce?.cancel();
+    _realtimeReloadDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (mounted) _load();
+    });
   }
 
   Future<void> _load() async {
     if (mounted) setState(() => _loading = true);
     final generation = ++_loadGeneration;
 
+    final latestProject = <RemoteProject>[];
     final costs = List<RemoteCostItem>.of(_costs);
     final files = List<RemoteProjectFile>.of(_files);
     final members = List<RemoteProjectMember>.of(_members);
     final auditLogs = List<RemoteAuditLog>.of(_auditLogs);
     final errors = <String>[];
-    final projectId = widget.project.id;
+    final projectId = _currentProject.id;
 
     await Future.wait<void>([
+      _loadSection(
+        label: 'Объект',
+        load: () => widget.deps.projectRepository.getProject(projectId),
+        assign: (value) {
+          latestProject
+            ..clear()
+            ..add(value);
+        },
+        errors: errors,
+      ),
       _loadSection(
         label: 'Расходы',
         load: () => widget.deps.costItemRepository.list(projectId),
@@ -110,6 +142,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     if (!mounted) return;
     if (generation != _loadGeneration) return;
     setState(() {
+      if (latestProject.isNotEmpty) _project = latestProject.single;
       _costs = costs;
       _files = files;
       _members = members;
@@ -149,10 +182,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
               if (value == 'refresh') _load();
             },
             itemBuilder: (_) => const [
-              PopupMenuItem<String>(
-                value: 'refresh',
-                child: Text('Обновить'),
-              ),
+              PopupMenuItem<String>(value: 'refresh', child: Text('Обновить')),
             ],
           ),
         ],
@@ -174,7 +204,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                     index: _tab,
                     children: [
                       _OverviewTab(
-                        project: widget.project,
+                        project: _currentProject,
                         costs: _costs,
                         files: _files,
                         members: _members,
@@ -185,7 +215,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                             : null,
                       ),
                       _ExpensesTab(
-                        project: widget.project,
+                        project: _currentProject,
                         repository: widget.deps.costItemRepository,
                         fileRepository: widget.deps.fileRepository,
                         onOpenFile: _openFile,
@@ -195,18 +225,16 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
                         canContribute: _canContribute,
                         canManage: _canManage,
                       ),
-                      _ReportsTab(
-                        project: widget.project,
-                        costs: _costs,
-                      ),
+                      _ReportsTab(project: _currentProject, costs: _costs),
                       _MoreTab(
-                        project: widget.project,
+                        project: _currentProject,
                         files: _files,
                         members: _members,
                         costs: _costs,
                         auditLogs: _auditLogs,
                         onOpenTeam: _openTeam,
                         onOpenSubscription: _openSubscription,
+                        onOpenSupport: _openSupport,
                         onOpenReport: () => setState(() => _tab = 2),
                         onAddMember: _canManage
                             ? () => _openTeam(openInvite: true)
@@ -252,21 +280,30 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => ProjectTeamScreen(
-          projectId: widget.project.id,
+          projectId: _currentProject.id,
           repository: widget.deps.teamRepository,
           canManage: _canManage,
           openInviteOnLoad: openInvite,
+          realtime: widget.deps.realtimeService,
         ),
       ),
     );
     if (mounted) await _load();
   }
 
+  Future<void> _openSupport() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _SupportScreen(apiClient: widget.deps.apiClient),
+      ),
+    );
+  }
+
   Future<void> _openSubscription() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _SubscriptionScreen(
-          project: widget.project,
+          project: _currentProject,
           members: _members,
           canManage: _canManage,
         ),
@@ -278,7 +315,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     final file = await Navigator.of(context).push<RemoteProjectFile>(
       MaterialPageRoute(
         builder: (_) => _FileUploadForm(
-          projectId: widget.project.id,
+          projectId: _currentProject.id,
           repository: widget.deps.fileRepository,
         ),
       ),
@@ -348,7 +385,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
     final cleaned = value.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     return cleaned.isEmpty ? 'online_prorab_file' : cleaned;
   }
-
 }
 
 class _WorkspaceNotice extends StatelessWidget {

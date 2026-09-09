@@ -174,12 +174,13 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = tx.Exec(ctx, `
 			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-			VALUES ($1, $2, 'add_member', 'project_member', $3, jsonb_build_object('phone', $4, 'role', $5, 'source', 'phone'))
+			VALUES ($1, $2, 'add_member', 'project_member', $3, jsonb_build_object('phone', $4::text, 'role', $5::text, 'source', 'phone'))
 		`, actorID, req.ProjectID, targetUserID, req.Phone, req.Role)
 		if err := tx.Commit(ctx); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to commit project member")
 			return
 		}
+		publishProjectEvent(req.ProjectID, "project_member", targetUserID, "added")
 		JSON(w, http.StatusOK, map[string]any{
 			"status":     "added",
 			"project_id": req.ProjectID,
@@ -214,7 +215,7 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = appState.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, metadata)
-		VALUES ($1, $2, 'invite', 'project_member', jsonb_build_object('phone', $3, 'role', $4))
+		VALUES ($1, $2, 'invite', 'project_member', jsonb_build_object('phone', $3::text, 'role', $4::text))
 	`, actorID, req.ProjectID, req.Phone, req.Role)
 
 	response := map[string]any{
@@ -224,6 +225,7 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 	if !appState.IsProduction {
 		response["invite_token"] = token
 	}
+	publishProjectEvent(req.ProjectID, "project_member", "", "invited")
 	JSON(w, http.StatusCreated, response)
 }
 
@@ -298,12 +300,13 @@ func AcceptProjectInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = tx.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-		VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3))
+		VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3::text))
 	`, userID, projectID, role)
 	if err := tx.Commit(ctx); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to commit invitation")
 		return
 	}
+	publishProjectEvent(projectID, "project_member", userID, "accepted")
 	JSON(w, http.StatusOK, map[string]string{"status": "accepted", "project_id": projectID, "role": role})
 }
 
@@ -356,8 +359,9 @@ func ProjectMember(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = appState.DB.Pool.Exec(ctx, `
 			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-			VALUES ($1, $2, 'update_role', 'project_member', $3, jsonb_build_object('role', $4))
+			VALUES ($1, $2, 'update_role', 'project_member', $3, jsonb_build_object('role', $4::text))
 		`, actorID, projectID, memberID, req.Role)
+		publishProjectEvent(projectID, "project_member", memberID, "role_updated")
 		JSON(w, http.StatusOK, map[string]string{"status": "updated", "role": req.Role})
 	case http.MethodDelete:
 		result, err := appState.DB.Pool.Exec(ctx, `DELETE FROM project_members WHERE project_id = $1 AND user_id = $2`, projectID, memberID)
@@ -373,6 +377,7 @@ func ProjectMember(w http.ResponseWriter, r *http.Request) {
 			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
 			VALUES ($1, $2, 'remove', 'project_member', $3)
 		`, actorID, projectID, memberID)
+		publishProjectEvent(projectID, "project_member", memberID, "removed", memberID)
 		JSON(w, http.StatusOK, map[string]string{"status": "removed"})
 	default:
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")

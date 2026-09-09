@@ -180,6 +180,7 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, 'create', 'cost_item', $3)
 	`, userID, req.ProjectID, item.ID)
 
+	publishProjectEvent(req.ProjectID, "cost_item", item.ID, "created")
 	JSON(w, http.StatusCreated, item)
 }
 
@@ -233,6 +234,7 @@ func updateCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 		VALUES ($1, $2, 'update', 'cost_item', $3)
 	`, userID, projectID, costItemID)
 
+	publishProjectEvent(projectID, "cost_item", costItemID, "updated")
 	JSON(w, http.StatusOK, item)
 }
 
@@ -261,8 +263,9 @@ func deleteCostItem(w http.ResponseWriter, r *http.Request, costItemID string) {
 	}
 	_, _ = appState.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
-		VALUES ($1, $2, 'delete', 'cost_item', $3)
+	VALUES ($1, $2, 'delete', 'cost_item', $3)
 	`, userID, projectID, costItemID)
+	publishProjectEvent(projectID, "cost_item", costItemID, "deleted")
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

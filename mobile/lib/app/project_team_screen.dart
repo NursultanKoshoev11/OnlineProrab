@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:online_prorab/app/online_prorab_theme.dart';
 import 'package:online_prorab/features/projects/project_team_repository.dart';
+import 'package:online_prorab/services/realtime_service.dart';
 
 class ProjectTeamScreen extends StatefulWidget {
   const ProjectTeamScreen({
@@ -8,6 +11,7 @@ class ProjectTeamScreen extends StatefulWidget {
     required this.repository,
     this.canManage = true,
     this.openInviteOnLoad = false,
+    this.realtime,
     super.key,
   });
 
@@ -15,6 +19,7 @@ class ProjectTeamScreen extends StatefulWidget {
   final ProjectTeamRepository repository;
   final bool canManage;
   final bool openInviteOnLoad;
+  final RealtimeService? realtime;
 
   @override
   State<ProjectTeamScreen> createState() => _ProjectTeamScreenState();
@@ -23,11 +28,16 @@ class ProjectTeamScreen extends StatefulWidget {
 class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
   late Future<List<RemoteProjectMember>> membersFuture;
   bool _actionInProgress = false;
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  Timer? _realtimeReloadDebounce;
 
   @override
   void initState() {
     super.initState();
     membersFuture = widget.repository.listMembers(widget.projectId);
+    _realtimeSubscription = widget.realtime?.events
+        .where((event) => event.projectId == widget.projectId)
+        .listen((_) => _scheduleRealtimeRefresh());
     if (widget.openInviteOnLoad && widget.canManage) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _inviteMember();
@@ -35,9 +45,25 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _realtimeReloadDebounce?.cancel();
+    _realtimeSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleRealtimeRefresh() {
+    _realtimeReloadDebounce?.cancel();
+    _realtimeReloadDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (mounted) _refresh();
+    });
+  }
+
   Future<void> _refresh() async {
     final future = widget.repository.listMembers(widget.projectId);
-    setState(() => membersFuture = future);
+    setState(() {
+      membersFuture = future;
+    });
     try {
       await future;
     } catch (_) {
@@ -103,7 +129,8 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _ProjectMemberCard(
                         member: member,
-                        onChangeRole: !widget.canManage || member.role == 'owner'
+                        onChangeRole:
+                            !widget.canManage || member.role == 'owner'
                             ? null
                             : () => _changeRole(member),
                         onRemove: !widget.canManage || member.role == 'owner'

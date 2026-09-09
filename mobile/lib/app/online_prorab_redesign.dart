@@ -14,6 +14,7 @@ import 'package:online_prorab/services/auth_repository.dart';
 import 'package:online_prorab/services/project_file_download_service.dart';
 import 'package:online_prorab/services/session_store.dart';
 import 'package:online_prorab/services/demo_mode.dart';
+import 'package:online_prorab/services/realtime_service.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:online_prorab/features/reports/expense_report_pdf.dart';
@@ -31,6 +32,7 @@ part 'redesign/reports.dart';
 part 'redesign/files.dart';
 part 'redesign/more_analytics.dart';
 part 'redesign/subscription.dart';
+part 'redesign/support.dart';
 part 'redesign/cost_project_form.dart';
 part 'redesign/expense_form.dart';
 part 'redesign/widgets.dart';
@@ -44,10 +46,7 @@ const _brandSoft = Color(0xFFE5F5EB);
 const _line = Color(0xFFE8ECE9);
 const _warningSoft = Color(0xFFFFF0D6);
 const _warning = Color(0xFFC27A16);
-const _offlineDemo = bool.fromEnvironment(
-  'OFFLINE_DEMO',
-  defaultValue: false,
-);
+const _offlineDemo = bool.fromEnvironment('OFFLINE_DEMO', defaultValue: false);
 
 class OnlineProrabRedesignApp extends StatefulWidget {
   const OnlineProrabRedesignApp({super.key});
@@ -67,12 +66,14 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final AuditLogRepository _auditLogRepository;
   late final stt.SpeechToText _speechToText;
   late final http.Client? _demoHttpClient;
+  late final RealtimeService _realtimeService;
 
   @override
   void initState() {
     super.initState();
     _demoHttpClient = _offlineDemo ? DemoHttpClient() : null;
     _apiClient = ApiClient(httpClient: _demoHttpClient);
+    _realtimeService = RealtimeService(apiClient: _apiClient);
     _authRepository = AuthRepository(
       apiClient: _apiClient,
       sessionStore: SessionStore(),
@@ -88,6 +89,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   @override
   void dispose() {
     _authRepository.dispose();
+    unawaited(_realtimeService.close());
     _apiClient.close();
     _speechToText.cancel();
     super.dispose();
@@ -269,6 +271,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         teamRepository: _teamRepository,
         auditLogRepository: _auditLogRepository,
         speechToText: _speechToText,
+        realtimeService: _realtimeService,
         offlineDemo: _offlineDemo,
       ),
     );
@@ -285,6 +288,7 @@ class _Dependencies {
     required this.teamRepository,
     required this.auditLogRepository,
     required this.speechToText,
+    required this.realtimeService,
     required this.offlineDemo,
   });
 
@@ -296,6 +300,7 @@ class _Dependencies {
   final ProjectTeamRepository teamRepository;
   final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
+  final RealtimeService realtimeService;
   final bool offlineDemo;
 }
 
@@ -309,6 +314,7 @@ class _AuthGate extends StatefulWidget {
     required this.teamRepository,
     required this.auditLogRepository,
     required this.speechToText,
+    required this.realtimeService,
     required this.offlineDemo,
   });
 
@@ -320,6 +326,7 @@ class _AuthGate extends StatefulWidget {
   final ProjectTeamRepository teamRepository;
   final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
+  final RealtimeService realtimeService;
   final bool offlineDemo;
 
   @override
@@ -339,6 +346,7 @@ class _AuthGateState extends State<_AuthGate> {
     teamRepository: widget.teamRepository,
     auditLogRepository: widget.auditLogRepository,
     speechToText: widget.speechToText,
+    realtimeService: widget.realtimeService,
     offlineDemo: widget.offlineDemo,
   );
 
@@ -354,12 +362,20 @@ class _AuthGateState extends State<_AuthGate> {
             ),
           )
         : widget.authRepository.loadSession();
+    if (!widget.offlineDemo) {
+      _sessionFuture.then((session) {
+        if (session != null) widget.realtimeService.start();
+      });
+    }
     _sessionExpiredSubscription = widget.authRepository.sessionExpired.listen((
       _,
     ) {
+      widget.realtimeService.stop();
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
-      setState(() => _sessionFuture = Future<SessionData?>.value(null));
+      setState(() {
+        _sessionFuture = Future<SessionData?>.value(null);
+      });
     });
   }
 
@@ -382,9 +398,12 @@ class _AuthGateState extends State<_AuthGate> {
         }
         return _LoginScreen(
           deps: _deps,
-          onAuthenticated: (session) => setState(
-            () => _sessionFuture = Future<SessionData?>.value(session),
-          ),
+          onAuthenticated: (session) {
+            if (!widget.offlineDemo) widget.realtimeService.start();
+            setState(() {
+              _sessionFuture = Future<SessionData?>.value(session);
+            });
+          },
         );
       },
     );

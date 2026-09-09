@@ -62,6 +62,10 @@ class ProjectRepository {
         .toList();
   }
 
+  Future<RemoteProject> getProject(String projectId) async {
+    return RemoteProject.fromJson(await _apiClient.getProject(projectId));
+  }
+
   Future<RemoteProject> createProject({
     required String name,
     required String address,

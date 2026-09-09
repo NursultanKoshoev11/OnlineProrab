@@ -37,3 +37,17 @@ Expected responses:
 
 - `/health` returns `200 OK` when the HTTP server is alive.
 - `/ready` returns `200 OK` only when the database connection is healthy.
+
+## Support integrations
+
+Support tickets are always stored in PostgreSQL. Delivery to Telegram and WhatsApp is optional until the provider credentials are configured.
+
+- `SUPPORT_TELEGRAM_BOT_TOKEN`
+- `SUPPORT_TELEGRAM_CHAT_ID`
+- `SUPPORT_TELEGRAM_URL` (optional deep link shown in the app)
+- `SUPPORT_WHATSAPP_ACCESS_TOKEN`
+- `SUPPORT_WHATSAPP_PHONE_NUMBER_ID`
+- `SUPPORT_WHATSAPP_TO`
+- `SUPPORT_WHATSAPP_URL` (optional deep link shown in the app)
+
+Inject these values through the deployment secret store or environment, never commit them to Git. Until a channel is configured, `POST /api/v1/support/tickets` returns `delivery_status=not_configured` while preserving the ticket for later processing.

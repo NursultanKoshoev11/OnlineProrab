@@ -18,24 +18,38 @@ type SMSSender interface {
 }
 
 type State struct {
-	DB             *database.DB
-	JWTSecret      string
-	AccessTokenTTL time.Duration
-	UploadDir      string
-	MaxUploadBytes int64
-	IsProduction   bool
-	SMSSender      SMSSender
+	DB                      *database.DB
+	JWTSecret               string
+	AccessTokenTTL          time.Duration
+	UploadDir               string
+	MaxUploadBytes          int64
+	IsProduction            bool
+	SMSSender               SMSSender
+	SupportTelegramBotToken string
+	SupportTelegramChatID   string
+	SupportTelegramURL      string
+	SupportWhatsAppToken    string
+	SupportWhatsAppPhoneID  string
+	SupportWhatsAppTo       string
+	SupportWhatsAppURL      string
 }
 
 func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 	appState = State{
-		DB:             db,
-		JWTSecret:      cfg.JWTSecret,
-		AccessTokenTTL: cfg.AccessTokenTTL,
-		UploadDir:      cfg.UploadDir,
-		MaxUploadBytes: cfg.MaxUploadBytes,
-		IsProduction:   cfg.IsProduction(),
-		SMSSender:      smsSender,
+		DB:                      db,
+		JWTSecret:               cfg.JWTSecret,
+		AccessTokenTTL:          cfg.AccessTokenTTL,
+		UploadDir:               cfg.UploadDir,
+		MaxUploadBytes:          cfg.MaxUploadBytes,
+		IsProduction:            cfg.IsProduction(),
+		SMSSender:               smsSender,
+		SupportTelegramBotToken: cfg.SupportTelegramBotToken,
+		SupportTelegramChatID:   cfg.SupportTelegramChatID,
+		SupportTelegramURL:      cfg.SupportTelegramURL,
+		SupportWhatsAppToken:    cfg.SupportWhatsAppToken,
+		SupportWhatsAppPhoneID:  cfg.SupportWhatsAppPhoneID,
+		SupportWhatsAppTo:       cfg.SupportWhatsAppTo,
+		SupportWhatsAppURL:      cfg.SupportWhatsAppURL,
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"

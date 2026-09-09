@@ -14,6 +14,8 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   final _search = TextEditingController();
   bool _showArchived = false;
   late Future<List<RemoteProject>> _future;
+  StreamSubscription<RealtimeEvent>? _realtimeSubscription;
+  Timer? _realtimeReloadDebounce;
 
   @override
   void initState() {
@@ -21,19 +23,33 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
     _future = widget.deps.projectRepository.listProjects(
       includeArchived: _showArchived,
     );
+    _realtimeSubscription = widget.deps.realtimeService.events.listen((_) {
+      _scheduleRealtimeReload();
+    });
   }
 
   @override
   void dispose() {
+    _realtimeReloadDebounce?.cancel();
+    _realtimeSubscription?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  void _scheduleRealtimeReload() {
+    _realtimeReloadDebounce?.cancel();
+    _realtimeReloadDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (mounted) _reload();
+    });
   }
 
   Future<void> _reload() async {
     final future = widget.deps.projectRepository.listProjects(
       includeArchived: _showArchived,
     );
-    setState(() => _future = future);
+    setState(() {
+      _future = future;
+    });
     try {
       await future;
     } catch (_) {
@@ -139,10 +155,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                               borderRadius: BorderRadius.all(
                                 Radius.circular(11),
                               ),
-                              borderSide: BorderSide(
-                                color: _brand,
-                                width: 1.5,
-                              ),
+                              borderSide: BorderSide(color: _brand, width: 1.5),
                             ),
                           ),
                         ),

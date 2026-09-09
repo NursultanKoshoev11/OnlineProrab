@@ -9,6 +9,7 @@ class _MoreTab extends StatelessWidget {
     required this.auditLogs,
     required this.onOpenTeam,
     required this.onOpenSubscription,
+    required this.onOpenSupport,
     required this.onOpenReport,
     required this.onAddMember,
     required this.onAddFile,
@@ -23,6 +24,7 @@ class _MoreTab extends StatelessWidget {
   final List<RemoteAuditLog> auditLogs;
   final VoidCallback onOpenTeam;
   final VoidCallback onOpenSubscription;
+  final VoidCallback onOpenSupport;
   final VoidCallback onOpenReport;
   final VoidCallback? onAddMember;
   final VoidCallback? onAddFile;
@@ -86,6 +88,21 @@ class _MoreTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _SectionCard(
+          icon: Icons.support_agent_rounded,
+          title: 'Техподдержка',
+          subtitle: 'Написать в Telegram или WhatsApp',
+          onTap: onOpenSupport,
+          children: const [
+            _InfoRow(
+              icon: Icons.chat_bubble_outline_rounded,
+              title: 'Связаться с поддержкой',
+              subtitle:
+                  'Обращение сохранится в системе и будет передано оператору',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SectionCard(
           icon: Icons.picture_as_pdf_outlined,
           title: 'Отчёт расходов',
           subtitle: 'Предпросмотр PDF по текущим расходам',
@@ -139,10 +156,7 @@ class _MoreTab extends StatelessWidget {
           subtitle: '${visibleAuditLogs.length} событий',
           children: visibleAuditLogs.isEmpty
               ? const [
-                  Text(
-                    'Действий пока нет.',
-                    style: TextStyle(color: _muted),
-                  ),
+                  Text('Действий пока нет.', style: TextStyle(color: _muted)),
                 ]
               : visibleAuditLogs
                     .take(6)
@@ -161,11 +175,7 @@ class _MoreTab extends StatelessWidget {
 }
 
 class _FileRow extends StatelessWidget {
-  const _FileRow({
-    required this.file,
-    required this.onOpen,
-    this.onDelete,
-  });
+  const _FileRow({required this.file, required this.onOpen, this.onDelete});
 
   final RemoteProjectFile file;
   final VoidCallback onOpen;

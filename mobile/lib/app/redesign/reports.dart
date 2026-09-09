@@ -84,21 +84,34 @@ class _ReportsTab extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-              child: PdfPreview(
-                key: ValueKey(_fingerprint),
-                build: _build,
-                pdfFileName: _fileName,
-                allowSharing: true,
-                allowPrinting: true,
-                canChangeOrientation: false,
-                canChangePageFormat: false,
-                maxPageWidth: 700,
-              ),
-            ),
+            child: costs.isEmpty
+                ? Card(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Добавьте хотя бы один расход, чтобы открыть PDF-предпросмотр.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: _muted),
+                        ),
+                      ),
+                    ),
+                  )
+                : ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: PdfPreview(
+                      key: ValueKey(_fingerprint),
+                      build: _build,
+                      pdfFileName: _fileName,
+                      allowSharing: true,
+                      allowPrinting: true,
+                      canChangeOrientation: false,
+                      canChangePageFormat: false,
+                      maxPageWidth: 700,
+                    ),
+                  ),
           ),
         ],
       ),

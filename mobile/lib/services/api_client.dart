@@ -97,6 +97,12 @@ class ApiClient {
         ),
       );
 
+  Future<Map<String, dynamic>> getProject(String projectId) async {
+    final data = await getJson('/api/v1/projects/' + projectId);
+    if (data is Map<String, dynamic>) return data;
+    throw const ApiException(500, 'Backend returned an invalid project');
+  }
+
   Future<Map<String, dynamic>> createProject(
     String name,
     String address, {
@@ -344,6 +350,22 @@ class ApiClient {
 
   Future<List<dynamic>> listAuditLogs(String projectId) async =>
       _asList(await getJson('/api/v1/audit-logs', {'project_id': projectId}));
+
+  Future<Map<String, dynamic>> getSupportChannels() async {
+    final data = await getJson('/api/v1/support/channels');
+    if (data is Map<String, dynamic>) return data;
+    throw const ApiException(500, 'Backend returned invalid support channels');
+  }
+
+  Future<Map<String, dynamic>> createSupportTicket({
+    required String channel,
+    required String subject,
+    required String message,
+  }) => postJson('/api/v1/support/tickets', {
+    'channel': channel,
+    'subject': subject,
+    'message': message,
+  });
 
   Future<Map<String, dynamic>> postJson(
     String path,

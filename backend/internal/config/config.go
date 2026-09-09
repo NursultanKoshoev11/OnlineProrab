@@ -41,6 +41,13 @@ type Config struct {
 	TwilioAPIKeySecret        string
 	TwilioFrom                string
 	TwilioMessagingServiceSID string
+	SupportTelegramBotToken   string
+	SupportTelegramChatID     string
+	SupportTelegramURL        string
+	SupportWhatsAppToken      string
+	SupportWhatsAppPhoneID    string
+	SupportWhatsAppTo         string
+	SupportWhatsAppURL        string
 }
 
 func Load() Config {
@@ -61,6 +68,13 @@ func Load() Config {
 	cfg.TwilioAPIKeySecret = strings.TrimSpace(os.Getenv("TWILIO_API_KEY_SECRET"))
 	cfg.TwilioFrom = strings.TrimSpace(os.Getenv("TWILIO_FROM"))
 	cfg.TwilioMessagingServiceSID = strings.TrimSpace(os.Getenv("TWILIO_MESSAGING_SERVICE_SID"))
+	cfg.SupportTelegramBotToken = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_BOT_TOKEN"))
+	cfg.SupportTelegramChatID = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_CHAT_ID"))
+	cfg.SupportTelegramURL = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_URL"))
+	cfg.SupportWhatsAppToken = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_ACCESS_TOKEN"))
+	cfg.SupportWhatsAppPhoneID = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_PHONE_NUMBER_ID"))
+	cfg.SupportWhatsAppTo = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_TO"))
+	cfg.SupportWhatsAppURL = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_URL"))
 	return cfg
 }
 

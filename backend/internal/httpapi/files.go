@@ -176,6 +176,7 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 		archivePreviousProjectCovers(ctx, req.ProjectID, item.ID)
 	}
 
+	publishProjectEvent(req.ProjectID, "file", item.ID, "created")
 	JSON(w, http.StatusCreated, item)
 }
 
@@ -230,7 +231,7 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-		VALUES ($1, $2, 'delete', 'file', $3, jsonb_build_object('storage_path', $4))
+		VALUES ($1, $2, 'delete', 'file', $3, jsonb_build_object('storage_path', $4::text))
 	`, userID, projectID, fileID, storagePath); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to record file deletion")
 		return
@@ -243,6 +244,7 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 	if err := removeStoredFile(storagePath); err != nil && !os.IsNotExist(err) {
 		log.Printf("request_id=%s failed_to_remove_file=%q error=%v", requestIDFromContext(r.Context()), storagePath, err)
 	}
+	publishProjectEvent(projectID, "file", fileID, "deleted")
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

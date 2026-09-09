@@ -114,13 +114,14 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = appState.DB.Pool.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-		VALUES ($1, $2, 'upload', 'file', $3, jsonb_build_object('content_type', $4, 'size_bytes', $5))
+		VALUES ($1, $2, 'upload', 'file', $3, jsonb_build_object('content_type', $4::text, 'size_bytes', $5::bigint))
 	`, userID, projectID, item.ID, item.ContentType, item.SizeBytes)
 	if kind == "project_cover" {
 		archivePreviousProjectCovers(ctx, projectID, item.ID)
 	}
 
 	cleanup = false
+	publishProjectEvent(projectID, "file", item.ID, "created")
 	JSON(w, http.StatusCreated, item)
 }
 

@@ -229,6 +229,7 @@ func createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	publishProjectEvent(item.ID, "project", item.ID, "created")
 	JSON(w, http.StatusCreated, item)
 }
 
@@ -362,6 +363,8 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cleanup = false
+	publishProjectEvent(item.ID, "project", item.ID, "created")
+	publishProjectEvent(item.ID, "file", item.CoverFileID, "created")
 	JSON(w, http.StatusCreated, item)
 }
 
@@ -456,6 +459,7 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		VALUES ($1, $2, 'update', 'project', $2)
 	`, userID, projectID)
 
+	publishProjectEvent(projectID, "project", projectID, "updated")
 	JSON(w, http.StatusOK, item)
 }
 
@@ -485,6 +489,7 @@ func deleteProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
 		VALUES ($1, $2, 'archive', 'project', $2)
 	`, userID, projectID)
+	publishProjectEvent(projectID, "project", projectID, "archived")
 	JSON(w, http.StatusOK, map[string]string{"status": "archived"})
 }
 

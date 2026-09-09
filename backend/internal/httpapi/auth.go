@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -242,13 +243,16 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusInternalServerError, "failed to complete project invitation")
 			return
 		}
-		_, _ = tx.Exec(ctx, `
+		if _, auditErr := tx.Exec(ctx, `
 			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-			VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3, 'source', 'sms_login'))
-		`, userID, invite.projectID, invite.role)
+			VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3::text, 'source', 'sms_login'))
+		`, userID, invite.projectID, invite.role); auditErr != nil {
+			log.Printf("verify sms: failed to write invite audit log: %v", auditErr)
+		}
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE sms_login_codes SET consumed_at = now() WHERE id = $1`, codeID); err != nil {
+		log.Printf("verify sms: failed to complete login code: %v", err)
 		Error(w, http.StatusInternalServerError, "failed to complete login code")
 		return
 	}
