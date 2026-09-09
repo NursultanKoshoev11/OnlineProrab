@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:online_prorab/services/api_config.dart';
+import 'package:online_prorab/services/demo_mode.dart';
 
 class ApiClient {
   ApiClient({
@@ -141,6 +142,9 @@ class ApiClient {
       request.fields['start_date'] = startDate;
       request.fields['budget_amount'] = budgetAmount.toString();
       request.fields['currency'] = currency;
+      if (_httpClient is DemoHttpClient) {
+        request.fields['demo_cover_path'] = filePath;
+      }
       request.files.add(
         await http.MultipartFile.fromPath(
           'cover',
@@ -333,6 +337,9 @@ class ApiClient {
       }
       request.fields['project_id'] = projectId;
       request.fields['kind'] = kind;
+      if (_httpClient is DemoHttpClient) {
+        request.fields['demo_cover_path'] = filePath;
+      }
       request.files.add(
         await http.MultipartFile.fromPath('file', filePath, filename: fileName),
       );
