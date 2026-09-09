@@ -4,7 +4,6 @@ class _OverviewTab extends StatelessWidget {
   const _OverviewTab({
     required this.project,
     required this.costs,
-    required this.files,
     required this.members,
     required this.openTab,
     required this.onOpenTeam,
@@ -13,7 +12,6 @@ class _OverviewTab extends StatelessWidget {
 
   final RemoteProject project;
   final List<RemoteCostItem> costs;
-  final List<RemoteProjectFile> files;
   final List<RemoteProjectMember> members;
   final ValueChanged<int> openTab;
   final VoidCallback onOpenTeam;
@@ -117,14 +115,6 @@ class _OverviewTab extends StatelessWidget {
                 subtitle: 'Предпросмотр PDF по расходам',
                 count: 1,
                 onTap: () => openTab(2),
-              ),
-              const Divider(height: 1, color: _line),
-              _OverviewSectionRow(
-                icon: Icons.folder_open_outlined,
-                title: 'Файлы',
-                subtitle: 'Документы и фотографии объекта',
-                count: files.length,
-                onTap: () => openTab(3),
               ),
               const Divider(height: 1, color: _line),
               _OverviewSectionRow(
@@ -239,14 +229,21 @@ class _OverviewValue extends StatelessWidget {
       children: [
         Text(label, style: const TextStyle(color: _muted, fontSize: 12)),
         const SizedBox(height: 4),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
+        SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              softWrap: false,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ),
       ],
