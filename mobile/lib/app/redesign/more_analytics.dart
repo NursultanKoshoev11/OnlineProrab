@@ -104,7 +104,9 @@ class _MoreTab extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _FileRow extends StatelessWidget {
+  // ignore: unused_element_parameter
   const _FileRow({required this.file, required this.onOpen, this.onDelete});
 
   final RemoteProjectFile file;
@@ -168,6 +170,7 @@ class _FileRow extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _ExpenseSummaryCard extends StatelessWidget {
   const _ExpenseSummaryCard({required this.costs});
   final List<RemoteCostItem> costs;
