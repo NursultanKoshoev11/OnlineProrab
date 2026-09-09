@@ -236,6 +236,10 @@ class DemoDataState {
       final fields = request is http.MultipartRequest
           ? Map<String, dynamic>.from(request.fields)
           : <String, dynamic>{};
+      final coverPath = fields['demo_cover_path']?.toString().trim() ?? '';
+      if (coverPath.isNotEmpty) {
+        fields['cover_file_id'] = 'demo-local:$coverPath';
+      }
       final item = _newProject(fields);
       projects.insert(0, item);
       return _json(item, status: 201);
@@ -312,14 +316,23 @@ class DemoDataState {
       final fields = request is http.MultipartRequest
           ? request.fields
           : <String, String>{};
+      final projectId = fields['project_id'] ?? 'demo-project-1';
+      final kind = fields['kind'] ?? 'document';
+      final coverPath = fields['demo_cover_path']?.trim() ?? '';
       final item = _newFile({
-        'project_id': fields['project_id'] ?? 'demo-project-1',
-        'kind': fields['kind'] ?? 'document',
+        'project_id': projectId,
+        'kind': kind,
         'original_name': 'demo-upload.pdf',
-        'content_type': 'application/pdf',
+        'content_type': kind == 'project_cover'
+            ? 'image/jpeg'
+            : 'application/pdf',
         'size_bytes': 24576,
       });
       files.insert(0, item);
+      if (kind == 'project_cover' && coverPath.isNotEmpty) {
+        final project = _find(projects, projectId);
+        project?['cover_file_id'] = 'demo-local:$coverPath';
+      }
       return _json(item, status: 201);
     }
     final fileId = _idAfter(path, '/api/v1/files/');
@@ -437,7 +450,7 @@ class DemoDataState {
     'name': body['name']?.toString() ?? 'Новый объект',
     'address': body['address']?.toString() ?? '',
     'status': 'active',
-    'cover_file_id': '',
+    'cover_file_id': body['cover_file_id']?.toString() ?? '',
     'start_date': body['start_date']?.toString() ?? '',
     'budget_amount': body['budget_amount'] ?? 0,
     'currency': body['currency']?.toString() ?? 'KGS',
