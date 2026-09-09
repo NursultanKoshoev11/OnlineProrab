@@ -111,5 +111,23 @@ void main() {
     );
     expect(updated.statusCode, 200);
     expect((jsonDecode(updated.body) as Map<String, dynamic>)['role'], 'manager');
+
+    final removed = await client.delete(
+      Uri.parse(
+        'http://offline.demo/api/v1/project-members/${invited['user_id']}?project_id=demo-project-1',
+      ),
+    );
+    expect(removed.statusCode, 200);
+
+    final afterRemoval = await client.get(
+      Uri.parse(
+        'http://offline.demo/api/v1/project-members?project_id=demo-project-1',
+      ),
+    );
+    expect(
+      (jsonDecode(afterRemoval.body) as List<dynamic>)
+          .where((item) => item['user_id'] == invited['user_id']),
+      isEmpty,
+    );
   });
 }
