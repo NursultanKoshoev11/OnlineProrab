@@ -421,6 +421,23 @@ class _ProjectCoverImageState extends State<_ProjectCoverImage> {
       );
     }
 
+    if (widget.fileId.startsWith('demo-local:')) {
+      final path = widget.fileId.substring('demo-local:'.length);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        child: SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (_, _, _) => const _CoverPlaceholder(),
+          ),
+        ),
+      );
+    }
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(widget.borderRadius),
       child: SizedBox(
