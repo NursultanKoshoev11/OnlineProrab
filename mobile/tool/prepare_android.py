@@ -5,14 +5,13 @@ import subprocess
 
 def ensure_android_platform() -> None:
     android_dir = Path("android")
-    ios_dir = Path("ios")
-    if android_dir.exists() and ios_dir.exists():
+    if android_dir.exists():
         return
     subprocess.run(
         [
             "flutter",
             "create",
-            "--platforms=android,ios",
+            "--platforms=android",
             "--org=com.onlineprorab",
             "--project-name=online_prorab",
             ".",
