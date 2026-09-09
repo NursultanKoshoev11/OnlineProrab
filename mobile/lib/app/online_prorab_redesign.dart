@@ -63,7 +63,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final CostItemRepository _costItemRepository;
   late final ProjectFileRepository _fileRepository;
   late final ProjectTeamRepository _teamRepository;
-  late final AuditLogRepository _auditLogRepository;
   late final stt.SpeechToText _speechToText;
   late final http.Client? _demoHttpClient;
   late final RealtimeService _realtimeService;
@@ -82,7 +81,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     _costItemRepository = CostItemRepository(apiClient: _apiClient);
     _fileRepository = ProjectFileRepository(apiClient: _apiClient);
     _teamRepository = ProjectTeamRepository(apiClient: _apiClient);
-    _auditLogRepository = AuditLogRepository(apiClient: _apiClient);
     _speechToText = stt.SpeechToText();
   }
 
@@ -269,7 +267,6 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         costItemRepository: _costItemRepository,
         fileRepository: _fileRepository,
         teamRepository: _teamRepository,
-        auditLogRepository: _auditLogRepository,
         speechToText: _speechToText,
         realtimeService: _realtimeService,
         offlineDemo: _offlineDemo,
@@ -286,7 +283,6 @@ class _Dependencies {
     required this.costItemRepository,
     required this.fileRepository,
     required this.teamRepository,
-    required this.auditLogRepository,
     required this.speechToText,
     required this.realtimeService,
     required this.offlineDemo,
@@ -298,7 +294,6 @@ class _Dependencies {
   final CostItemRepository costItemRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
-  final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
   final RealtimeService realtimeService;
   final bool offlineDemo;
@@ -312,7 +307,6 @@ class _AuthGate extends StatefulWidget {
     required this.costItemRepository,
     required this.fileRepository,
     required this.teamRepository,
-    required this.auditLogRepository,
     required this.speechToText,
     required this.realtimeService,
     required this.offlineDemo,
@@ -324,7 +318,6 @@ class _AuthGate extends StatefulWidget {
   final CostItemRepository costItemRepository;
   final ProjectFileRepository fileRepository;
   final ProjectTeamRepository teamRepository;
-  final AuditLogRepository auditLogRepository;
   final stt.SpeechToText speechToText;
   final RealtimeService realtimeService;
   final bool offlineDemo;
@@ -344,7 +337,6 @@ class _AuthGateState extends State<_AuthGate> {
     costItemRepository: widget.costItemRepository,
     fileRepository: widget.fileRepository,
     teamRepository: widget.teamRepository,
-    auditLogRepository: widget.auditLogRepository,
     speechToText: widget.speechToText,
     realtimeService: widget.realtimeService,
     offlineDemo: widget.offlineDemo,
