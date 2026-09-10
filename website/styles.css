@@ -685,3 +685,45 @@ body { background: var(--ref-cream, #f5f4ef); }
   .blueprint-notes { opacity:.45; }
   .blueprint-note { font-size:6px; }
 }
+
+
+/* STROY reference precision pass v5 */
+@media (min-width: 961px) {
+  .nav-wrap { position:relative; justify-content:initial; }
+  .desktop-nav { position:absolute; left:23%; margin-left:0; gap:34px; }
+  .nav-cta {
+    margin-left:auto;
+    color:#fff;
+    border-color:#0b6f48;
+    background:#0b6f48;
+    box-shadow:0 10px 22px rgba(11,111,72,.18);
+  }
+  .nav-cta:hover { color:#fff; border-color:#095b3c; background:#095b3c; }
+  .hero-copy h1 { font-size:clamp(56px,5.35vw,82px); }
+  .phone-main {
+    top:-52px;
+    height:700px;
+  }
+  .phone-main .phone-screen {
+    position:relative;
+    padding-bottom:74px;
+  }
+  .phone-main .mini-bottom {
+    position:absolute;
+    left:18px;
+    right:18px;
+    bottom:15px;
+    margin:0;
+    padding-top:9px;
+    background:#fbfbf7;
+  }
+  .floating-report-card {
+    top:68px;
+    right:2%;
+    width:245px;
+  }
+  .material-one { top:18px; }
+  .material-two { top:153px; }
+  .material-three { top:286px; }
+}
+.hero-visual { overflow:visible; }
