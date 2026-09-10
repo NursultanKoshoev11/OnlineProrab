@@ -45,15 +45,15 @@ type expenseAIGroup struct {
 }
 
 type expenseAISearchResponse struct {
-	Query         string             `json:"query"`
-	Mode          string             `json:"mode"`
-	Summary       string             `json:"summary,omitempty"`
-	Note          string             `json:"note,omitempty"`
-	MatchedCount  int                `json:"matched_count"`
-	Totals        map[string]float64 `json:"totals"`
-	Items         []CostItemDTO      `json:"items"`
-	Model         string             `json:"model,omitempty"`
-	Breakdown     []expenseAIGroup   `json:"breakdown,omitempty"`
+	Query        string             `json:"query"`
+	Mode         string             `json:"mode"`
+	Summary      string             `json:"summary,omitempty"`
+	Note         string             `json:"note,omitempty"`
+	MatchedCount int                `json:"matched_count"`
+	Totals       map[string]float64 `json:"totals"`
+	Items        []CostItemDTO      `json:"items"`
+	Model        string             `json:"model,omitempty"`
+	Breakdown    []expenseAIGroup   `json:"breakdown,omitempty"`
 }
 
 // ExpenseAISearch interprets a natural-language expense query with Gemini,
@@ -195,7 +195,7 @@ func askGeminiForExpenseIDs(ctx context.Context, query string, items []CostItemD
 
 	requestBody := map[string]any{
 		"contents": []map[string]any{{
-			"role": "user",
+			"role":  "user",
 			"parts": []map[string]string{{"text": prompt}},
 		}},
 		"generationConfig": map[string]any{
