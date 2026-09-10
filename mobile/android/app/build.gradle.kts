@@ -4,6 +4,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Keep local/CI debug builds on one explicit certificate instead of the
+// machine-specific Android Studio debug keystore. The keystore itself stays
+// outside the repository. CI can provide it through STROY_KEYSTORE_PATH and
+// the STROY_* signing environment variables.
+val stroyKeystorePath = System.getenv("STROY_KEYSTORE_PATH")
+    ?: "${System.getProperty("user.home")}/.android/stroy-debug.keystore"
+val stroyKeystore = file(stroyKeystorePath)
+val stroyStorePassword = System.getenv("STROY_KEYSTORE_PASSWORD") ?: "android"
+val stroyKeyAlias = System.getenv("STROY_KEY_ALIAS") ?: "androiddebugkey"
+val stroyKeyPassword = System.getenv("STROY_KEY_PASSWORD") ?: "android"
+
 android {
     namespace = "com.onlineprorab.online_prorab"
     compileSdk = flutter.compileSdkVersion
@@ -25,11 +36,31 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (stroyKeystore.exists()) {
+            create("stroyStable") {
+                storeFile = stroyKeystore
+                storePassword = stroyStorePassword
+                keyAlias = stroyKeyAlias
+                keyPassword = stroyKeyPassword
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = if (stroyKeystore.exists()) {
+                signingConfigs.getByName("stroyStable")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (stroyKeystore.exists()) {
+                signingConfigs.getByName("stroyStable")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
