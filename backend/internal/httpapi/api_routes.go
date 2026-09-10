@@ -14,6 +14,7 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/project-invites/accept", requireAuth(AcceptProjectInvite))
 	mux.HandleFunc(api+"/cost-items", requireAuth(withProjectMutationRBAC(CostItems, "", nil)))
 	mux.HandleFunc(api+"/cost-items/", requireAuth(withProjectMutationRBAC(CostItems, api+"/cost-items/", costItemProjectID)))
+	mux.HandleFunc(api+"/expense-ai/search", requireAuth(ExpenseAISearch))
 	mux.HandleFunc(api+"/daily-reports", requireAuth(withProjectMutationRBAC(DailyReports, "", nil)))
 	mux.HandleFunc(api+"/daily-reports/", requireAuth(withProjectMutationRBAC(DailyReports, api+"/daily-reports/", dailyReportProjectID)))
 	mux.HandleFunc(api+"/files", requireAuth(withProjectMutationRBAC(Files, "", nil)))
