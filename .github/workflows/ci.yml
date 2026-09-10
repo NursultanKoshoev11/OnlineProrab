@@ -59,8 +59,8 @@ jobs:
 
       - name: Verify formatting
         run: |
-          gofmt -d .
-          exit 1
+          gofmt -l .
+          test -z "$(gofmt -l .)"
 
       - name: Vet
         run: go vet ./...
