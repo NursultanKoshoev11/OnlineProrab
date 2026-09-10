@@ -49,7 +49,9 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
       - name: Format check
-        run: test -z "$(gofmt -l .)"
+        run: |
+          gofmt -l .
+          test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
       - name: Race tests
