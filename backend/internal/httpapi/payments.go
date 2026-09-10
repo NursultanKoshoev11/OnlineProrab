@@ -45,7 +45,7 @@ type paymentOrderResponse struct {
 
 // SubscriptionCheckout creates a server-owned payment order. The client only
 // submits the plan and provider; the amount is always selected on the server.
-// Optima's exact create-payment API is intentionally not guessed here: until
+// A bank's exact create-payment API is intentionally not guessed here: until
 // the bank supplies its manual, a configured hosted URL template or the
 // development test mode is required.
 func SubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
@@ -70,19 +70,18 @@ func SubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "plan_code must be pro or business")
 		return
 	}
-	if request.Provider != "optima" {
+	configuredTemplate, webhookURL, providerOK := paymentProviderConfig(request.Provider)
+	if !providerOK {
 		JSON(w, http.StatusUnprocessableEntity, map[string]string{
 			"error": "selected payment provider is not configured",
 			"code":  "payment_provider_not_configured",
 		})
 		return
 	}
-
-	configuredTemplate := strings.TrimSpace(appState.OptimaPaymentURLTemplate)
 	if !appState.PaymentTestMode && configuredTemplate == "" {
 		JSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "Optima payment credentials and checkout URL are not configured",
-			"code":  "optima_not_configured",
+			"error": request.Provider + " payment credentials and checkout URL are not configured",
+			"code":  request.Provider + "_not_configured",
 		})
 		return
 	}
@@ -122,7 +121,7 @@ func SubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if configuredTemplate != "" && response.PaymentURL == "" {
-		response.PaymentURL = renderOptimaPaymentURL(configuredTemplate, response)
+		response.PaymentURL = renderHostedPaymentURL(configuredTemplate, response, webhookURL)
 		if _, err := appState.DB.Pool.Exec(r.Context(), `
 			UPDATE payment_orders SET payment_url = $2, updated_at = now() WHERE id = $1
 		`, response.OrderID, response.PaymentURL); err != nil {
@@ -217,13 +216,13 @@ func completeTestPayment(w http.ResponseWriter, r *http.Request, orderID string)
 	}
 	defer tx.Rollback(ctx)
 
-	var status, planCode string
+	var status, planCode, provider string
 	if err := tx.QueryRow(ctx, `
-		SELECT status, plan_code
+		SELECT status, plan_code, provider
 		FROM payment_orders
 		WHERE id = $1 AND user_id = $2
 		FOR UPDATE
-	`, orderID, userIDFromContext(ctx)).Scan(&status, &planCode); err != nil {
+	`, orderID, userIDFromContext(ctx)).Scan(&status, &planCode, &provider); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(w, http.StatusNotFound, "payment order not found")
 		} else {
@@ -241,7 +240,7 @@ func completeTestPayment(w http.ResponseWriter, r *http.Request, orderID string)
 			Error(w, http.StatusInternalServerError, "failed to complete test payment")
 			return
 		}
-		if err := activateSubscriptionTx(ctx, tx, userIDFromContext(ctx), planCode, orderID); err != nil {
+		if err := activateSubscriptionTx(ctx, tx, userIDFromContext(ctx), planCode, provider, orderID); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to activate subscription")
 			return
 		}
@@ -257,57 +256,83 @@ func completeTestPayment(w http.ResponseWriter, r *http.Request, orderID string)
 	})
 }
 
-func activateSubscriptionTx(ctx context.Context, tx pgx.Tx, userID, planCode, externalID string) error {
+func activateSubscriptionTx(ctx context.Context, tx pgx.Tx, userID, planCode, provider, externalID string) error {
 	plan, ok := paidSubscriptionPlans[planCode]
 	if !ok {
 		return fmt.Errorf("unknown plan %q", planCode)
 	}
+	if _, _, ok := paymentProviderConfig(provider); !ok {
+		return fmt.Errorf("unknown payment provider %q", provider)
+	}
 	var subscriptionID string
 	err := tx.QueryRow(ctx, `
 		UPDATE subscriptions
-		SET plan_code = $2, platform = 'optima', status = 'active', external_id = $3,
-		    current_period_end = now() + ($4::text || ' days')::interval, updated_at = now()
+		SET plan_code = $2, platform = $3, status = 'active', external_id = $4,
+		    current_period_end = now() + ($5::text || ' days')::interval, updated_at = now()
 		WHERE user_id = $1 AND status IN ('active', 'trialing')
 		RETURNING id::text
-	`, userID, plan.Code, externalID, plan.PeriodDays).Scan(&subscriptionID)
+	`, userID, plan.Code, provider, externalID, plan.PeriodDays).Scan(&subscriptionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, `
 			INSERT INTO subscriptions
 			    (user_id, plan_code, platform, status, external_id, current_period_end)
-			VALUES ($1, $2, 'optima', 'active', $3, now() + ($4::text || ' days')::interval)
+			VALUES ($1, $2, $3, 'active', $4, now() + ($5::text || ' days')::interval)
 			RETURNING id::text
-		`, userID, plan.Code, externalID, plan.PeriodDays).Scan(&subscriptionID)
+		`, userID, plan.Code, provider, externalID, plan.PeriodDays).Scan(&subscriptionID)
 	}
 	if err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO subscription_events (subscription_id, event_type, platform, payload_ref)
-		VALUES ($1, 'payment_confirmed', 'optima', $2)
-	`, subscriptionID, externalID)
+		VALUES ($1, 'payment_confirmed', $2, $3)
+	`, subscriptionID, provider, externalID)
 	return err
+}
+
+// paymentProviderConfig exposes only an explicit provider whitelist. Each
+// provider remains fail-closed until its official contract is configured.
+func paymentProviderConfig(provider string) (template, webhookURL string, ok bool) {
+	switch provider {
+	case "optima":
+		return appState.OptimaPaymentURLTemplate, appState.PaymentWebhookURL, true
+	case "obank":
+		return appState.OBankPaymentURLTemplate, appState.OBankPaymentWebhookURL, true
+	default:
+		return "", "", false
+	}
 }
 
 // OptimaWebhook is deliberately fail-closed until the bank's signed payload
 // contract is supplied. No unauthenticated callback can activate a subscription.
 func OptimaWebhook(w http.ResponseWriter, r *http.Request) {
+	failClosedPaymentWebhook(w, r, "optima")
+}
+
+// OBankWebhook is deliberately fail-closed until O!Bank's signed payload
+// contract is supplied.
+func OBankWebhook(w http.ResponseWriter, r *http.Request) {
+	failClosedPaymentWebhook(w, r, "obank")
+}
+
+func failClosedPaymentWebhook(w http.ResponseWriter, r *http.Request, provider string) {
 	if r.Method != http.MethodPost {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	JSON(w, http.StatusNotImplemented, map[string]string{
-		"error": "Optima webhook contract is not configured",
-		"code":  "optima_webhook_not_configured",
+		"error": provider + " webhook contract is not configured",
+		"code":  provider + "_webhook_not_configured",
 	})
 }
 
-func renderOptimaPaymentURL(template string, order paymentOrderResponse) string {
+func renderHostedPaymentURL(template string, order paymentOrderResponse, webhookURL string) string {
 	values := map[string]string{
 		"order_id":    order.OrderID,
 		"amount":      fmt.Sprintf("%.2f", order.Amount),
 		"currency":    order.Currency,
 		"return_url":  appState.PaymentReturnURL,
-		"webhook_url": appState.PaymentWebhookURL,
+		"webhook_url": webhookURL,
 	}
 	result := template
 	for key, value := range values {
@@ -316,4 +341,8 @@ func renderOptimaPaymentURL(template string, order paymentOrderResponse) string 
 		result = strings.ReplaceAll(result, "{"+key+"}", encoded)
 	}
 	return result
+}
+
+func renderOptimaPaymentURL(template string, order paymentOrderResponse) string {
+	return renderHostedPaymentURL(template, order, appState.PaymentWebhookURL)
 }
