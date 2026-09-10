@@ -32,6 +32,8 @@ type State struct {
 	SupportWhatsAppPhoneID  string
 	SupportWhatsAppTo       string
 	SupportWhatsAppURL      string
+	GeminiAPIKey            string
+	GeminiModel             string
 }
 
 func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
@@ -50,6 +52,8 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		SupportWhatsAppPhoneID:  cfg.SupportWhatsAppPhoneID,
 		SupportWhatsAppTo:       cfg.SupportWhatsAppTo,
 		SupportWhatsAppURL:      cfg.SupportWhatsAppURL,
+		GeminiAPIKey:            cfg.GeminiAPIKey,
+		GeminiModel:             cfg.GeminiModel,
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"
