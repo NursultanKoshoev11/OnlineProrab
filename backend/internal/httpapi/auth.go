@@ -34,7 +34,48 @@ type authResponse struct {
 	UserID      string `json:"user_id,omitempty"`
 }
 
-var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}$`)
+var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}package httpapi
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+type requestSMSCodeRequest struct {
+	Phone string `json:"phone"`
+	Name  string `json:"name"`
+}
+
+type verifySMSCodeRequest struct {
+	Phone string `json:"phone"`
+	Code  string `json:"code"`
+}
+
+type authResponse struct {
+	Status      string `json:"status"`
+	AccessToken string `json:"access_token,omitempty"`
+	TokenType   string `json:"token_type,omitempty"`
+	ExpiresIn   int64  `json:"expires_in,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
+}
+
+)
+
+// developmentSMSCode is intentionally available only when the backend runs
+// outside production without a configured SMS sender. It keeps local/staging
+// smoke tests usable without weakening production authentication.
+const developmentSMSCode = "111111"
 
 func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -57,7 +98,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, err := generateSMSCode()
+	code, err := issueSMSCode()
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to generate code")
 		return
@@ -100,6 +141,13 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		response["dev_code"] = code
 	}
 	JSON(w, http.StatusAccepted, response)
+}
+
+func issueSMSCode() (string, error) {
+	if !appState.IsProduction && appState.SMSSender == nil {
+		return developmentSMSCode, nil
+	}
+	return generateSMSCode()
 }
 
 func cleanupSMSCode(codeID string) {
