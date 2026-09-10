@@ -45,6 +45,7 @@ type State struct {
 	PaymentWebhookURL        string
 	OptimaPaymentURLTemplate string
 	OBankPaymentURLTemplate  string
+	OBankPaymentWebhookURL   string
 }
 
 func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
@@ -76,6 +77,7 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		PaymentWebhookURL:        cfg.PaymentWebhookURL,
 		OptimaPaymentURLTemplate: cfg.OptimaPaymentURLTemplate,
 		OBankPaymentURLTemplate:  cfg.OBankPaymentURLTemplate,
+		OBankPaymentWebhookURL:   cfg.OBankPaymentWebhookURL,
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"
