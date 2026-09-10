@@ -39,7 +39,11 @@ type State struct {
 	GroqModel               string
 	OpenRouterAPIKey        string
 	OpenRouterModel         string
-	OpenRouterFallbackModel string
+	OpenRouterFallbackModel string	PaymentTestMode          bool
+	PaymentReturnURL         string
+	PaymentWebhookURL        string
+	OptimaPaymentURLTemplate string
+
 }
 
 func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
@@ -66,6 +70,10 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		OpenRouterAPIKey:        cfg.OpenRouterAPIKey,
 		OpenRouterModel:         cfg.OpenRouterModel,
 		OpenRouterFallbackModel: cfg.OpenRouterFallbackModel,
+		PaymentTestMode:          cfg.PaymentTestMode,
+		PaymentReturnURL:         cfg.PaymentReturnURL,
+		PaymentWebhookURL:        cfg.PaymentWebhookURL,
+		OptimaPaymentURLTemplate: cfg.OptimaPaymentURLTemplate,
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"
