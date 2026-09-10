@@ -854,3 +854,89 @@ body { background: var(--ref-cream, #f5f4ef); }
   }
   .concrete-plinth { display: none; }
 }
+
+
+/* STROY separate realistic visual layers v8 */
+@media (min-width: 961px) {
+  .hero-visual::before {
+    background:
+      linear-gradient(116deg, rgba(7, 26, 17, .38), rgba(4, 18, 12, .38)),
+      url("assets/stroy-hero-background.webp") right center / 160% 100% no-repeat;
+  }
+  .phone-main {
+    width: 336px;
+    height: 700px;
+    right: 31%;
+    top: -52px;
+    transform: none;
+    border: 0;
+    border-radius: 0;
+    background: url("assets/stroy-phone-cutout-tight.webp") center / 100% 100% no-repeat;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .phone-main .phone-speaker {
+    display: none;
+  }
+  .phone-main .phone-screen {
+    position: absolute;
+    left: 8%;
+    top: 2%;
+    width: 84%;
+    height: 96%;
+    padding: 23px 18px 14px;
+    border: 0;
+    border-radius: 38px;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+  .phone-main .phone-screen::after {
+    display: none;
+  }
+  .concrete-plinth {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .hero-visual::before {
+    background:
+      linear-gradient(116deg, rgba(7, 26, 17, .24), rgba(4, 18, 12, .3)),
+      url("assets/stroy-hero-background.webp") 72% center / cover no-repeat;
+  }
+  .phone-main {
+    width: 234px;
+    height: 488px;
+    right: 10%;
+    top: 6px;
+    transform: none;
+    border: 0;
+    border-radius: 0;
+    background: url("assets/stroy-phone-cutout-tight.webp") center / 100% 100% no-repeat;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .phone-main .phone-speaker {
+    display: none;
+  }
+  .phone-main .phone-screen {
+    position: absolute;
+    left: 8%;
+    top: 2%;
+    width: 84%;
+    height: 96%;
+    padding: 15px 11px 9px;
+    border: 0;
+    border-radius: 25px;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+  .phone-main .phone-screen::after {
+    display: none;
+  }
+  .concrete-plinth {
+    display: none;
+  }
+}
