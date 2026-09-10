@@ -42,6 +42,55 @@ class RemoteCostItem {
   );
 }
 
+class RemoteExpenseAiResult {
+  const RemoteExpenseAiResult({
+    required this.query,
+    required this.mode,
+    required this.summary,
+    required this.note,
+    required this.matchedCount,
+    required this.totals,
+    required this.items,
+  });
+
+  final String query;
+  final String mode;
+  final String summary;
+  final String note;
+  final int matchedCount;
+  final Map<String, double> totals;
+  final List<RemoteCostItem> items;
+
+  factory RemoteExpenseAiResult.fromJson(Map<String, dynamic> json) {
+    final rawTotals = json['totals'];
+    final totals = <String, double>{};
+    if (rawTotals is Map) {
+      rawTotals.forEach((key, value) {
+        if (value is num) totals[key.toString()] = value.toDouble();
+      });
+    }
+    final rawItems = json['items'];
+    final items = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map((item) => RemoteCostItem.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ))
+              .where((item) => item.id.isNotEmpty)
+              .toList()
+        : <RemoteCostItem>[];
+    return RemoteExpenseAiResult(
+      query: json['query']?.toString() ?? '',
+      mode: json['mode']?.toString() ?? 'local',
+      summary: json['summary']?.toString() ?? '',
+      note: json['note']?.toString() ?? '',
+      matchedCount: (json['matched_count'] as num?)?.toInt() ?? items.length,
+      totals: totals,
+      items: items,
+    );
+  }
+}
+
 class RemoteDailyReport {
   const RemoteDailyReport({
     required this.id,
@@ -171,6 +220,17 @@ class CostItemRepository {
         .map(RemoteCostItem.fromJson)
         .where((item) => item.id.isNotEmpty)
         .toList();
+  }
+
+  Future<RemoteExpenseAiResult> searchWithAI({
+    required String projectId,
+    required String query,
+  }) async {
+    final data = await _apiClient.searchExpensesWithAI(
+      projectId: projectId,
+      query: query,
+    );
+    return RemoteExpenseAiResult.fromJson(data);
   }
 
   Future<RemoteCostItem> create({
