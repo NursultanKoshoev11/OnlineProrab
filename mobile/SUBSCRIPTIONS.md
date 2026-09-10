@@ -8,8 +8,9 @@ Screens:
 - Plan selection
 - Manage subscription
 - Error state
-- Owner payment screen with MBANK and Optima Bank UI
-- QR payment preview for the demo APK
+- Owner payment screen with MBANK and Optima Bank selection
+- Server-owned checkout order flow for Optima
+- Offline demo checkout with a controlled test completion action
 
 States:
 
@@ -26,5 +27,7 @@ Rules:
 - Restore purchases must sync with backend.
 - The project owner pays; invited project members do not pay separately.
 - Participant limits are counted separately from the owner.
-- The current mobile implementation is UI-only until official bank access and
-  payment verification endpoints are available.
+- The live Optima adapter is intentionally fail-closed until the bank supplies
+  its official signed API/webhook contract. The app opens only a URL returned
+  by the backend; it never contains bank secrets or accepts a client-side
+  success as proof of payment.
