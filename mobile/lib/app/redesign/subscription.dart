@@ -244,6 +244,17 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
           _clearPaymentState();
         }),
       ),
+      const SizedBox(height: 9),
+      _BankChoice(
+        name: 'O!Bank',
+        subtitle: 'Интернет-эквайринг',
+        icon: 'O',
+        selected: _selectedBank == 'obank',
+        onTap: () => setState(() {
+          _selectedBank = 'obank';
+          _clearPaymentState();
+        }),
+      ),
       const SizedBox(height: 16),
       _PaymentSummary(price: _planPrice),
       const SizedBox(height: 14),
@@ -262,7 +273,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
         label: Text(
           _selectedBank == 'optima'
               ? 'Оплатить через Optima Bank'
-              : 'Оплатить через MBANK',
+              : _selectedBank == 'obank'
+                  ? 'Оплатить через O!Bank'
+                  : 'Оплатить через MBANK',
         ),
       ),
       if (_paymentError != null) ...[
@@ -295,9 +308,10 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
   }
 
   Future<void> _startPayment() async {
-    if (_selectedBank != 'optima') {
+    if (_selectedBank != 'optima' && _selectedBank != 'obank') {
       setState(() {
-        _paymentError = 'MBANK пока не подключён. Выберите Optima Bank.';
+        _paymentError =
+            'MBANK пока не подключён. Выберите Optima Bank или O!Bank.';
       });
       return;
     }
@@ -378,7 +392,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
   String _paymentErrorText(Object error) {
     if (error is ApiException) {
       if (error.statusCode == 503) {
-        return 'Optima ещё не подключён на сервере. Нужны официальные API-доступы банка.';
+        return 'Выбранный банк ещё не подключён на сервере. Нужны официальные API-доступы банка.';
       }
       return error.message;
     }
