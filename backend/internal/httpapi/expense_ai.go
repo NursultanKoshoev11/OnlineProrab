@@ -45,19 +45,20 @@ type expenseAIGroup struct {
 }
 
 type expenseAISearchResponse struct {
-	Query         string             `json:"query"`
-	Mode          string             `json:"mode"`
-	Summary       string             `json:"summary,omitempty"`
-	Note          string             `json:"note,omitempty"`
-	MatchedCount  int                `json:"matched_count"`
-	Totals        map[string]float64 `json:"totals"`
-	Items         []CostItemDTO      `json:"items"`
-	Model         string             `json:"model,omitempty"`
-	Breakdown     []expenseAIGroup   `json:"breakdown,omitempty"`
+	Query        string             `json:"query"`
+	Mode         string             `json:"mode"`
+	Summary      string             `json:"summary,omitempty"`
+	Note         string             `json:"note,omitempty"`
+	MatchedCount int                `json:"matched_count"`
+	Totals       map[string]float64 `json:"totals"`
+	Items        []CostItemDTO      `json:"items"`
+	Model        string             `json:"model,omitempty"`
+	Breakdown    []expenseAIGroup   `json:"breakdown,omitempty"`
 }
 
-// ExpenseAISearch interprets a natural-language expense query with Gemini,
-// then calculates the returned totals from PostgreSQL-owned records.
+// ExpenseAISearch interprets a natural-language expense query with the
+// configured AI providers, then calculates the returned totals from
+// PostgreSQL-owned records.
 func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 	if appState.DB == nil || appState.DB.Pool == nil {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
@@ -95,19 +96,21 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 
 	selected := localExpenseMatches(items, req.Query)
 	mode := "local"
-	note := "Gemini не настроен на сервере; показан обычный поиск."
+	note := "AI-провайдеры не настроены на сервере; показан обычный поиск."
 	modelSummary := ""
-	if strings.TrimSpace(appState.GeminiAPIKey) != "" {
-		selection, callErr := askGeminiForExpenseIDs(ctx, req.Query, items)
+	modelName := ""
+	if len(configuredExpenseAIProviders()) > 0 {
+		selection, provider, model, callErr := askExpenseAIForExpenseIDs(ctx, req.Query, items)
 		if callErr != nil {
-			// Keep the feature useful if the provider is temporarily unavailable.
-			log.Printf("gemini expense search failed: %v", callErr)
-			note = "Gemini временно недоступен; показан обычный поиск."
+			// Keep the feature useful if every provider is temporarily unavailable.
+			log.Printf("all expense AI providers failed: %v", callErr)
+			note = "AI временно недоступен; показан обычный поиск."
 		} else {
 			selected = validExpenseSelection(items, selection.SelectedIDs)
-			mode = "gemini"
-			note = "Сумма пересчитана сервером по расходам объекта."
+			mode = provider
+			note = fmt.Sprintf("Ответ получен через %s; сумма пересчитана сервером по расходам объекта.", provider)
 			modelSummary = strings.TrimSpace(selection.Summary)
+			modelName = model
 		}
 	}
 
@@ -119,7 +122,7 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		MatchedCount: len(selected),
 		Totals:       make(map[string]float64),
 		Items:        make([]CostItemDTO, 0, len(selected)),
-		Model:        appState.GeminiModel,
+		Model:        modelName,
 	}
 	for _, item := range selected {
 		response.Items = append(response.Items, item)
@@ -195,7 +198,7 @@ func askGeminiForExpenseIDs(ctx context.Context, query string, items []CostItemD
 
 	requestBody := map[string]any{
 		"contents": []map[string]any{{
-			"role": "user",
+			"role":  "user",
 			"parts": []map[string]string{{"text": prompt}},
 		}},
 		"generationConfig": map[string]any{

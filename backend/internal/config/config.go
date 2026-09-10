@@ -50,6 +50,13 @@ type Config struct {
 	SupportWhatsAppURL        string
 	GeminiAPIKey              string
 	GeminiModel               string
+	AIProviderOrder           []string
+	GroqAPIKey                string
+	GroqModel                 string
+	OpenRouterAPIKey          string
+	OpenRouterModel           string
+	CerebrasAPIKey            string
+	CerebrasModel             string
 }
 
 func Load() Config {
@@ -79,6 +86,13 @@ func Load() Config {
 	cfg.SupportWhatsAppURL = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_URL"))
 	cfg.GeminiAPIKey = strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
 	cfg.GeminiModel = getEnv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+	cfg.AIProviderOrder = splitCSV(getEnv("AI_PROVIDER_ORDER", "gemini,groq,openrouter,cerebras"))
+	cfg.GroqAPIKey = strings.TrimSpace(os.Getenv("GROQ_API_KEY"))
+	cfg.GroqModel = getEnv("GROQ_MODEL", "openai/gpt-oss-20b")
+	cfg.OpenRouterAPIKey = strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
+	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
+	cfg.CerebrasAPIKey = strings.TrimSpace(os.Getenv("CEREBRAS_API_KEY"))
+	cfg.CerebrasModel = getEnv("CEREBRAS_MODEL", "qwen-3.8-27b")
 	return cfg
 }
 

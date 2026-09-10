@@ -34,6 +34,13 @@ type State struct {
 	SupportWhatsAppURL      string
 	GeminiAPIKey            string
 	GeminiModel             string
+	AIProviderOrder         []string
+	GroqAPIKey              string
+	GroqModel               string
+	OpenRouterAPIKey        string
+	OpenRouterModel         string
+	CerebrasAPIKey          string
+	CerebrasModel           string
 }
 
 func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
@@ -54,6 +61,13 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		SupportWhatsAppURL:      cfg.SupportWhatsAppURL,
 		GeminiAPIKey:            cfg.GeminiAPIKey,
 		GeminiModel:             cfg.GeminiModel,
+		AIProviderOrder:         cfg.AIProviderOrder,
+		GroqAPIKey:              cfg.GroqAPIKey,
+		GroqModel:               cfg.GroqModel,
+		OpenRouterAPIKey:        cfg.OpenRouterAPIKey,
+		OpenRouterModel:         cfg.OpenRouterModel,
+		CerebrasAPIKey:          cfg.CerebrasAPIKey,
+		CerebrasModel:           cfg.CerebrasModel,
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"
