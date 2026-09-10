@@ -184,6 +184,14 @@ class ApiClient {
   Future<List<dynamic>> listCostItems(String projectId) async =>
       _asList(await getJson('/api/v1/cost-items', {'project_id': projectId}));
 
+  Future<Map<String, dynamic>> searchExpensesWithAI({
+    required String projectId,
+    required String query,
+  }) => postJson('/api/v1/expense-ai/search', {
+    'project_id': projectId,
+    'query': query,
+  });
+
   Future<Map<String, dynamic>> createCostItem({
     required String projectId,
     required String title,
