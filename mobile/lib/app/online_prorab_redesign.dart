@@ -21,6 +21,7 @@ import 'package:online_prorab/features/reports/expense_report_pdf.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:url_launcher/url_launcher.dart';
 
 part 'redesign/auth_login.dart';
 part 'redesign/projects_screen.dart';
