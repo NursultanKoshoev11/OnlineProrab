@@ -7,7 +7,7 @@
     <meta name="description" content="STROY — контроль строительного объекта, расходов и команды с телефона." />
     <title>STROY — строительство под контролем</title>
     <link rel="icon" href="assets/stroy_icon.png" />
-    <link rel="stylesheet" href="styles.css?v=20260910-2" />
+    <link rel="stylesheet" href="styles.css?v=20260910-3" />
   </head>
   <body>
     <div class="site-noise" aria-hidden="true"></div>
@@ -38,15 +38,19 @@
     <main id="top">
       <section class="hero container">
         <div class="hero-copy">
-          <div class="eyebrow"><span class="pulse-dot"></span> цифровой прораб для вашей команды</div>
+          <div class="eyebrow hero-rule" aria-hidden="true"><span></span></div>
           <h1>Строительство<br /><em>под контролем.</em></h1>
           <p class="hero-lead">
-            STROY собирает объект, расходы, команду и отчёты в одном спокойном рабочем пространстве.
-            Меньше таблиц — больше ясности на каждом этапе.
+            STROY — цифровой помощник прораба.<br />
+            Объекты, команда, расходы и отчёты —<br />
+            в одном приложении.
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#demo">Посмотреть приложение <span>→</span></a>
-            <a class="button button-ghost" href="#features">Что умеет STROY <span>↓</span></a>
+            <a class="button button-primary" href="#demo">Открыть демо <span>→</span></a>
+            <a class="hero-video-link" href="#flow">
+              <span class="play-circle">▶</span>
+              <span><b>Как работает</b><small>Короткое видео (1 мин)</small></span>
+            </a>
           </div>
           <div class="hero-proof">
             <div class="avatar-stack" aria-hidden="true">
@@ -60,7 +64,7 @@
           <div class="glow glow-one"></div>
           <div class="glow glow-two"></div>
           <div class="hero-grid-lines"></div>
-          <div class="floating-label label-top"><span class="label-icon">⌁</span><span><b>Данные всегда рядом</b><small>online + offline режим</small></span></div>
+          <div class="floating-label label-top" aria-hidden="true"></div>
 
           <div class="phone phone-back">
             <div class="phone-speaker"></div>
@@ -75,25 +79,44 @@
           <div class="phone phone-main">
             <div class="phone-speaker"></div>
             <div class="phone-screen">
-              <div class="mini-status light"><span>09:41</span><span>▮▮▮</span></div>
-              <div class="app-mini-top"><div class="mini-brand"><img src="assets/stroy_icon.png" alt="" /> <b>STROY</b></div><span class="mini-avatar">Н</span></div>
-              <div class="mini-kicker">ВАШИ ОБЪЕКТЫ <span>3 активных</span></div>
-              <div class="mini-project-card">
-                <div class="house-art house-one"><span></span><i></i></div>
-                <div><b>Дом у озера</b><small>Иссык‑Куль · в работе</small><strong>1 248 500 <small>сом</small></strong></div>
-                <span class="mini-arrow">›</span>
+              <div class="mini-status light"><span>9:41</span><span>•••</span></div>
+              <div class="app-mini-top">
+                <div class="mini-brand"><img src="assets/stroy_icon.png" alt="" /><b>STROY</b></div>
+                <span class="mini-notify">♧</span>
               </div>
-              <div class="mini-project-card second">
-                <div class="house-art house-two"><span></span><i></i></div>
-                <div><b>Гостевой дом</b><small>Каджи‑Сай · проект</small><strong>364 200 <small>сом</small></strong></div>
-                <span class="mini-arrow">›</span>
+              <div class="mini-welcome"><b>Доброе утро!</b><small>Всё под контролем.</small></div>
+              <div class="mini-stat-grid">
+                <div><b>4</b><small>Объекта</small></div>
+                <div><b>12</b><small>Команда</small></div>
+                <div><b>3</b><small>Задачи</small></div>
               </div>
-              <div class="mini-bottom"><span class="active">⌂<small>Объекты</small></span><span>◌<small>Расходы</small></span><span>◉<small>Команда</small></span><span>•••<small>Ещё</small></span></div>
+              <div class="mini-spend"><div><small>ВСЕГО ПОТРАЧЕНО</small><b>12 480 000 <em>сом</em></b></div><span>↗ +12%</span></div>
+              <div class="mini-ai"><div><b>✦ &nbsp; AI‑поиск</b><small>Спросите о ваших объектах...</small></div><span>→</span></div>
+              <div class="mini-section-title"><b>Недавние объекты</b><small>Смотреть все</small></div>
+              <div class="mini-recent">
+                <div><span class="recent-photo recent-photo-one"></span><div><b>ЖК Солнечный</b><small>78%</small></div><i><span style="width:78%"></span></i></div>
+                <div><span class="recent-photo recent-photo-two"></span><div><b>Бизнес‑центр Парк</b><small>42%</small></div><i><span style="width:42%"></span></i></div>
+                <div><span class="recent-photo recent-photo-three"></span><div><b>Школа №17</b><small>65%</small></div><i><span style="width:65%"></span></i></div>
+              </div>
+              <div class="mini-bottom"><span class="active">⌂<small>Главная</small></span><span>◌<small>Объекты</small></span><span>◉<small>Задачи</small></span><span>☷<small>Команда</small></span><span>•••<small>Ещё</small></span></div>
             </div>
           </div>
 
-          <div class="floating-card expense-float"><span class="float-icon">↗</span><div><small>ВСЕГО ПОТРАЧЕНО</small><b>1 248 500 <em>сом</em></b></div><span class="trend">+12.4%</span></div>
-          <div class="floating-card ai-float"><span class="ai-spark">✦</span><div><small>AI‑ПОИСК</small><b>«Сколько ушло на крышу?»</b><span>3 категории · найдено</span></div></div>
+          <div class="floating-card material-float material-one">
+            <span class="material-thumb concrete-thumb">▦</span>
+            <div><b>Бетон М300</b><small>Стройматериалы</small><strong>- 248 000 <em>сом</em></strong></div>
+            <span class="card-close">×</span>
+          </div>
+          <div class="floating-card material-float material-two">
+            <span class="material-thumb metal-thumb">≋</span>
+            <div><b>Арматура A500</b><small>Материалы</small><strong>- 186 400 <em>сом</em></strong></div>
+            <span class="card-close">×</span>
+          </div>
+          <div class="floating-card material-float material-three">
+            <span class="material-thumb machine-thumb">▰</span>
+            <div><b>Аренда техники</b><small>Услуги</small><strong>- 320 000 <em>сом</em></strong></div>
+            <span class="card-close">×</span>
+          </div>
 
           <div class="motion-orbit motion-orbit-one" aria-hidden="true"><span></span></div>
           <div class="motion-orbit motion-orbit-two" aria-hidden="true"><span></span></div>
@@ -176,6 +199,6 @@
     </main>
 
     <footer class="footer"><div class="container footer-main"><a class="brand" href="#top"><img src="assets/stroy_icon.png" alt="" /><span>STROY</span></a><p>Цифровой контроль строительства<br />для людей и команд.</p><div class="footer-links"><a href="#features">Возможности</a><a href="#flow">Как работает</a><a href="#security">Надёжность</a></div></div><div class="container footer-bottom"><span>© 2026 STROY</span><span>made for better building</span></div></footer>
-    <script src="script.js?v=20260910-2"></script>
+    <script src="script.js?v=20260910-3"></script>
   </body>
 </html>
