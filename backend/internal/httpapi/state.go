@@ -39,7 +39,8 @@ type State struct {
 	GroqModel               string
 	OpenRouterAPIKey        string
 	OpenRouterModel         string
-	OpenRouterFallbackModel string	PaymentTestMode          bool
+	OpenRouterFallbackModel string
+	PaymentTestMode          bool
 	PaymentReturnURL         string
 	PaymentWebhookURL        string
 	OptimaPaymentURLTemplate string
