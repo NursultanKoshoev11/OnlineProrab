@@ -34,3 +34,23 @@ func TestPaidSubscriptionPlansAreServerOwned(t *testing.T) {
 		t.Fatal("business price must remain server-owned at 2990 KGS")
 	}
 }
+
+func TestPaymentProviderConfigIncludesOBank(t *testing.T) {
+	oldTemplate := appState.OBankPaymentURLTemplate
+	oldWebhookURL := appState.OBankPaymentWebhookURL
+	defer func() {
+		appState.OBankPaymentURLTemplate = oldTemplate
+		appState.OBankPaymentWebhookURL = oldWebhookURL
+	}()
+
+	appState.OBankPaymentURLTemplate = "https://obank.example/pay"
+	appState.OBankPaymentWebhookURL = "https://stroy.example/api/v1/payments/obank/webhook"
+
+	template, webhookURL, ok := paymentProviderConfig("obank")
+	if !ok || template != appState.OBankPaymentURLTemplate || webhookURL != appState.OBankPaymentWebhookURL {
+		t.Fatalf("O!Bank provider configuration was not returned correctly")
+	}
+	if _, _, ok := paymentProviderConfig("unknown"); ok {
+		t.Fatal("unknown payment provider must be rejected")
+	}
+}
