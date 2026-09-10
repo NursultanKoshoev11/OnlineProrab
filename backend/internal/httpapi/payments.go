@@ -312,8 +312,8 @@ func renderOptimaPaymentURL(template string, order paymentOrderResponse) string 
 	result := template
 	for key, value := range values {
 		encoded := url.QueryEscape(value)
-		result = strings.ReplaceAll(result, "{"+key+"}", encoded)
 		result = strings.ReplaceAll(result, "{{"+key+"}}", encoded)
+		result = strings.ReplaceAll(result, "{"+key+"}", encoded)
 	}
 	return result
 }
