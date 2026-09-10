@@ -35,7 +35,7 @@ type State struct {
 	GeminiAPIKey             string
 	GeminiModel              string
 	AIProviderOrder          []string
-	GroqAPIKey              string
+	GroqAPIKey               string
 	GroqModel                string
 	OpenRouterAPIKey         string
 	OpenRouterModel          string
@@ -65,7 +65,7 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		GeminiAPIKey:             cfg.GeminiAPIKey,
 		GeminiModel:              cfg.GeminiModel,
 		AIProviderOrder:          cfg.AIProviderOrder,
-		GroqAPIKey:              cfg.GroqAPIKey,
+		GroqAPIKey:               cfg.GroqAPIKey,
 		GroqModel:                cfg.GroqModel,
 		OpenRouterAPIKey:         cfg.OpenRouterAPIKey,
 		OpenRouterModel:          cfg.OpenRouterModel,
