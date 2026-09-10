@@ -262,6 +262,42 @@ class DemoDataState {
     if (path == '/api/v1/cost-items' && method == 'GET') {
       return _json(costs.where((item) => item['project_id'] == costProjectId).toList());
     }
+    if (path == '/api/v1/expense-ai/search' && method == 'POST') {
+      final projectCosts = costs
+          .where((item) => item['project_id'] == body['project_id'])
+          .toList();
+      final query = body['query']?.toString().toLowerCase().trim() ?? '';
+      final terms = query
+          .split(RegExp(r'\s+'))
+          .map((value) => value.replaceAll(RegExp(r'[?!,.;:]'), ''))
+          .where((value) => value.length >= 3)
+          .where((value) => !const {'сколько', 'потратил', 'потрачено', 'на', 'по', 'за', 'и', 'в'}.contains(value))
+          .toList();
+      final matched = projectCosts.where((item) {
+        final haystack = [
+          item['title'],
+          item['description'],
+          item['category'],
+          item['vendor'],
+        ].join(' ').toLowerCase();
+        return terms.any(haystack.contains);
+      }).toList();
+      final total = matched.fold<double>(
+        0,
+        (sum, item) => sum + ((item['amount'] as num?)?.toDouble() ?? 0),
+      );
+      return _json({
+        'query': body['query']?.toString() ?? '',
+        'mode': 'demo',
+        'summary': matched.isEmpty
+            ? 'Связанные расходы не найдены.'
+            : 'Найдены связанные расходы по вашему запросу.',
+        'note': 'Офлайн-режим: Gemini заменён локальным поиском.',
+        'matched_count': matched.length,
+        'totals': {'KGS': total},
+        'items': matched,
+      });
+    }
     if (path == '/api/v1/cost-items' && method == 'POST') {
       final item = _newCost(body);
       costs.insert(0, item);
