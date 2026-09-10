@@ -363,13 +363,14 @@ class ApiClient {
     await deleteJson('/api/v1/files/$fileId');
   }
 
-  Future<List<dynamic>> listAuditLogs  Future<Map<String, dynamic>> createSubscriptionCheckout({
+  Future<Map<String, dynamic>> createSubscriptionCheckout({
     required String planCode,
     required String provider,
-  }) => postJson('/api/v1/subscriptions/checkout', {
-    'plan_code': planCode,
-    'provider': provider,
-  });
+  }) =>
+      postJson('/api/v1/subscriptions/checkout', {
+        'plan_code': planCode,
+        'provider': provider,
+      });
 
   Future<Map<String, dynamic>> getSubscriptionPaymentStatus(
     String orderId,
@@ -386,7 +387,7 @@ class ApiClient {
     );
   }
 
-(String projectId) async =>
+  Future<List<dynamic>> listAuditLogs(String projectId) async =>
       _asList(await getJson('/api/v1/audit-logs', {'project_id': projectId}));
 
   Future<Map<String, dynamic>> getSupportChannels() async {
