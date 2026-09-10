@@ -48,6 +48,8 @@ type Config struct {
 	SupportWhatsAppPhoneID    string
 	SupportWhatsAppTo         string
 	SupportWhatsAppURL        string
+	GeminiAPIKey              string
+	GeminiModel               string
 }
 
 func Load() Config {
@@ -75,6 +77,8 @@ func Load() Config {
 	cfg.SupportWhatsAppPhoneID = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_PHONE_NUMBER_ID"))
 	cfg.SupportWhatsAppTo = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_TO"))
 	cfg.SupportWhatsAppURL = strings.TrimSpace(os.Getenv("SUPPORT_WHATSAPP_URL"))
+	cfg.GeminiAPIKey = strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
+	cfg.GeminiModel = getEnv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 	return cfg
 }
 
