@@ -36,4 +36,5 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/subscriptions/checkout", requireAuth(SubscriptionCheckout))
 	mux.HandleFunc(api+"/subscriptions/payments/", requireAuth(SubscriptionPayment))
 	mux.HandleFunc(api+"/payments/optima/webhook", OptimaWebhook)
+	mux.HandleFunc(api+"/payments/obank/webhook", OBankWebhook)
 }
