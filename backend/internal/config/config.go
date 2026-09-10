@@ -60,6 +60,7 @@ type Config struct {
 	PaymentReturnURL          string
 	PaymentWebhookURL         string
 	OptimaPaymentURLTemplate  string
+	OBankPaymentURLTemplate   string
 }
 
 func Load() Config {
@@ -99,6 +100,7 @@ func Load() Config {
 	cfg.PaymentReturnURL = strings.TrimSpace(os.Getenv("PAYMENT_RETURN_URL"))
 	cfg.PaymentWebhookURL = strings.TrimSpace(os.Getenv("PAYMENT_WEBHOOK_URL"))
 	cfg.OptimaPaymentURLTemplate = strings.TrimSpace(os.Getenv("OPTIMA_PAYMENT_URL_TEMPLATE"))
+	cfg.OBankPaymentURLTemplate = strings.TrimSpace(os.Getenv("OBANK_PAYMENT_URL_TEMPLATE"))
 	return cfg
 }
 
