@@ -201,6 +201,8 @@ class DemoDataState {
   final List<Map<String, dynamic>> files;
   final List<Map<String, dynamic>> members;
   final List<Map<String, dynamic>> auditLogs;
+  final Map<String, Map<String, dynamic>> paymentOrders = {};
+  String? activeSubscriptionPlan;
   int _sequence = 100;
 
   http.Response handle(http.BaseRequest request) {
@@ -219,6 +221,75 @@ class DemoDataState {
     }
     if (method == 'POST' && path == '/api/v1/auth/session/logout') {
       return _json({'status': 'logged_out'});
+    }
+
+
+    if (method == 'GET' && path == '/api/v1/subscriptions/plans') {
+      return _json({
+        'plans': [
+          {'id': 'free', 'name': 'Free', 'price_kgs': 0, 'max_projects': 1},
+          {'id': 'pro', 'name': 'Pro', 'price_kgs': 990, 'max_projects': 5},
+          {
+            'id': 'business',
+            'name': 'Business',
+            'price_kgs': 2990,
+            'max_projects': 25,
+          },
+        ],
+      });
+    }
+    if (method == 'GET' && path == '/api/v1/subscriptions/status') {
+      return _json({
+        'user_id': 'demo-user-1',
+        'plan': activeSubscriptionPlan ?? 'free',
+        'status': 'active',
+        'current_period_end': null,
+      });
+    }
+    if (method == 'POST' && path == '/api/v1/subscriptions/checkout') {
+      final provider = body['provider']?.toString() ?? '';
+      final planCode = body['plan_code']?.toString() ?? '';
+      if (provider != 'optima' || !const {'pro', 'business'}.contains(planCode)) {
+        return _json(
+          {'error': 'Demo supports Optima Pro and Business only'},
+          status: 422,
+        );
+      }
+      final orderId = _nextId('payment');
+      final amount = planCode == 'business' ? 2990 : 990;
+      paymentOrders[orderId] = {
+        'order_id': orderId,
+        'provider': 'optima',
+        'plan_code': planCode,
+        'amount': amount,
+        'currency': 'KGS',
+        'status': 'pending',
+        'test_mode': true,
+        'integration_status': 'test',
+        'expires_at': DateTime.now()
+            .toUtc()
+            .add(const Duration(minutes: 30))
+            .toIso8601String(),
+      };
+      return _json(paymentOrders[orderId]!, status: 201);
+    }
+    if (method == 'GET' && path.startsWith('/api/v1/subscriptions/payments/')) {
+      final orderId = _idAfter(path, '/api/v1/subscriptions/payments/');
+      final order = orderId == null ? null : paymentOrders[orderId];
+      return order == null ? _notFound() : _json(order);
+    }
+    if (method == 'POST' && path.endsWith('/test-complete')) {
+      final prefix = '/api/v1/subscriptions/payments/';
+      if (!path.startsWith(prefix)) return _notFound();
+      final orderId = path.substring(
+        prefix.length,
+        path.length - '/test-complete'.length,
+      );
+      final order = paymentOrders[orderId];
+      if (order == null) return _notFound();
+      order['status'] = 'paid';
+      activeSubscriptionPlan = order['plan_code']?.toString();
+      return _json({'order_id': orderId, 'status': 'paid', 'test_mode': true});
     }
 
     if (path == '/api/v1/projects') {

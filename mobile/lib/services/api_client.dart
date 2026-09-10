@@ -363,6 +363,30 @@ class ApiClient {
     await deleteJson('/api/v1/files/$fileId');
   }
 
+  Future<Map<String, dynamic>> createSubscriptionCheckout({
+    required String planCode,
+    required String provider,
+  }) =>
+      postJson('/api/v1/subscriptions/checkout', {
+        'plan_code': planCode,
+        'provider': provider,
+      });
+
+  Future<Map<String, dynamic>> getSubscriptionPaymentStatus(
+    String orderId,
+  ) async {
+    final data = await getJson('/api/v1/subscriptions/payments/$orderId');
+    if (data is Map<String, dynamic>) return data;
+    throw const ApiException(500, 'Backend returned invalid payment status');
+  }
+
+  Future<void> completeTestSubscriptionPayment(String orderId) async {
+    await postJson(
+      '/api/v1/subscriptions/payments/$orderId/test-complete',
+      const <String, dynamic>{},
+    );
+  }
+
   Future<List<dynamic>> listAuditLogs(String projectId) async =>
       _asList(await getJson('/api/v1/audit-logs', {'project_id': projectId}));
 
