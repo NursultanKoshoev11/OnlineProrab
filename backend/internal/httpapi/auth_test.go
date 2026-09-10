@@ -29,6 +29,36 @@ func TestGenerateSMSCodeReturnsSixDigits(t *testing.T) {
 	}
 }
 
+func TestIssueSMSCodeUsesFixedDevelopmentCodeOnlyWithoutSMSProvider(t *testing.T) {
+	oldState := appState
+	defer func() { appState = oldState }()
+
+	appState.IsProduction = false
+	appState.SMSSender = nil
+	code, err := issueSMSCode()
+	if err != nil {
+		t.Fatalf("issueSMSCode returned error: %v", err)
+	}
+	if code != developmentSMSCode {
+		t.Fatalf("expected development code %q, got %q", developmentSMSCode, code)
+	}
+}
+
+func TestIssueSMSCodeDoesNotUseFixedCodeInProduction(t *testing.T) {
+	oldState := appState
+	defer func() { appState = oldState }()
+
+	appState.IsProduction = true
+	appState.SMSSender = nil
+	code, err := issueSMSCode()
+	if err != nil {
+		t.Fatalf("issueSMSCode returned error: %v", err)
+	}
+	if code == developmentSMSCode {
+		t.Fatalf("production code must not be the fixed development code %q", developmentSMSCode)
+	}
+}
+
 func TestAccessTokenRoundTrip(t *testing.T) {
 	oldState := appState
 	appState.JWTSecret = "unit-test-signing-key-1234567890"
