@@ -31,16 +31,16 @@ type subscriptionCheckoutRequest struct {
 }
 
 type paymentOrderResponse struct {
-	OrderID       string  `json:"order_id"`
-	Provider      string  `json:"provider"`
-	PlanCode      string  `json:"plan_code"`
-	Amount        float64 `json:"amount"`
-	Currency      string  `json:"currency"`
-	Status        string  `json:"status"`
-	PaymentURL    string  `json:"payment_url,omitempty"`
-	TestMode      bool    `json:"test_mode"`
-	Integration   string  `json:"integration_status"`
-	ExpiresAt     string  `json:"expires_at"`
+	OrderID     string  `json:"order_id"`
+	Provider    string  `json:"provider"`
+	PlanCode    string  `json:"plan_code"`
+	Amount      float64 `json:"amount"`
+	Currency    string  `json:"currency"`
+	Status      string  `json:"status"`
+	PaymentURL  string  `json:"payment_url,omitempty"`
+	TestMode    bool    `json:"test_mode"`
+	Integration string  `json:"integration_status"`
+	ExpiresAt   string  `json:"expires_at"`
 }
 
 // SubscriptionCheckout creates a server-owned payment order. The client only
@@ -251,8 +251,8 @@ func completeTestPayment(w http.ResponseWriter, r *http.Request, orderID string)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]any{
-		"order_id": orderID,
-		"status":   "paid",
+		"order_id":  orderID,
+		"status":    "paid",
 		"test_mode": true,
 	})
 }
