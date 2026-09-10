@@ -1,47 +1,65 @@
-# Optima Bank integration
+# Bank payment integration
 
 ## Current implementation
 
-The app now uses a server-owned payment order flow:
+The app uses a server-owned payment order flow for the explicitly supported
+providers `optima` and `obank`:
 
 1. Android sends only `plan_code` and `provider` to
    `POST /api/v1/subscriptions/checkout`.
 2. The backend selects the authoritative KGS amount and creates a
    `payment_orders` row.
-3. The backend returns a hosted checkout URL when Optima has supplied a URL
-   template, or returns a controlled test order in development test mode.
+3. The backend returns a hosted checkout URL only when the selected provider's
+   bank-supplied URL template is configured, or returns a controlled test order
+   in development test mode.
 4. Android opens the returned URL externally. Card data never enters the app.
 5. Android can read the order state from
-   `GET /api/v1/subscriptions/payments/{order_id}` after returning from the
-   bank.
+   `GET /api/v1/subscriptions/payments/{order_id}`.
 
 The test completion endpoint is available only when `PAYMENT_TEST_MODE=true`
 and `APP_ENV` is not `production`:
 
-`POST /api/v1/subscriptions/payments/{order_id}/test-complete`
+NaNPOST /api/v1/subscriptions/payments/{order_id}/test-complete`
 
-## What is intentionally not guessed
+## O!Bank
 
-Optima's public page confirms internet acquiring for websites and mobile
-applications, but it does not publish the signed API request and webhook
-contract needed to activate a real subscription. The webhook endpoint therefore
-fails closed with `501` until the bank's technical manual is provided. It must
-not be changed to trust an unsigned callback.
+O!Bank's public business page advertises internet acquiring from a partner's
+website or application and integration with software. Its exact signed API
+request and webhook contract are not present in the public page used for this
+implementation.
 
-After receiving the manual, implement the bank-specific adapter and signature
-verification using the exact fields from the document. Do not put merchant
-secrets in the Android APK.
+The O!Bank provider is therefore registered in the backend, but its live
+webhook remains fail-closed with `501` until O!Bank supplies the technical
+manual and merchant credentials. Do not activate a subscription from an
+unsigned callback.
 
-## Configuration
+Configuration:
 
 ```env
-PAYMENT_TEST_MODE=false
-PAYMENT_RETURN_URL=https://your-domain.example/payment-return
+OBANK_PAYMENT_WEBHOOK_URL=https://your-domain.example/api/v1/payments/obank/webhook
+OBANK_PAYMENT_URL_TEMPLATE=
+```
+
+## Optima Bank
+
+Optima's public page confirms internet acquiring for websites and mobile
+applications, but the exact signed API request and webhook contract must come
+from the bank.
+
+Configuration:
+
+```env
 PAYMENT_WEBHOOK_URL=https://your-domain.example/api/v1/payments/optima/webhook
 OPTIMA_PAYMENT_URL_TEMPLATE=
 ```
 
-`OPTIMA_PAYMENT_URL_TEMPLATE` is only a bridge for a bank-provided hosted URL
-format. Supported placeholders are `{order_id}`, `{amount}`, `{currency}`,
-`{return_url}`, and `{webhook_url}`. Leave it empty until Optima gives the
-exact format.
+## Hosted URL bridge
+
+Both providers support these placeholders when the bank gives an exact hosted
+checkout URL format:
+
+NaN{order_id}`, `{amount}`, `{currency}`, `{return_url}`, and
+NaN{webhook_url}`.
+
+This bridge is not a substitute for a bank API adapter or webhook signature
+verification. Merchant secrets must never be put in the Android APK.
