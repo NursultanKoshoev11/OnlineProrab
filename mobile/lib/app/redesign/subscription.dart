@@ -344,7 +344,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
         );
         if (!launched && mounted) {
           setState(() {
-            _paymentError = 'Не удалось открыть страницу Optima.';
+            _paymentError = _selectedBank == 'obank'
+                ? 'Не удалось открыть страницу O!Bank.'
+                : 'Не удалось открыть страницу Optima.';
           });
         }
       }
