@@ -56,11 +56,10 @@ type Config struct {
 	OpenRouterAPIKey          string
 	OpenRouterModel           string
 	OpenRouterFallbackModel   string
-	PaymentTestMode          bool
-	PaymentReturnURL         string
-	PaymentWebhookURL        string
-	OptimaPaymentURLTemplate string
-
+	PaymentTestMode           bool
+	PaymentReturnURL          string
+	PaymentWebhookURL         string
+	OptimaPaymentURLTemplate  string
 }
 
 func Load() Config {
@@ -224,15 +223,15 @@ func getEnvInt(key string, fallback int) int {
 }
 
 func getEnvBool(key string, fallback bool) bool {
-  value := strings.TrimSpace(os.Getenv(key))
-  if value == "" {
-    return fallback
-  }
-  parsed, err := strconv.ParseBool(value)
-  if err != nil {
-    panic(fmt.Sprintf("invalid boolean value for %s: %q", key, value))
-  }
-  return parsed
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		panic(fmt.Sprintf("invalid boolean value for %s: %q", key, value))
+	}
+	return parsed
 }
 
 func splitCSV(value string) []string {
