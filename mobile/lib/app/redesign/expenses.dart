@@ -41,6 +41,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   late List<RemoteCostItem> _items;
   RemoteExpenseAiResult? _aiResult;
   bool _aiLoading = false;
+  bool _aiReportOpen = false;
   String? _aiError;
 
   @override
@@ -62,6 +63,9 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   }
 
   List<RemoteCostItem> get _filtered {
+    // The AI result is an additional mini-report. It must not replace the
+    // ordinary expense report or make its total depend on the voice query.
+    if (_aiReportOpen) return List<RemoteCostItem>.of(_items);
     final parsed = parseExpenseSearchQuery(_search.text, now: DateTime.now());
     return _items.where(parsed.matches).toList();
   }
@@ -117,7 +121,15 @@ class _ExpensesTabState extends State<_ExpensesTab> {
               const SizedBox(height: 20),
               TextField(
                 controller: _search,
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) {
+                  setState(() {
+                    // A manually edited query starts the normal local search
+                    // again and closes the previous AI mini-report.
+                    _aiReportOpen = false;
+                    _aiResult = null;
+                    _aiError = null;
+                  });
+                },
                 onSubmitted: _runAiSearch,
                 decoration: InputDecoration(
                   hintText: 'Поиск расходов',
@@ -149,7 +161,10 @@ class _ExpensesTabState extends State<_ExpensesTab> {
               ],
               if (_aiResult != null) ...[
                 const SizedBox(height: 12),
-                _AiExpenseResultCard(result: _aiResult!),
+                _AiExpenseResultCard(
+                  result: _aiResult!,
+                  onClose: _closeAiReport,
+                ),
               ],
               const SizedBox(height: 14),
               Card(
@@ -322,6 +337,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     setState(() {
       _aiLoading = true;
       _aiError = null;
+      _aiResult = null;
+      _aiReportOpen = true;
     });
     try {
       final result = await widget.repository.searchWithAI(
@@ -340,6 +357,16 @@ class _ExpensesTabState extends State<_ExpensesTab> {
         _aiError = _errorText(error);
       });
     }
+  }
+
+  void _closeAiReport() {
+    setState(() {
+      _aiResult = null;
+      _aiLoading = false;
+      _aiError = null;
+      _aiReportOpen = false;
+      _search.clear();
+    });
   }
 
   Future<void> _openDetails(RemoteCostItem item) async {
@@ -391,9 +418,10 @@ class _ExpensesTabState extends State<_ExpensesTab> {
 }
 
 class _AiExpenseResultCard extends StatelessWidget {
-  const _AiExpenseResultCard({required this.result});
+  const _AiExpenseResultCard({required this.result, required this.onClose});
 
   final RemoteExpenseAiResult result;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -418,6 +446,13 @@ class _AiExpenseResultCard extends StatelessWidget {
                 Text(
                   '${result.matchedCount} ${_expenseWord(result.matchedCount)}',
                   style: const TextStyle(color: _muted, fontSize: 12),
+                ),
+                const SizedBox(width: 2),
+                IconButton(
+                  tooltip: 'Закрыть мини-отчёт',
+                  onPressed: onClose,
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close_rounded, size: 20),
                 ),
               ],
             ),
