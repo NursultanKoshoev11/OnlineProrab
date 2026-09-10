@@ -479,32 +479,37 @@ class _AiExpenseResultCard extends StatelessWidget {
               ),
             if (result.items.isNotEmpty) ...[
               const SizedBox(height: 8),
-              ...result.items.take(4).map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: _muted, fontSize: 12),
-                        ),
+              ...result.items
+                  .take(4)
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _money(item.amount, item.currency),
+                            style: const TextStyle(
+                              color: _ink,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _money(item.amount, item.currency),
-                        style: const TextStyle(
-                          color: _ink,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
             ],
             if (result.note.isNotEmpty) ...[
               const SizedBox(height: 7),
@@ -562,9 +567,10 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
   void _ensureListening() {
     if (!mounted || !_keepListening || _starting || _listening) return;
     if (_activeWords.trim().isNotEmpty) {
-      _committedWords = [_committedWords, _activeWords]
-          .where((part) => part.trim().isNotEmpty)
-          .join(' ');
+      _committedWords = [
+        _committedWords,
+        _activeWords,
+      ].where((part) => part.trim().isNotEmpty).join(' ');
       _activeWords = '';
     }
     _startListening();
