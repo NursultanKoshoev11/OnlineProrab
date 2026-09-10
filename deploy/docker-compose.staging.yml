@@ -36,6 +36,8 @@ services:
       TWILIO_API_KEY_SECRET: ${TWILIO_API_KEY_SECRET:-}
       TWILIO_FROM: ${TWILIO_FROM:-}
       TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
     ports:
       - "127.0.0.1:${STROY_API_PORT:-8081}:8080"
     volumes:
