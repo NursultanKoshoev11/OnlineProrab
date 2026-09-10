@@ -57,9 +57,9 @@ func SubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user_id":           userID,
-		"plan":              strings.TrimSpace(plan),
-		"status":            strings.TrimSpace(status),
+		"user_id":            userID,
+		"plan":               strings.TrimSpace(plan),
+		"status":             strings.TrimSpace(status),
 		"current_period_end": periodEnd,
 	})
 }
