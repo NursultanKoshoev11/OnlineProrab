@@ -27,7 +27,7 @@ type expenseAIProviderCall func(context.Context, expenseAIProviderConfig, string
 func configuredExpenseAIProviders() []expenseAIProviderConfig {
 	order := appState.AIProviderOrder
 	if len(order) == 0 {
-		order = []string{"gemini", "groq", "openrouter", "cerebras"}
+		order = []string{"gemini", "groq", "openrouter", "openrouter-fallback"}
 	}
 
 	providers := make([]expenseAIProviderConfig, 0, len(order))
@@ -68,16 +68,16 @@ func configuredExpenseAIProviders() []expenseAIProviderConfig {
 			if provider.model == "" {
 				provider.model = "openrouter/free"
 			}
-		case "cerebras":
+		case "openrouter-fallback":
 			provider = expenseAIProviderConfig{
-				name:     "cerebras",
-				apiKey:   strings.TrimSpace(appState.CerebrasAPIKey),
-				model:    strings.TrimSpace(appState.CerebrasModel),
-				endpoint: "https://api.cerebras.ai/v1/chat/completions",
+				name:     "openrouter-fallback",
+				apiKey:   strings.TrimSpace(appState.OpenRouterAPIKey),
+				model:    strings.TrimSpace(appState.OpenRouterFallbackModel),
+				endpoint: "https://openrouter.ai/api/v1/chat/completions",
 				kind:     "openai-compatible",
 			}
 			if provider.model == "" {
-				provider.model = "qwen-3.8-27b"
+				provider.model = "nex-agi/nex-n2.5-pro:free"
 			}
 		default:
 			continue
@@ -234,6 +234,8 @@ func postExpenseAIJSON(ctx context.Context, provider expenseAIProviderConfig, en
 		return nil, fmt.Errorf("request could not be created")
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("User-Agent", "OnlineProrab/1.0")
 	for key, value := range headers {
 		request.Header.Set(key, value)
 	}

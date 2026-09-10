@@ -39,8 +39,7 @@ type State struct {
 	GroqModel               string
 	OpenRouterAPIKey        string
 	OpenRouterModel         string
-	CerebrasAPIKey          string
-	CerebrasModel           string
+	OpenRouterFallbackModel string
 }
 
 func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
@@ -66,8 +65,7 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		GroqModel:               cfg.GroqModel,
 		OpenRouterAPIKey:        cfg.OpenRouterAPIKey,
 		OpenRouterModel:         cfg.OpenRouterModel,
-		CerebrasAPIKey:          cfg.CerebrasAPIKey,
-		CerebrasModel:           cfg.CerebrasModel,
+		OpenRouterFallbackModel: cfg.OpenRouterFallbackModel,
 	}
 	if appState.JWTSecret == "" {
 		appState.JWTSecret = "dev-only-change-me"
