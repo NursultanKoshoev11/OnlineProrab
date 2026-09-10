@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -172,13 +173,18 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusInternalServerError, "failed to close previous invitation")
 			return
 		}
-		_, _ = tx.Exec(ctx, `
-			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-			VALUES ($1, $2, 'add_member', 'project_member', $3, jsonb_build_object('phone', $4::text, 'role', $5::text, 'source', 'phone'))
-		`, actorID, req.ProjectID, targetUserID, req.Phone, req.Role)
 		if err := tx.Commit(ctx); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to commit project member")
 			return
+		}
+		// Audit logging must not roll back a successful membership assignment.
+		// Keep it outside the membership transaction so an audit/schema issue
+		// cannot turn a valid add-member request into a 500 response.
+		if _, err := appState.DB.Pool.Exec(ctx, `
+			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
+			VALUES ($1, $2, 'add_member', 'project_member', $3, jsonb_build_object('phone', $4::text, 'role', $5::text, 'source', 'phone'))
+		`, actorID, req.ProjectID, targetUserID, req.Phone, req.Role); err != nil {
+			log.Printf("add member: failed to write audit log for project %s/user %s: %v", req.ProjectID, targetUserID, err)
 		}
 		publishProjectEvent(req.ProjectID, "project_member", targetUserID, "added")
 		JSON(w, http.StatusOK, map[string]any{
