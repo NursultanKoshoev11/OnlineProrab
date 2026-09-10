@@ -39,6 +39,9 @@ class _ExpensesTab extends StatefulWidget {
 class _ExpensesTabState extends State<_ExpensesTab> {
   final _search = TextEditingController();
   late List<RemoteCostItem> _items;
+  RemoteExpenseAiResult? _aiResult;
+  bool _aiLoading = false;
+  String? _aiError;
 
   @override
   void initState() {
@@ -115,6 +118,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
               TextField(
                 controller: _search,
                 onChanged: (_) => setState(() {}),
+                onSubmitted: _runAiSearch,
                 decoration: InputDecoration(
                   hintText: 'Поиск расходов',
                   prefixIcon: const Icon(Icons.search_rounded),
@@ -132,6 +136,21 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                   ),
                 ),
               ),
+              if (_aiLoading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(minHeight: 3),
+              ],
+              if (_aiError != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _aiError!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ],
+              if (_aiResult != null) ...[
+                const SizedBox(height: 12),
+                _AiExpenseResultCard(result: _aiResult!),
+              ],
               const SizedBox(height: 14),
               Card(
                 child: Padding(
@@ -295,6 +314,32 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     _search.text = value.trim();
     _search.selection = TextSelection.collapsed(offset: _search.text.length);
     setState(() {});
+    await _runAiSearch(value.trim());
+  }
+
+  Future<void> _runAiSearch(String query) async {
+    if (query.trim().isEmpty) return;
+    setState(() {
+      _aiLoading = true;
+      _aiError = null;
+    });
+    try {
+      final result = await widget.repository.searchWithAI(
+        projectId: widget.project.id,
+        query: query.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _aiResult = result;
+        _aiLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _aiLoading = false;
+        _aiError = _errorText(error);
+      });
+    }
   }
 
   Future<void> _openDetails(RemoteCostItem item) async {
@@ -342,6 +387,101 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     if (result == null) return;
     setState(() => _items = [result, ..._items]);
     widget.onChanged(_items);
+  }
+}
+
+class _AiExpenseResultCard extends StatelessWidget {
+  const _AiExpenseResultCard({required this.result});
+
+  final RemoteExpenseAiResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = result.totals.entries.toList();
+    return Card(
+      color: _brandSoft,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome_rounded, color: _brand),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Мини-отчёт по запросу',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Text(
+                  '${result.matchedCount} ${_expenseWord(result.matchedCount)}',
+                  style: const TextStyle(color: _muted, fontSize: 12),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              result.summary,
+              style: const TextStyle(color: _muted, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            if (entries.isEmpty)
+              const Text(
+                '0 сом',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+              )
+            else
+              ...entries.map(
+                (entry) => Text(
+                  _money(entry.value, entry.key),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            if (result.items.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...result.items.take(4).map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: _muted, fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _money(item.amount, item.currency),
+                        style: const TextStyle(
+                          color: _ink,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (result.note.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              Text(
+                result.note,
+                style: const TextStyle(color: _muted, fontSize: 11),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
