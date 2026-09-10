@@ -130,4 +130,31 @@ void main() {
       isEmpty,
     );
   });
+
+  test('supports the Optima checkout flow in offline demo mode', () async {
+    final client = DemoHttpClient();
+    addTearDown(client.close);
+
+    final checkout = await client.post(
+      Uri.parse('http://offline.demo/api/v1/subscriptions/checkout'),
+      body: jsonEncode({'plan_code': 'pro', 'provider': 'optima'}),
+    );
+    expect(checkout.statusCode, 201);
+    final order = jsonDecode(checkout.body) as Map<String, dynamic>;
+    expect(order['test_mode'], true);
+    expect(order['amount'], 990);
+
+    final orderId = order['order_id'] as String;
+    final completed = await client.post(
+      Uri.parse(
+        'http://offline.demo/api/v1/subscriptions/payments/$orderId/test-complete',
+      ),
+    );
+    expect(completed.statusCode, 200);
+
+    final status = await client.get(
+      Uri.parse('http://offline.demo/api/v1/subscriptions/payments/$orderId'),
+    );
+    expect((jsonDecode(status.body) as Map<String, dynamic>)['status'], 'paid');
+  });
 }

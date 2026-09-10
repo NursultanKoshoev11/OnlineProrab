@@ -5,20 +5,27 @@ class _SubscriptionScreen extends StatefulWidget {
     required this.project,
     required this.members,
     required this.canManage,
+    required this.apiClient,
   });
 
   final RemoteProject project;
   final List<RemoteProjectMember> members;
   final bool canManage;
+  final ApiClient apiClient;
 
   @override
   State<_SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
-class _SubscriptionScreenState extends State<_SubscriptionScreen> {
+class _SubscriptionScreenState extends State<_SubscriptionScreen>
+    with WidgetsBindingObserver {
   String _selectedPlan = 'pro';
-  String _selectedBank = 'mbank';
-  bool _showQr = false;
+  String _selectedBank = 'optima';
+  bool _busy = false;
+  String? _orderId;
+  String? _paymentStatus;
+  String? _paymentError;
+  bool _testMode = false;
 
   int get _participantCount => widget.members
       .where((member) => member.role.trim().toLowerCase() != 'owner')
@@ -26,15 +33,34 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
 
   int get _participantLimit => switch (_selectedPlan) {
     'free' => 3,
-    'team' => 10,
+    'business' => 10,
     _ => 5,
   };
 
   int get _planPrice => switch (_selectedPlan) {
     'free' => 0,
-    'team' => 2_990,
+    'business' => 2_990,
     _ => 990,
   };
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _orderId != null) {
+      _refreshPayment();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +186,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         selected: _selectedPlan == 'free',
         onTap: () => setState(() {
           _selectedPlan = 'free';
-          _showQr = false;
+          _clearPaymentState();
         }),
       ),
       const SizedBox(height: 9),
@@ -172,7 +198,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         recommended: true,
         onTap: () => setState(() {
           _selectedPlan = 'pro';
-          _showQr = false;
+          _clearPaymentState();
         }),
       ),
       const SizedBox(height: 9),
@@ -180,10 +206,10 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         name: 'Team',
         description: '10 объектов · 10 участников',
         price: '2 990 сом/мес',
-        selected: _selectedPlan == 'team',
+        selected: _selectedPlan == 'business',
         onTap: () => setState(() {
-          _selectedPlan = 'team';
-          _showQr = false;
+          _selectedPlan = 'business';
+          _clearPaymentState();
         }),
       ),
       const SizedBox(height: 20),
@@ -193,55 +219,278 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
       ),
       const SizedBox(height: 5),
       const Text(
-        'Банковский SDK подключим после получения официальных доступов.',
+        'Сервер создаёт защищённый заказ. Данные карты вводятся только на стороне банка.',
         style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
       ),
       const SizedBox(height: 10),
       _BankChoice(
         name: 'MBANK',
-        subtitle: 'Карта или QR-код',
+        subtitle: 'Пока недоступно',
         icon: 'M',
         selected: _selectedBank == 'mbank',
         onTap: () => setState(() {
           _selectedBank = 'mbank';
-          _showQr = false;
+          _clearPaymentState();
         }),
       ),
       const SizedBox(height: 9),
       _BankChoice(
         name: 'Optima Bank',
-        subtitle: 'Карта или QR-код',
+        subtitle: 'Интернет-эквайринг',
         icon: 'O',
         selected: _selectedBank == 'optima',
         onTap: () => setState(() {
           _selectedBank = 'optima';
-          _showQr = false;
+          _clearPaymentState();
+        }),
+      ),
+      const SizedBox(height: 9),
+      _BankChoice(
+        name: 'O!Bank',
+        subtitle: 'Интернет-эквайринг',
+        icon: 'O',
+        selected: _selectedBank == 'obank',
+        onTap: () => setState(() {
+          _selectedBank = 'obank';
+          _clearPaymentState();
         }),
       ),
       const SizedBox(height: 16),
       _PaymentSummary(price: _planPrice),
       const SizedBox(height: 14),
       FilledButton.icon(
-        onPressed: _planPrice == 0
-            ? null
-            : () => setState(() => _showQr = true),
-        icon: const Icon(Icons.qr_code_2_rounded),
-        label: Text(_showQr ? 'QR-код готов' : 'Показать QR-код'),
+        onPressed: _planPrice == 0 || _busy ? null : _startPayment,
+        icon: _busy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.lock_open_rounded),
+        label: Text(
+          _selectedBank == 'optima'
+              ? 'Оплатить через Optima Bank'
+              : _selectedBank == 'obank'
+                  ? 'Оплатить через O!Bank'
+                  : 'Оплатить через MBANK',
+        ),
       ),
-      if (_showQr) ...[
+      if (_paymentError != null) ...[
         const SizedBox(height: 14),
-        _QrPaymentPreview(
-          bankName: _selectedBank == 'mbank' ? 'MBANK' : 'Optima Bank',
-          amount: _planPrice,
+        _PaymentMessage(
+          icon: Icons.info_outline_rounded,
+          message: _paymentError!,
+          color: _warning,
         ),
       ],
-      const SizedBox(height: 10),
-      const Text(
-        'Сейчас это демонстрационный UI. Реальное подтверждение платежа появится после подключения backend и официального банковского доступа.',
-        textAlign: TextAlign.center,
-        style: TextStyle(color: _muted, fontSize: 11, height: 1.4),
-      ),
+      if (_orderId != null) ...[
+        const SizedBox(height: 14),
+        _PaymentStatusCard(
+          orderId: _orderId!,
+          status: _paymentStatus ?? 'pending',
+          testMode: _testMode,
+          busy: _busy,
+          onRefresh: _refreshPayment,
+          onCompleteTest: _completeTestPayment,
+        ),
+      ],
     ];
+  }
+
+  void _clearPaymentState() {
+    _orderId = null;
+    _paymentStatus = null;
+    _paymentError = null;
+    _testMode = false;
+  }
+
+  Future<void> _startPayment() async {
+    if (_selectedBank != 'optima' && _selectedBank != 'obank') {
+      setState(() {
+        _paymentError =
+            'MBANK пока не подключён. Выберите Optima Bank или O!Bank.';
+      });
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _paymentError = null;
+      _orderId = null;
+      _paymentStatus = null;
+    });
+    try {
+      final response = await widget.apiClient.createSubscriptionCheckout(
+        planCode: _selectedPlan,
+        provider: _selectedBank,
+      );
+      final orderId = response['order_id']?.toString() ?? '';
+      final paymentUrl = response['payment_url']?.toString() ?? '';
+      if (orderId.isEmpty) {
+        throw const ApiException(500, 'Сервер не вернул номер заказа');
+      }
+      if (!mounted) return;
+      setState(() {
+        _orderId = orderId;
+        _paymentStatus = response['status']?.toString() ?? 'pending';
+        _testMode = response['test_mode'] == true;
+      });
+      if (paymentUrl.isNotEmpty) {
+        final launched = await launchUrl(
+          Uri.parse(paymentUrl),
+          mode: LaunchMode.externalApplication,
+        );
+        if (!launched && mounted) {
+          setState(() {
+            _paymentError = _selectedBank == 'obank'
+                ? 'Не удалось открыть страницу O!Bank.'
+                : 'Не удалось открыть страницу Optima.';
+          });
+        }
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _paymentError = _paymentErrorText(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _refreshPayment() async {
+    final orderId = _orderId;
+    if (orderId == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final response = await widget.apiClient.getSubscriptionPaymentStatus(
+        orderId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _paymentStatus = response['status']?.toString() ?? 'pending';
+      });
+    } catch (error) {
+      if (mounted) setState(() => _paymentError = _paymentErrorText(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _completeTestPayment() async {
+    final orderId = _orderId;
+    if (orderId == null || !_testMode || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.apiClient.completeTestSubscriptionPayment(orderId);
+      if (mounted) setState(() => _paymentStatus = 'paid');
+    } catch (error) {
+      if (mounted) setState(() => _paymentError = _paymentErrorText(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _paymentErrorText(Object error) {
+    if (error is ApiException) {
+      if (error.statusCode == 503) {
+        return 'Выбранный банк ещё не подключён на сервере. Нужны официальные API-доступы банка.';
+      }
+      return error.message;
+    }
+    return 'Не удалось создать платёж. Проверьте соединение.';
+  }
+}
+
+class _PaymentMessage extends StatelessWidget {
+  const _PaymentMessage({required this.icon, required this.message, required this.color});
+
+  final IconData icon;
+  final String message;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _warningSoft,
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 9),
+          Expanded(child: Text(message, style: const TextStyle(fontSize: 12, height: 1.35))),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentStatusCard extends StatelessWidget {
+  const _PaymentStatusCard({
+    required this.orderId,
+    required this.status,
+    required this.testMode,
+    required this.busy,
+    required this.onRefresh,
+    required this.onCompleteTest,
+  });
+
+  final String orderId;
+  final String status;
+  final bool testMode;
+  final bool busy;
+  final VoidCallback onRefresh;
+  final VoidCallback onCompleteTest;
+
+  @override
+  Widget build(BuildContext context) {
+    final paid = status == 'paid';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  paid ? Icons.check_circle_outline : Icons.schedule,
+                  color: paid ? _brand : _warning,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    paid ? 'Оплата подтверждена' : 'Ожидаем подтверждение оплаты',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Проверить',
+                  onPressed: busy ? null : onRefresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            Text(
+              'Заказ: $orderId',
+              style: const TextStyle(color: _muted, fontSize: 11),
+            ),
+            if (testMode && !paid) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: busy ? null : onCompleteTest,
+                icon: const Icon(Icons.science_outlined),
+                label: const Text('Завершить тестовую оплату'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -437,80 +686,3 @@ class _PaymentSummary extends StatelessWidget {
   }
 }
 
-class _QrPaymentPreview extends StatelessWidget {
-  const _QrPaymentPreview({required this.bankName, required this.amount});
-
-  final String bankName;
-  final int amount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Text(
-              'QR для оплаты через $bankName',
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              '$amount сом · STROY Pro',
-              style: const TextStyle(color: _muted, fontSize: 12),
-            ),
-            const SizedBox(height: 15),
-            const _DemoQrCode(),
-            const SizedBox(height: 12),
-            const Text(
-              'Демо QR-код. Он станет платёжным после подключения backend.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _muted, fontSize: 11, height: 1.4),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DemoQrCode extends StatelessWidget {
-  const _DemoQrCode();
-
-  static const _size = 15;
-
-  bool _dark(int row, int column) {
-    final finder = (row < 7 && column < 7) ||
-        (row < 7 && column >= _size - 7) ||
-        (row >= _size - 7 && column < 7);
-    if (finder) {
-      final top = row < 7 ? row : row - (_size - 7);
-      final left = column < 7 ? column : column - (_size - 7);
-      return top == 0 || top == 6 || left == 0 || left == 6 ||
-          (top >= 2 && top <= 4 && left >= 2 && left <= 4);
-    }
-    return ((row * 7 + column * 11 + row * column) % 5) < 2;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 178,
-      height: 178,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: _size,
-        ),
-        itemCount: _size * _size,
-        itemBuilder: (_, index) {
-          final row = index ~/ _size;
-          final column = index % _size;
-          return ColoredBox(
-            color: _dark(row, column) ? Colors.black : Colors.white,
-          );
-        },
-      ),
-    );
-  }
-}

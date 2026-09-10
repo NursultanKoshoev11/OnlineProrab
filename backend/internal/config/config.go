@@ -56,6 +56,12 @@ type Config struct {
 	OpenRouterAPIKey          string
 	OpenRouterModel           string
 	OpenRouterFallbackModel   string
+	PaymentTestMode           bool
+	PaymentReturnURL          string
+	PaymentWebhookURL         string
+	OptimaPaymentURLTemplate  string
+	OBankPaymentURLTemplate   string
+	OBankPaymentWebhookURL    string
 }
 
 func Load() Config {
@@ -91,6 +97,12 @@ func Load() Config {
 	cfg.OpenRouterAPIKey = strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
 	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
+	cfg.PaymentTestMode = getEnvBool("PAYMENT_TEST_MODE", false)
+	cfg.PaymentReturnURL = strings.TrimSpace(os.Getenv("PAYMENT_RETURN_URL"))
+	cfg.PaymentWebhookURL = strings.TrimSpace(os.Getenv("PAYMENT_WEBHOOK_URL"))
+	cfg.OptimaPaymentURLTemplate = strings.TrimSpace(os.Getenv("OPTIMA_PAYMENT_URL_TEMPLATE"))
+	cfg.OBankPaymentURLTemplate = strings.TrimSpace(os.Getenv("OBANK_PAYMENT_URL_TEMPLATE"))
+	cfg.OBankPaymentWebhookURL = strings.TrimSpace(os.Getenv("OBANK_PAYMENT_WEBHOOK_URL"))
 	return cfg
 }
 
@@ -126,6 +138,9 @@ func (cfg Config) Validate() error {
 		problems = append(problems, validateTwilioConfig(cfg)...)
 	}
 	if cfg.IsProduction() {
+		if cfg.PaymentTestMode {
+			problems = append(problems, "PAYMENT_TEST_MODE must be false in production")
+		}
 		if strings.TrimSpace(cfg.JWTSecret) == "" {
 			problems = append(problems, "JWT_SECRET is required in production")
 		}
@@ -207,6 +222,18 @@ func getEnvInt(key string, fallback int) int {
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		panic(fmt.Sprintf("invalid integer value for %s: %q", key, value))
+	}
+	return parsed
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		panic(fmt.Sprintf("invalid boolean value for %s: %q", key, value))
 	}
 	return parsed
 }
