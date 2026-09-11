@@ -2,7 +2,7 @@ class AppConfig {
   static const appName = 'STROY';
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8080',
+    defaultValue: 'https://api.stroy.com.kg',
   );
   static const buildMode = String.fromEnvironment(
     'BUILD_MODE',

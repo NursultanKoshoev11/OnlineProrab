@@ -8,7 +8,7 @@
     </queries>
 
 <application
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:fullBackupContent="false"
         android:allowBackup="false"
         android:label="STROY"

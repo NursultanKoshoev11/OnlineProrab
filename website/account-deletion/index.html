@@ -15,24 +15,31 @@
 <main class="legal-main"><div class="legal-container">
 <div class="legal-kicker">STROY / УПРАВЛЕНИЕ ДАННЫМИ</div><h1>Удаление аккаунта и данных</h1><p class="legal-lead">Понятный внешний канал для запроса удаления аккаунта STROY и связанных данных.</p>
 <div class="legal-grid"><aside class="legal-aside" aria-label="Разделы документа"><a href="#request">Отправить запрос</a><a href="#how">Как подать запрос</a><a href="#delete">Что удаляется</a><a href="#retention">Хранение</a><a href="#timing">Срок обработки</a><a href="#contact">Контакты</a></aside><article class="legal-content"><div class="legal-meta"><span>Дата обновления</span><strong>11 сентября 2026</strong></div>
-<section class="legal-notice legal-notice-strong" id="request"><strong>Запрос на удаление:</strong> нажмите кнопку и отправьте письмо с номера телефона, привязанного к аккаунту STROY.</section>
-<a class="legal-action" href="mailto:nursultankosoev2@gmail.com?subject=STROY%20-%20%D0%B7%D0%B0%D0%BF%D1%80%D0%BE%D1%81%20%D0%BD%D0%B0%20%D1%83%D0%B4%D0%B0%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5">Отправить запрос на удаление <span>↗</span></a>
+<section class="legal-notice legal-notice-strong" id="request"><strong>Удаление онлайн:</strong> подтвердите номер телефона кодом из SMS. После подтверждения аккаунт и связанные данные удаляются без возможности восстановления.</section>
+<form class="deletion-form" id="deletion-form" novalidate>
+<div class="deletion-step"><span class="deletion-step-number">1</span><div><label for="deletion-phone">Номер телефона аккаунта</label><input id="deletion-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+996 700 000 000" required><p class="deletion-hint">Используйте номер, с которым вы входите в STROY.</p></div></div>
+<button class="legal-action deletion-button" id="request-code" type="submit">Получить код <span>→</span></button>
+<div class="deletion-step deletion-code-step" id="deletion-code-step" hidden><span class="deletion-step-number">2</span><div><label for="deletion-code">Код из SMS</label><input id="deletion-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" required><p class="deletion-hint">Код действует ограниченное время и нужен для подтверждения владения номером.</p></div></div>
+<button class="legal-action deletion-button deletion-confirm" id="confirm-deletion" type="button" hidden>Удалить аккаунт и данные <span>↗</span></button>
+<p class="deletion-status" id="deletion-status" role="status" aria-live="polite"></p>
+</form>
 <h2 id="how">1. Как подать запрос</h2>
-<ol class="legal-steps"><li><strong>Откройте письмо</strong> по кнопке выше или напишите на <a href="mailto:nursultankosoev2@gmail.com">nursultankosoev2@gmail.com</a>.</li>
-<li><strong>Укажите тему:</strong> «Запрос на удаление аккаунта STROY».</li><li><strong>Укажите номер телефона</strong>, связанный с аккаунтом, и попросите удалить аккаунт и связанные данные.</li></ol>
-<p>Не отправляйте пароль, SMS-код, токен доступа или фотографии документов. Для защиты аккаунта может потребоваться подтверждение владения номером.</p>
+<ol class="legal-steps"><li><strong>Введите номер телефона</strong>, связанный с аккаунтом, и запросите код.</li>
+<li><strong>Введите SMS-код</strong> в этой форме, чтобы подтвердить владение номером.</li><li><strong>Подтвердите удаление</strong>. Если форма недоступна, напишите на <a href="mailto:nursultankosoev2@gmail.com">nursultankosoev2@gmail.com</a> с темой «Запрос на удаление аккаунта STROY».</li></ol>
+<p>Не отправляйте пароль, токен доступа или фотографии документов. SMS-код вводится только в эту защищённую форму и не передаётся сотрудникам поддержки.</p>
 <h2 id="delete">2. Что удаляется</h2>
-<p>После проверки запроса удаляются аккаунт и связанные данные, которые больше не нужны для работы сервиса: идентификатор, активные сессии, профиль, участие в объектах, созданные пользователем расходы, отчёты и загруженные файлы — в пределах технической возможности и применимого законодательства.</p>
+<p>Удаляются аккаунт и связанные данные: идентификатор, активные сессии, профиль, участие в объектах, принадлежащие пользователю объекты, созданные им расходы и отчёты, обращения в поддержку и загруженные им файлы. Данные общих объектов, необходимые другим участникам, обрабатываются по правилам доступа и каскадного удаления.</p>
 <p>Если запись относится к общему проекту и нужна другим участникам, оператор может связаться с владельцем проекта для корректного удаления или обезличивания.</p>
 <h2 id="retention">3. Что может быть сохранено</h2>
 <p>Ограниченная информация может сохраняться только для безопасности, предотвращения мошенничества, разрешения спора, исполнения юридической обязанности или подтверждения обработки запроса. После окончания обязательного срока она удаляется.</p>
 <h2 id="timing">4. Срок обработки</h2>
 <p>Мы подтверждаем получение запроса и сообщаем результат после проверки. Обработка выполняется без неоправданной задержки с учётом объёма данных и законных требований.</p>
 <h2 id="app">5. В приложении</h2>
-<p>Если в вашей версии приложения есть пункт удаления аккаунта в настройках, вы можете использовать его. Внешний запрос на этой странице доступен даже после удаления приложения.</p>
+<p>В приложении откройте «Профиль» → «Удалить аккаунт и данные». Внешняя форма на этой странице доступна даже после удаления приложения.</p>
 <h2 id="contact">6. Контакты</h2>
 <p>По вопросам удаления: <a href="mailto:nursultankosoev2@gmail.com">nursultankosoev2@gmail.com</a>. Общие вопросы — на странице <a href="/support">Поддержка</a>.</p></article></div>
 </div></main>
+<script src="/account-deletion/account-deletion.js" defer></script>
 <footer class="legal-footer"><div class="legal-container legal-footer-row">
 <a class="brand" href="/" aria-label="STROY — на главную"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 40 40" focusable="false"><path d="M7 16.5 20 7l13 9.5M11.5 15.5v17h17v-17M15 21c1.2 2.1 3.8 2.7 5.8 1.5 2-1.2 4.6-.6 5.8 1.5 1.2 2.1.2 4.7-1.9 5.8-2 1.1-4.5.5-5.7-1.5-1.2-2.1-3.8-2.7-5.8-1.5"/></svg></span><span>STROY</span></a>
 <div class="legal-footer-links"><a href="/privacy">Конфиденциальность</a><a href="/terms">Условия</a><a href="/account-deletion">Удаление аккаунта</a><a href="/support">Поддержка</a></div>

@@ -23,6 +23,12 @@ The API refuses unsafe production configuration when `APP_ENV=production` and th
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
 
+## Account deletion
+
+- Authenticated app deletion: `DELETE /api/v1/account` with a Bearer token.
+- Public deletion flow: `/account-deletion` sends an SMS challenge, verifies the phone, then calls the same authenticated endpoint.
+- The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. Files are removed from storage after the transaction commits.
+
 ## Local smoke test
 
 Run this from the repository root; the root compose file starts the API and PostgreSQL services.
