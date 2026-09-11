@@ -12,10 +12,12 @@ val stroyKeystore = file(stroyKeystorePath)
 val stroyStorePassword = System.getenv("STROY_KEYSTORE_PASSWORD") ?: "android"
 val stroyKeyAlias = System.getenv("STROY_KEY_ALIAS") ?: "androiddebugkey"
 val stroyKeyPassword = System.getenv("STROY_KEY_PASSWORD") ?: "android"
+val stroyApplicationId = System.getenv("STROY_APPLICATION_ID")
+    ?: "com.onlineprorab.online_prorab"
 
 android {
     namespace = "com.onlineprorab.online_prorab"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -25,11 +27,11 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.onlineprorab.online_prorab"
+        applicationId = stroyApplicationId
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -54,6 +56,11 @@ android {
             }
         }
         release {
+            if (System.getenv("STROY_APPLICATION_ID").isNullOrBlank()) {
+                throw GradleException(
+                    "Release package id requires STROY_APPLICATION_ID to match the Play Console app",
+                )
+            }
             if (!stroyKeystore.exists()) {
                 throw GradleException(
                     "Release signing requires STROY_KEYSTORE_PATH to point to a production keystore",
