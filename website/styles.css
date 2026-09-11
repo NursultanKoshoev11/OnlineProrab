@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+
 :root {
   --ink: #102019;
   --muted: #6c7c73;
@@ -13,7 +15,7 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--cream); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; overflow-x: hidden; }
+body { margin: 0; background: var(--cream); color: var(--ink); font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; overflow-x: hidden; }
 a { color: inherit; text-decoration: none; }
 button { font: inherit; }
 .container { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
@@ -37,7 +39,7 @@ button { font: inherit; }
 .eyebrow.green { color: var(--brand); }
 .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-bright); box-shadow: 0 0 0 6px rgba(11,154,77,.12); }
 h1, h2, h3, p { margin-top: 0; }
-h1 { font-size: clamp(54px, 7vw, 91px); line-height: .95; letter-spacing: -.075em; margin: 23px 0 27px; font-weight: 900; }
+h1 { font-family: "Manrope", ui-sans-serif, sans-serif; font-size: clamp(54px, 7vw, 91px); line-height: .94; letter-spacing: -.09em; margin: 23px 0 27px; font-weight: 800; }
 h1 em, h2 span, .demo-copy em { color: var(--brand); font-style: normal; }
 .hero-lead { max-width: 450px; font-size: 16px; color: var(--muted); line-height: 1.75; }
 .hero-actions { display: flex; gap: 11px; flex-wrap: wrap; margin-top: 31px; }
