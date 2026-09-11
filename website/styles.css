@@ -1077,6 +1077,14 @@ button,
   row-gap: 11px;
 }
 .footer-bottom { align-items: center; }
+@media (min-width:961px) {
+  .footer-links {
+    gap: 18px;
+  }
+  .footer-links a {
+    white-space: nowrap;
+  }
+}
 
 @media (max-width:960px) {
   .section-intro,
