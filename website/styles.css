@@ -688,6 +688,34 @@ body { background: var(--ref-cream, #f5f4ef); }
   .blueprint-note { font-size:6px; }
 }
 
+/* STROY supplied logo — exact transparent lockup from the user */
+.brand { gap: 0; }
+.brand-logo {
+  display: block;
+  width: 160px;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  object-fit: contain;
+}
+.mini-brand img.brand-logo,
+.mini-brand img[src*="stroy-logo-user"] {
+  width: 78px;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+.footer .brand-logo {
+  width: 160px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--ref-cream, #f5f4ef);
+}
+@media (max-width:700px) {
+  .brand-logo { width: 145px; }
+  .footer .brand-logo { width: 145px; }
+}
+
 
 /* STROY reference precision pass v5 */
 @media (min-width: 961px) {
@@ -800,7 +828,6 @@ body { background: var(--ref-cream, #f5f4ef); }
     url("assets/stroy-materials-v2.webp") left center / 300% 100% no-repeat;
 }
 .concrete-plinth::before { opacity: .18; }
-
 
 /* STROY supplied composition — use the exact user-provided reference assets */
 .hero-visual::before,
