@@ -37,7 +37,7 @@ jobs:
             api_base_url: http://127.0.0.1:8080
             offline_demo: 'true'
           - name: online
-            api_base_url: https://stroy.com.kg
+            api_base_url: https://api.stroy.com.kg
             offline_demo: 'false'
     defaults:
       run:
