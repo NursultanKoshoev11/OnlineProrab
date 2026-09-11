@@ -51,10 +51,42 @@ const setDemo = (name) => {
 document.querySelectorAll('.demo-tab').forEach((tab) => tab.addEventListener('click', () => setDemo(tab.dataset.demo)));
 
 const flowItems = document.querySelectorAll('.flow-item');
-flowItems.forEach((item) => item.addEventListener('mouseenter', () => {
+const flowVisualImage = document.querySelector('[data-flow-visual-image]');
+const flowVisualLabel = document.querySelector('[data-flow-visual-label]');
+const flowVisualStatus = document.querySelector('[data-flow-visual-status]');
+const flowProgress = document.querySelector('[data-flow-progress]');
+const flowProgressBar = document.querySelector('[data-flow-progress-bar]');
+
+const setFlowStep = (item) => {
   flowItems.forEach((other) => other.classList.remove('active'));
   item.classList.add('active');
-}));
+
+  const progress = item.dataset.flowProgress || '78';
+  if (flowVisualLabel) flowVisualLabel.textContent = item.dataset.flowLabel || '';
+  if (flowVisualStatus) flowVisualStatus.textContent = item.dataset.flowStatus || '';
+  if (flowProgress) flowProgress.textContent = `${progress}%`;
+  if (flowProgressBar) flowProgressBar.style.width = `${progress}%`;
+
+  if (flowVisualImage && item.dataset.flowImage && flowVisualImage.getAttribute('src') !== item.dataset.flowImage) {
+    flowVisualImage.classList.add('is-changing');
+    window.setTimeout(() => {
+      flowVisualImage.src = item.dataset.flowImage;
+      flowVisualImage.onload = () => flowVisualImage.classList.remove('is-changing');
+    }, 140);
+  }
+};
+
+flowItems.forEach((item) => {
+  item.addEventListener('mouseenter', () => setFlowStep(item));
+  item.addEventListener('focusin', () => setFlowStep(item));
+  item.addEventListener('click', () => setFlowStep(item));
+  item.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setFlowStep(item);
+    }
+  });
+});
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const finePointer = window.matchMedia('(pointer: fine)').matches;

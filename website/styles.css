@@ -1559,3 +1559,222 @@ button,
 @keyframes feature-wave { from { transform:scaleY(.55); } to { transform:scaleY(1.08); } }
 @keyframes feature-pulse { 50% { box-shadow:0 0 0 9px rgba(11,111,72,.08),0 12px 25px rgba(11,111,72,.25); } }
 @media (max-width:700px) { #features .feature-card { min-height:410px; padding:25px; } #features .feature-card h3 { font-size:34px; } }
+
+/* STROY process section — immersive product story */
+#flow.flow-section {
+  position: relative;
+  overflow: hidden;
+  padding: 154px 0 165px;
+  color: #f5fbf4;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(80, 164, 104, .24), transparent 30%),
+    radial-gradient(circle at 84% 78%, rgba(49, 119, 77, .2), transparent 34%),
+    linear-gradient(140deg, #071912 0%, #0d2d20 48%, #06110c 100%);
+}
+#flow.flow-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .22;
+  background-image:
+    linear-gradient(rgba(179, 225, 190, .13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(179, 225, 190, .13) 1px, transparent 1px);
+  background-size: 76px 76px;
+  mask-image: linear-gradient(to bottom, #000 5%, transparent 92%);
+}
+#flow.flow-section::after {
+  content: "";
+  position: absolute;
+  right: -210px;
+  bottom: -320px;
+  width: 700px;
+  height: 700px;
+  border: 1px solid rgba(151, 224, 168, .23);
+  border-radius: 50%;
+  box-shadow: 0 0 0 38px rgba(151, 224, 168, .04), 0 0 0 86px rgba(151, 224, 168, .025);
+  transform: rotate(-18deg);
+  pointer-events: none;
+}
+#flow .flow-layout {
+  position: relative;
+  z-index: 1;
+  grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+  gap: 86px;
+  align-items: center;
+}
+#flow .flow-copy { min-width: 0; }
+#flow .flow-copy > .eyebrow { color: #a3d9af; }
+#flow .flow-copy h2 {
+  max-width: 560px;
+  margin: 17px 0 25px;
+  color: #f5fbf4;
+  font-size: clamp(54px, 6.2vw, 88px);
+  line-height: .9;
+  letter-spacing: -.09em;
+}
+#flow .flow-copy h2 span { color: #83d49b; }
+#flow .flow-copy > p {
+  max-width: 430px;
+  margin: 0 0 26px;
+  color: #b7cbbd;
+  font-size: 16px;
+  line-height: 1.65;
+}
+#flow .flow-copy .text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  color: #e7f7e9;
+  font-size: 14px;
+}
+#flow .flow-copy .text-link span { color: #8bdda0; }
+#flow .flow-visual {
+  position: relative;
+  width: min(100%, 520px);
+  height: 255px;
+  margin-top: 49px;
+  overflow: hidden;
+  border: 1px solid rgba(195, 236, 202, .22);
+  border-radius: 24px;
+  background: #214c36;
+  box-shadow: 0 28px 56px rgba(0, 0, 0, .3), inset 0 1px rgba(255, 255, 255, .24);
+  transform: rotate(-3deg);
+  transition: transform .45s cubic-bezier(.22, .8, .26, 1), box-shadow .45s ease;
+}
+#flow .flow-visual:hover {
+  box-shadow: 0 36px 75px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .3);
+  transform: rotate(-1deg) translateY(-7px);
+}
+#flow .flow-visual > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 57%;
+  transition: opacity .32s ease, transform .55s ease;
+}
+#flow .flow-visual > img.is-changing { opacity: .12; transform: scale(1.08); }
+#flow .flow-visual-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(5, 25, 15, .08), rgba(5, 25, 15, .82));
+}
+#flow .flow-visual-top,
+#flow .flow-visual-bottom {
+  position: absolute;
+  right: 18px;
+  left: 18px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#flow .flow-visual-top { top: 17px; color: rgba(244, 252, 244, .78); font-size: 10px; font-weight: 900; letter-spacing: .13em; }
+#flow .flow-visual-top b { padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .19); border-radius: 10px; color: #fff; background: rgba(6, 35, 22, .54); font-size: 13px; letter-spacing: 0; }
+#flow .flow-visual-bottom { bottom: 17px; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; }
+#flow .flow-visual-bottom small { color: rgba(246, 253, 246, .72); font-size: 11px; }
+#flow .flow-visual-bottom strong { color: #fff; font-size: 13px; }
+#flow .flow-visual-bottom i { grid-column: 1 / -1; height: 5px; margin-top: 6px; overflow: hidden; border-radius: 10px; background: rgba(255, 255, 255, .26); }
+#flow .flow-visual-bottom u { display: block; width: 78%; height: 100%; border-radius: inherit; background: #a4e4b1; text-decoration: none; transition: width .35s ease; }
+#flow .flow-visual-orbit {
+  position: absolute;
+  right: -50px;
+  bottom: -97px;
+  width: 220px;
+  height: 220px;
+  border: 1px solid rgba(160, 235, 175, .62);
+  border-radius: 50%;
+  box-shadow: 0 0 0 14px rgba(160, 235, 175, .06);
+  pointer-events: none;
+}
+#flow .flow-list {
+  position: relative;
+  margin: 0;
+  padding: 8px;
+  overflow: visible;
+  border: 1px solid rgba(184, 231, 193, .2);
+  border-radius: 28px;
+  background: rgba(11, 38, 26, .66);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, .26), inset 0 1px rgba(255, 255, 255, .11);
+  backdrop-filter: blur(18px);
+}
+#flow .flow-list::before {
+  content: "";
+  position: absolute;
+  top: 44px;
+  bottom: 44px;
+  left: 49px;
+  width: 1px;
+  background: linear-gradient(#8ed49d, rgba(142, 212, 157, .14));
+  pointer-events: none;
+}
+#flow .flow-item,
+#flow .flow-item.active {
+  position: relative;
+  z-index: 1;
+  grid-template-columns: 62px minmax(0, 1fr) 42px;
+  min-height: 118px;
+  height: auto;
+  margin: 0;
+  padding: 23px 20px;
+  border: 1px solid transparent;
+  border-bottom: 1px solid rgba(183, 226, 191, .14);
+  border-radius: 18px;
+  background: transparent;
+  cursor: pointer;
+  transition: transform .35s cubic-bezier(.22, .8, .26, 1), background .35s ease, border-color .35s ease, box-shadow .35s ease;
+}
+#flow .flow-item:last-child { border-bottom-color: transparent; }
+#flow .flow-item:hover { background: rgba(153, 225, 166, .08); transform: translateX(5px); }
+#flow .flow-item.active {
+  border-color: rgba(173, 233, 184, .2);
+  background: linear-gradient(105deg, rgba(129, 211, 149, .18), rgba(129, 211, 149, .045));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .1), 0 14px 28px rgba(0, 0, 0, .12);
+  transform: translateX(8px);
+}
+#flow .flow-item:focus-visible { outline: 2px solid #a8e4b3; outline-offset: 3px; }
+#flow .flow-index {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(172, 231, 183, .32);
+  border-radius: 13px;
+  color: #a4dfaf;
+  background: rgba(8, 31, 20, .88);
+  font-size: 12px;
+  letter-spacing: .04em;
+  transition: color .3s ease, background .3s ease, box-shadow .3s ease;
+}
+#flow .flow-item.active .flow-index { color: #0a2c1b; background: #a8e3b1; box-shadow: 0 0 0 7px rgba(168, 227, 177, .1); }
+#flow .flow-item h3 { margin: 0 0 7px; color: #f5fbf5; font-size: 21px; letter-spacing: -.045em; }
+#flow .flow-item p { max-width: 430px; margin: 0; color: #a9c0af; font-size: 14px; line-height: 1.5; }
+#flow .flow-check { width: 34px; height: 34px; justify-self: end; border: 1px solid rgba(170, 229, 183, .24); color: #a7dfb3; background: rgba(153, 222, 165, .1); font-size: 14px; transition: color .3s ease, background .3s ease, transform .3s ease; }
+#flow .flow-item.active .flow-check { color: #0a6d45; background: #c5ebcc; transform: scale(1.08); }
+
+@media (max-width:960px) {
+  #flow .flow-layout { gap: 54px; }
+  #flow .flow-copy h2 { font-size: clamp(52px, 7vw, 72px); }
+}
+@media (max-width:700px) {
+  #flow.flow-section { padding: 94px 0 105px; }
+  #flow .flow-layout { grid-template-columns: 1fr; gap: 0; }
+  #flow .flow-copy h2 { font-size: 58px; }
+  #flow .flow-copy > p { font-size: 15px; }
+  #flow .flow-visual { width: 100%; height: 220px; margin-top: 38px; transform: none; }
+  #flow .flow-visual:hover { transform: translateY(-4px); }
+  #flow .flow-list { margin-top: 46px; padding: 6px; border-radius: 22px; }
+  #flow .flow-list::before { left: 35px; top: 35px; bottom: 35px; }
+  #flow .flow-item,
+  #flow .flow-item.active { grid-template-columns: 45px minmax(0, 1fr) 34px; min-height: 0; padding: 18px 12px; border-radius: 14px; }
+  #flow .flow-item:hover,
+  #flow .flow-item.active { transform: none; }
+  #flow .flow-index { width: 34px; height: 34px; border-radius: 10px; font-size: 10px; }
+  #flow .flow-item h3 { font-size: 18px; }
+  #flow .flow-item p { font-size: 13px; }
+  #flow .flow-check { width: 28px; height: 28px; font-size: 12px; }
+}
