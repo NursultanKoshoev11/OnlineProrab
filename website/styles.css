@@ -732,13 +732,13 @@ body { background: var(--ref-cream, #f5f4ef); }
 /* STROY realistic asset integration v6 */
 .hero-visual::before {
   background:
-    linear-gradient(116deg, rgba(9,27,19,.78) 0%, rgba(7,28,18,.56) 48%, rgba(4,14,10,.58) 100%),
-    url("assets/stroy-hero-bg.webp") center / cover no-repeat;
+    linear-gradient(90deg, rgba(4,14,10,.92) 0%, rgba(4,14,10,.38) 46%, rgba(4,14,10,.18) 100%),
+    url("assets/stroy-hero-scene-v2.webp") center / cover no-repeat;
 }
 .report-card-image {
   background:
     linear-gradient(180deg, rgba(7,28,18,.02), rgba(7,28,18,.18)),
-    url("assets/stroy-building.webp") center / cover no-repeat;
+    url("assets/stroy-building-v2.webp") center / cover no-repeat;
 }
 .report-card-image::before,
 .report-card-image::after,
@@ -746,7 +746,7 @@ body { background: var(--ref-cream, #f5f4ef); }
 .report-card-image span,
 .report-card-image i { display:none; }
 .material-thumb {
-  background-image:url("assets/stroy-materials-triptych.webp");
+  background-image:url("assets/stroy-materials-v2.webp");
   background-size:300% 100%;
   background-repeat:no-repeat;
   background-color:#d6d8cf;
@@ -755,7 +755,7 @@ body { background: var(--ref-cream, #f5f4ef); }
 .metal-thumb { background-position:50% 0; }
 .machine-thumb { background-position:100% 0; }
 .recent-photo {
-  background-image:url("assets/stroy-building.webp");
+  background-image:url("assets/stroy-building-v2.webp");
   background-size:cover;
   background-repeat:no-repeat;
 }
@@ -765,16 +765,36 @@ body { background: var(--ref-cream, #f5f4ef); }
 .dashboard-photo {
   background:
     linear-gradient(180deg, rgba(16,65,38,.05), rgba(16,65,38,.28)),
-    url("assets/stroy-building.webp") center / cover no-repeat;
+    url("assets/stroy-building-v2.webp") center / cover no-repeat;
 }
 .dashboard-photo::before,
 .dashboard-photo::after { display:none; }
 .object-visual {
   background:
     linear-gradient(180deg, rgba(12,50,31,.04), rgba(12,50,31,.32)),
-    url("assets/stroy-building.webp") center / cover no-repeat;
+    url("assets/stroy-building-v2.webp") center / cover no-repeat;
 }
 .visual-house { display:none; }
 @media (max-width:700px) {
   .report-card-image { background-position:center; }
 }
+
+/* STROY generated photo pass v7 */
+.hero-visual::before {
+  filter: saturate(.92) contrast(1.05);
+  background-position: center right;
+}
+.floating-card {
+  border-color: rgba(255,255,255,.48);
+  box-shadow: 0 22px 44px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.floating-report-card {
+  border-color: rgba(255,255,255,.4);
+  box-shadow: 0 30px 58px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.concrete-plinth {
+  background:
+    linear-gradient(165deg, rgba(255,255,255,.08), rgba(20,28,24,.34)),
+    url("assets/stroy-materials-v2.webp") left center / 300% 100% no-repeat;
+}
+.concrete-plinth::before { opacity: .18; }
