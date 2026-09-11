@@ -13,6 +13,11 @@ on:
         required: true
         default: 'true'
         type: string
+      production_release:
+        description: 'Build the signed production AAB (requires GitHub secrets/variables)'
+        required: true
+        default: 'false'
+        type: string
   push:
     branches: [main]
     paths:
@@ -92,19 +97,68 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build release APK compile check
+  production-bundle:
+    if: github.event_name == 'workflow_dispatch' && inputs.production_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      STROY_APPLICATION_ID: ${{ vars.STROY_APPLICATION_ID }}
+      STROY_KEYSTORE_PATH: ${{ runner.temp }}/stroy-upload.jks
+      STROY_KEYSTORE_PASSWORD: ${{ secrets.STROY_KEYSTORE_PASSWORD }}
+      STROY_KEY_ALIAS: ${{ secrets.STROY_KEY_ALIAS }}
+      STROY_KEY_PASSWORD: ${{ secrets.STROY_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Decode upload keystore
         env:
-          API_BASE_URL: ${{ matrix.build.api_base_url }}
-          OFFLINE_DEMO: ${{ matrix.build.offline_demo }}
-        run: flutter build apk --release --dart-define=API_BASE_URL="$API_BASE_URL" --dart-define=OFFLINE_DEMO="$OFFLINE_DEMO"
+          STROY_KEYSTORE_BASE64: ${{ secrets.STROY_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$STROY_KEYSTORE_BASE64"
+          printf '%s' "$STROY_KEYSTORE_BASE64" | base64 --decode > "$STROY_KEYSTORE_PATH"
+          test -s "$STROY_KEYSTORE_PATH"
 
-      - name: Name release APK for STROY
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/stroy-${{ matrix.build.name }}-release.apk
+      - name: Validate production release inputs
+        run: |
+          test -n "$STROY_APPLICATION_ID"
+          test -n "$STROY_KEYSTORE_PASSWORD"
+          test -n "$STROY_KEY_ALIAS"
+          test -n "$STROY_KEY_PASSWORD"
 
-      - name: Upload release APK artifact
+      - name: Prepare Android platform
+        run: python3 tool/prepare_android.py
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate adaptive STROY launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Analyze application
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build signed production AAB
+        run: flutter build appbundle --release --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
+
+      - name: Upload production AAB
         uses: actions/upload-artifact@v4
         with:
-          name: stroy-${{ matrix.build.name }}-release-apk-${{ github.run_number }}
-          path: mobile/build/app/outputs/flutter-apk/stroy-${{ matrix.build.name }}-release.apk
+          name: stroy-production-aab-${{ github.run_number }}
+          path: mobile/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
