@@ -1029,6 +1029,7 @@ button,
 }
 .flow-item,
 .flow-item.active {
+  height: 102px;
   min-height: 88px;
   padding: 20px 14px;
   border-radius: 0;
@@ -1103,6 +1104,7 @@ button,
   }
   .flow-item,
   .flow-item.active {
+    height: auto;
     min-height: 0;
     padding: 18px 12px;
   }
