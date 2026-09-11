@@ -940,3 +940,41 @@ body { background: var(--ref-cream, #f5f4ef); }
     display: none;
   }
 }
+
+
+/* STROY realistic phone + concrete plinth v9 */
+.concrete-plinth {
+  position: absolute;
+  z-index: 2;
+  left: -7%;
+  right: -14%;
+  bottom: -28px;
+  height: 190px;
+  display: block;
+  pointer-events: none;
+  transform: none;
+  background: url("assets/stroy-concrete-plinth.webp") center bottom / 100% 100% no-repeat;
+  box-shadow: none;
+  overflow: visible;
+}
+.concrete-plinth::before,
+.concrete-plinth span,
+.concrete-plinth i,
+.concrete-plinth b {
+  display: none;
+}
+.phone-main {
+  filter: drop-shadow(0 34px 20px rgba(3, 12, 8, .36));
+}
+@media (max-width: 700px) {
+  .concrete-plinth {
+    left: -8%;
+    right: -12%;
+    bottom: -22px;
+    height: 104px;
+    background-size: 100% 100%;
+  }
+  .phone-main {
+    filter: drop-shadow(0 22px 14px rgba(3, 12, 8, .3));
+  }
+}
