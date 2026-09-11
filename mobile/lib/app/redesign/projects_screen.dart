@@ -322,6 +322,20 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
                   foregroundColor: Colors.redAccent,
+                  side: const BorderSide(color: Color(0xFFFFCDD2)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                onPressed: _deleteAccount,
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: const Text('Удалить аккаунт и данные'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  foregroundColor: Colors.redAccent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),
@@ -338,5 +352,43 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить аккаунт?'),
+        content: const Text(
+          'Будут удалены профиль, ваши объекты, расходы, отчёты, сессии и загруженные файлы. Это действие нельзя отменить.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    Navigator.of(context).pop();
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      await widget.deps.authRepository.deleteAccount();
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      _toast(context, _errorText(error));
+    }
   }
 }
