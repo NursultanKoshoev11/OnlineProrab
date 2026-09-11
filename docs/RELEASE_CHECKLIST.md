@@ -31,7 +31,12 @@ Run from `mobile/`:
 flutter pub get
 flutter analyze
 flutter test
-flutter build apk --release --dart-define=API_BASE_URL=https://api.stroy.com.kg
+STROY_APPLICATION_ID=<exact Play Console package id> \\
+STROY_KEYSTORE_PATH=<path outside the repository> \\
+STROY_KEYSTORE_PASSWORD=<secret> \\
+STROY_KEY_ALIAS=<upload alias> \\
+STROY_KEY_PASSWORD=<secret> \\
+flutter build appbundle --release --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
 ```
 
 Mobile release gates:
@@ -44,6 +49,8 @@ Mobile release gates:
 - Project cover can be replaced from the edit screen.
 - File upload and protected download work on a real device.
 - APK is tested on a real Android device.
+- Signed AAB is built with the upload key; release never falls back to debug signing.
+- `targetSdk` and `compileSdk` are both 36.
 
 ## Release decision
 
