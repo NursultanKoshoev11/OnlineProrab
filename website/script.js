@@ -21,34 +21,70 @@ const demoContent = {
     title: 'Объект — это<br /><em>единая картина.</em>',
     text: 'Фото, ключевые показатели и текущий статус собраны на одном экране — без поиска по чатам и заметкам.',
     points: ['✓ Фото объекта', '✓ Общая сумма', '✓ Статус работы'],
+    visual: {
+      kicker: 'ОБЪЕКТ', title: 'Дом у озера', status: 'В работе', photoLabel: 'июнь 2026',
+      statOneLabel: 'Всего потрачено', statOneValue: '1 248 500', statOneUnit: 'сом',
+      statTwoLabel: 'Дата начала', statTwoValue: '09 сентября 2026', mode: 'object',
+    },
   },
   expenses: {
     number: '02',
     title: 'Каждый расход<br /><em>под контролем.</em>',
     text: 'Добавляйте покупку за несколько секунд, прикладывайте чек и сразу видьте, как меняется бюджет объекта.',
     points: ['✓ Название и сумма', '✓ Фото чека', '✓ Дата и описание'],
+    visual: {
+      kicker: 'РАСХОДЫ', title: 'Контроль бюджета', status: 'Всё учтено', photoLabel: 'последние 30 дней',
+      statOneLabel: 'Всего расходов', statOneValue: '1 248 500', statOneUnit: 'сом',
+      statTwoLabel: 'Операций', statTwoValue: '38 покупок', mode: 'expenses',
+    },
   },
   report: {
     number: '03',
     title: 'Отчёт готов<br /><em>для решения.</em>',
     text: 'Общий итог, расходы и PDF‑предпросмотр — в одном понятном экране для владельца, клиента и команды.',
     points: ['✓ Общий итог', '✓ PDF‑предпросмотр', '✓ Поделиться отчётом'],
+    visual: {
+      kicker: 'ОТЧЁТ', title: 'Отчёт по объекту', status: 'Готов', photoLabel: 'июнь 2026',
+      statOneLabel: 'Прогресс', statOneValue: '84%', statOneUnit: '',
+      statTwoLabel: 'Обновлён', statTwoValue: 'Сегодня, 12:40', mode: 'report',
+    },
   },
 };
+
+const demoVisualKicker = document.querySelector('#demoVisualKicker');
+const demoVisualTitle = document.querySelector('#demoVisualTitle');
+const demoVisualStatus = document.querySelector('#demoVisualStatus');
+const demoVisualPhoto = document.querySelector('#demoVisualPhoto');
+const demoVisualPhotoLabel = document.querySelector('#demoVisualPhotoLabel');
+const demoStatOneLabel = document.querySelector('#demoStatOneLabel');
+const demoStatOneValue = document.querySelector('#demoStatOneValue');
+const demoStatOneUnit = document.querySelector('#demoStatOneUnit');
+const demoStatTwoLabel = document.querySelector('#demoStatTwoLabel');
+const demoStatTwoValue = document.querySelector('#demoStatTwoValue');
 
 const setDemo = (name) => {
   const item = demoContent[name];
   if (!item) return;
-  document.querySelectorAll('.demo-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.demo === name));
+  document.querySelectorAll('.demo-tab').forEach((tab) => tab.classList.toggle('active', tab.getAttribute('data-demo') === name));
   document.querySelector('#demoNumber').textContent = item.number;
   document.querySelector('#demoTitle').innerHTML = item.title;
   document.querySelector('#demoText').textContent = item.text;
   document.querySelector('#demoPoints').innerHTML = item.points.map((point) => `<span>${point}</span>`).join('');
   const visual = document.querySelector('#demoVisual');
-  visual.dataset.mode = name;
+  const card = item.visual;
+  visual.setAttribute('data-mode', card.mode);
+  if (demoVisualKicker) demoVisualKicker.textContent = card.kicker;
+  if (demoVisualTitle) demoVisualTitle.textContent = card.title;
+  if (demoVisualStatus) demoVisualStatus.textContent = card.status;
+  if (demoVisualPhotoLabel) demoVisualPhotoLabel.textContent = card.photoLabel;
+  if (demoStatOneLabel) demoStatOneLabel.textContent = card.statOneLabel;
+  if (demoStatOneValue) demoStatOneValue.firstChild.textContent = card.statOneValue;
+  if (demoStatOneUnit) demoStatOneUnit.textContent = card.statOneUnit;
+  if (demoStatTwoLabel) demoStatTwoLabel.textContent = card.statTwoLabel;
+  if (demoStatTwoValue) demoStatTwoValue.textContent = card.statTwoValue;
 };
 
-document.querySelectorAll('.demo-tab').forEach((tab) => tab.addEventListener('click', () => setDemo(tab.dataset.demo)));
+document.querySelectorAll('.demo-tab').forEach((tab) => tab.addEventListener('click', () => setDemo(tab.getAttribute('data-demo'))));
 
 const flowItems = document.querySelectorAll('.flow-item');
 const flowVisualImage = document.querySelector('[data-flow-visual-image]');
