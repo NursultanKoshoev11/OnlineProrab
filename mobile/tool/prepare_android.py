@@ -84,7 +84,7 @@ def configure_main_manifest() -> None:
     attributes = {
         "android:allowBackup": "false",
         "android:fullBackupContent": "false",
-        "android:usesCleartextTraffic": "true",
+        "android:usesCleartextTraffic": "false",
     }
     for attribute, value in attributes.items():
         if attribute == "android:usesCleartextTraffic" and f"{attribute}=" in text:
