@@ -55,3 +55,36 @@ flowItems.forEach((item) => item.addEventListener('mouseenter', () => {
   flowItems.forEach((other) => other.classList.remove('active'));
   item.classList.add('active');
 }));
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const finePointer = window.matchMedia('(pointer: fine)').matches;
+
+if (!reduceMotion && finePointer) {
+  document.querySelectorAll('.browser-screen, .feature-card').forEach((card) => {
+    const surface = card.matches('.browser-screen') ? card.querySelector('.browser-window') : card;
+    if (!surface) return;
+
+    card.addEventListener('pointermove', (event) => {
+      const rect = card.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width - 0.5;
+      const y = (event.clientY - rect.top) / rect.height - 0.5;
+      const tiltX = (-y * 3.2).toFixed(2);
+      const tiltY = (x * 3.2).toFixed(2);
+      surface.style.transform = `perspective(1100px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-7px)`;
+    });
+
+    card.addEventListener('pointerleave', () => {
+      surface.style.transform = '';
+    });
+  });
+}
+
+const revealObserver = 'IntersectionObserver' in window
+  ? new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) entry.target.classList.add('is-visible');
+      });
+    }, { threshold: 0.16 })
+  : null;
+
+revealObserver?.observe(document.querySelector('.screen-showcase-grid'));
