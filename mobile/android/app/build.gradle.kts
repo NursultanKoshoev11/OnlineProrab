@@ -4,10 +4,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Keep local/CI debug builds on one explicit certificate instead of the
-// machine-specific Android Studio debug keystore. The keystore itself stays
-// outside the repository. CI can provide it through STROY_KEYSTORE_PATH and
-// the STROY_* signing environment variables.
+// The production keystore stays outside the repository. CI and local release
+// builds must provide it through STROY_KEYSTORE_PATH and STROY_* variables.
 val stroyKeystorePath = System.getenv("STROY_KEYSTORE_PATH")
     ?: "${System.getProperty("user.home")}/.android/stroy-debug.keystore"
 val stroyKeystore = file(stroyKeystorePath)
@@ -56,11 +54,12 @@ android {
             }
         }
         release {
-            signingConfig = if (stroyKeystore.exists()) {
-                signingConfigs.getByName("stroyStable")
-            } else {
-                signingConfigs.getByName("debug")
+            if (!stroyKeystore.exists()) {
+                throw GradleException(
+                    "Release signing requires STROY_KEYSTORE_PATH to point to a production keystore",
+                )
             }
+            signingConfig = signingConfigs.getByName("stroyStable")
         }
     }
 }
