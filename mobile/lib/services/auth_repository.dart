@@ -70,6 +70,11 @@ class AuthRepository {
     await _clearLocalSession(notify: false);
   }
 
+  Future<void> deleteAccount() async {
+    await _apiClient.deleteAccount();
+    await _clearLocalSession(notify: true);
+  }
+
   Future<void> _handleExpiredSession() async {
     await _clearLocalSession(notify: true);
   }
