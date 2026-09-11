@@ -90,6 +90,10 @@ class ApiClient {
     await _expireSession();
   }
 
+  Future<void> deleteAccount() async {
+    await deleteJson('/api/v1/account');
+  }
+
   Future<List<dynamic>> listProjects({bool includeArchived = false}) async =>
       _asList(
         await getJson(
