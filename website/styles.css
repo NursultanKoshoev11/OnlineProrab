@@ -698,6 +698,12 @@ body { background: var(--ref-cream, #f5f4ef); }
   box-shadow: none;
   object-fit: contain;
 }
+.brand img.brand-logo {
+  width: 160px;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
 .mini-brand img.brand-logo,
 .mini-brand img[src*="stroy-logo-user"] {
   width: 78px;
@@ -707,6 +713,7 @@ body { background: var(--ref-cream, #f5f4ef); }
 }
 .footer .brand-logo {
   width: 160px;
+  height: auto;
   padding: 5px 9px;
   border-radius: 7px;
   background: var(--ref-cream, #f5f4ef);
