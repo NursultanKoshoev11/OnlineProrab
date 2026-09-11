@@ -61,16 +61,19 @@ const setFlowStep = (item) => {
   flowItems.forEach((other) => other.classList.remove('active'));
   item.classList.add('active');
 
-  const progress = item.dataset.flowProgress || '78';
-  if (flowVisualLabel) flowVisualLabel.textContent = item.dataset.flowLabel || '';
-  if (flowVisualStatus) flowVisualStatus.textContent = item.dataset.flowStatus || '';
+  const progress = item.getAttribute('data-flow-progress') || '78';
+  const nextLabel = item.getAttribute('data-flow-label') || '';
+  const nextStatus = item.getAttribute('data-flow-status') || '';
+  const nextImage = item.getAttribute('data-flow-image') || '';
+  if (flowVisualLabel) flowVisualLabel.textContent = nextLabel;
+  if (flowVisualStatus) flowVisualStatus.textContent = nextStatus;
   if (flowProgress) flowProgress.textContent = `${progress}%`;
   if (flowProgressBar) flowProgressBar.style.width = `${progress}%`;
 
-  if (flowVisualImage && item.dataset.flowImage && flowVisualImage.getAttribute('src') !== item.dataset.flowImage) {
+  if (flowVisualImage && nextImage && flowVisualImage.getAttribute('src') !== nextImage) {
     flowVisualImage.classList.add('is-changing');
     window.setTimeout(() => {
-      flowVisualImage.src = item.dataset.flowImage;
+      flowVisualImage.setAttribute('src', nextImage);
       flowVisualImage.onload = () => flowVisualImage.classList.remove('is-changing');
     }, 140);
   }
