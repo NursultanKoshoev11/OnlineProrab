@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">STROY</title>
+  <desc id="desc">Знак STROY в форме крыши и буквы S</desc>
+  <rect width="256" height="256" rx="58" fill="#F7F9F5"/>
+  <path d="M50 105 128 48l78 57" fill="none" stroke="#087A47" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M178 116h-75c-14 0-25 11-25 25s11 25 25 25h50c14 0 25 11 25 25s-11 25-25 25H78" fill="none" stroke="#087A47" stroke-width="17" stroke-linecap="round"/>
+  <path d="M78 116v75" fill="none" stroke="#087A47" stroke-width="17" stroke-linecap="round"/>
+</svg>
