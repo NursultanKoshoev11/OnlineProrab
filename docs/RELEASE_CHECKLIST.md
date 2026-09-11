@@ -31,7 +31,7 @@ Run from `mobile/`:
 flutter pub get
 flutter analyze
 flutter test
-flutter build apk --release --dart-define=API_BASE_URL=https://your-production-api-domain
+flutter build apk --release --dart-define=API_BASE_URL=https://stroy.com.kg
 ```
 
 Mobile release gates:

@@ -9,7 +9,7 @@ This checklist tracks the minimum work required before a real public release.
 - `DATABASE_URL=postgres://...`
 - `JWT_SECRET=<strong random secret>`
 - `ACCESS_TOKEN_TTL_MINUTES=60`
-- `CORS_ALLOWED_ORIGINS=https://your-domain.example`
+- `CORS_ALLOWED_ORIGINS=https://stroy.com.kg`
 - `UPLOAD_DIR=/app/uploads`
 - `MAX_UPLOAD_MB=10`
 

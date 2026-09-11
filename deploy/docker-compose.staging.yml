@@ -27,7 +27,7 @@ services:
       DATABASE_URL: postgres://${STROY_DB_USER:-stroy}:${STROY_DB_PASSWORD}@postgres:5432/${STROY_DB_NAME:-stroy}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-60}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://stroy.com.kg}
       UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
       SMS_PROVIDER: ${SMS_PROVIDER:-}
