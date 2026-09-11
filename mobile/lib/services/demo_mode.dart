@@ -220,6 +220,15 @@ class DemoDataState {
     if (method == 'POST' && path == '/api/v1/auth/session/logout') {
       return _json({'status': 'logged_out'});
     }
+    if (method == 'DELETE' && path == '/api/v1/account') {
+      projects.clear();
+      costs.clear();
+      reports.clear();
+      files.clear();
+      members.clear();
+      auditLogs.clear();
+      return _json({'status': 'deleted'});
+    }
 
     if (path == '/api/v1/projects') {
       if (method == 'GET') {
