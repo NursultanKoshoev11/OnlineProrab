@@ -1780,7 +1780,7 @@ button,
 }
 
 /* STROY report demo — living product surface */
-body { overflow-x: hidden; }
+html, body { overflow-x: hidden; }
 #demo.demo-section {
   position: relative;
   isolation: isolate;
