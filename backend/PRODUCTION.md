@@ -57,3 +57,16 @@ Support tickets are always stored in PostgreSQL. Delivery to Telegram and WhatsA
 - `SUPPORT_WHATSAPP_URL` (optional deep link shown in the app)
 
 Inject these values through the deployment secret store or environment, never commit them to Git. Until a channel is configured, `POST /api/v1/support/tickets` returns `delivery_status=not_configured` while preserving the ticket for later processing.
+
+
+## Temporary Google Play review-only mode
+
+Until the SMS provider is connected, closed testing can use a single dedicated review phone:
+
+- `APP_ENV=production`
+- `REVIEW_ONLY_MODE=true`
+- `REVIEW_SMS_PHONE=+996...`
+- `REVIEW_SMS_CODE=111111`
+- leave `SMS_PROVIDER` empty only for this temporary mode
+
+The fixed code is accepted only for the exact configured phone. Other phone numbers receive an SMS-unavailable response and cannot sign in. Do not use a universal code for all numbers. Disable `REVIEW_ONLY_MODE` and configure the real SMS provider before a public release.
