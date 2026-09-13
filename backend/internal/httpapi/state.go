@@ -24,6 +24,9 @@ type State struct {
 	UploadDir               string
 	MaxUploadBytes          int64
 	IsProduction            bool
+	ReviewOnlyMode          bool
+	ReviewSMSPhone          string
+	ReviewSMSCode           string
 	SMSSender               SMSSender
 	SupportTelegramBotToken string
 	SupportTelegramChatID   string
@@ -50,6 +53,9 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		UploadDir:               cfg.UploadDir,
 		MaxUploadBytes:          cfg.MaxUploadBytes,
 		IsProduction:            cfg.IsProduction(),
+		ReviewOnlyMode:          cfg.ReviewOnlyMode,
+		ReviewSMSPhone:          cfg.ReviewSMSPhone,
+		ReviewSMSCode:           cfg.ReviewSMSCode,
 		SMSSender:               smsSender,
 		SupportTelegramBotToken: cfg.SupportTelegramBotToken,
 		SupportTelegramChatID:   cfg.SupportTelegramChatID,

@@ -142,3 +142,41 @@ func validProductionConfig() Config {
 		TwilioFrom:         "+15550000000",
 	}
 }
+
+
+func TestValidateAllowsProductionReviewOnlyWithoutSMSProvider(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.SMSProvider = ""
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+	cfg.ReviewOnlyMode = true
+	cfg.ReviewSMSPhone = "+996700000001"
+	cfg.ReviewSMSCode = "111111"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected review-only production config to be valid, got %v", err)
+	}
+}
+
+func TestValidateRejectsReviewCredentialsWithoutReviewOnlyMode(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.ReviewSMSPhone = "+996700000001"
+	cfg.ReviewSMSCode = "111111"
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected review credentials without review-only mode to be rejected")
+	}
+}
+
+func TestValidateRejectsInvalidReviewCode(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.ReviewOnlyMode = true
+	cfg.ReviewSMSPhone = "+996700000001"
+	cfg.ReviewSMSCode = "11111"
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected invalid review code to be rejected")
+	}
+}

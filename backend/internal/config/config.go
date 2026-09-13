@@ -36,6 +36,9 @@ type Config struct {
 	UploadDir                 string
 	MaxUploadBytes            int64
 	SMSProvider               string
+	ReviewOnlyMode            bool
+	ReviewSMSPhone            string
+	ReviewSMSCode             string
 	TwilioAccountSID          string
 	TwilioAPIKeySID           string
 	TwilioAPIKeySecret        string
@@ -71,6 +74,9 @@ func Load() Config {
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
 	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
+	cfg.ReviewOnlyMode = getEnvBool("REVIEW_ONLY_MODE", false)
+	cfg.ReviewSMSPhone = normalizePhone(os.Getenv("REVIEW_SMS_PHONE"))
+	cfg.ReviewSMSCode = strings.TrimSpace(os.Getenv("REVIEW_SMS_CODE"))
 	cfg.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
 	cfg.TwilioAPIKeySID = strings.TrimSpace(os.Getenv("TWILIO_API_KEY_SID"))
 	cfg.TwilioAPIKeySecret = strings.TrimSpace(os.Getenv("TWILIO_API_KEY_SECRET"))
@@ -125,6 +131,22 @@ func (cfg Config) Validate() error {
 	if cfg.SMSProvider == SMSProviderTwilio {
 		problems = append(problems, validateTwilioConfig(cfg)...)
 	}
+
+	reviewPhoneSet := cfg.ReviewSMSPhone != ""
+	reviewCodeSet := cfg.ReviewSMSCode != ""
+	if reviewPhoneSet != reviewCodeSet {
+		problems = append(problems, "REVIEW_SMS_PHONE and REVIEW_SMS_CODE must be configured together")
+	}
+	if (reviewPhoneSet || reviewCodeSet) && !cfg.ReviewOnlyMode {
+		problems = append(problems, "REVIEW_ONLY_MODE=true is required when review credentials are configured")
+	}
+	if reviewPhoneSet && !isValidPhone(cfg.ReviewSMSPhone) {
+		problems = append(problems, "REVIEW_SMS_PHONE must be a valid E.164 phone number")
+	}
+	if reviewCodeSet && !isSixDigitCode(cfg.ReviewSMSCode) {
+		problems = append(problems, "REVIEW_SMS_CODE must be exactly 6 digits")
+	}
+
 	if cfg.IsProduction() {
 		if strings.TrimSpace(cfg.JWTSecret) == "" {
 			problems = append(problems, "JWT_SECRET is required in production")
@@ -144,8 +166,8 @@ func (cfg Config) Validate() error {
 				break
 			}
 		}
-		if cfg.SMSProvider != SMSProviderTwilio {
-			problems = append(problems, "SMS_PROVIDER=twilio is required in production")
+		if !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio {
+			problems = append(problems, "SMS_PROVIDER=twilio is required in production unless REVIEW_ONLY_MODE is enabled")
 		}
 	}
 
@@ -189,6 +211,53 @@ func isUnsafeSigningKey(value string) bool {
 func isUnsafeProductionOrigin(origin string) bool {
 	value := strings.ToLower(strings.TrimSpace(origin))
 	return value == "*" || strings.Contains(value, "localhost") || strings.Contains(value, "127.0.0.1") || strings.Contains(value, "0.0.0.0")
+}
+
+func normalizePhone(value string) string {
+	return strings.ReplaceAll(strings.TrimSpace(value), " ", "")
+}
+
+func isValidPhone(value string) bool {
+	value = normalizePhone(value)
+	if strings.HasPrefix(value, "+") {
+		value = value[1:]
+	}
+	if len(value) < 9 || len(value) > 15 {
+		return false
+	}
+	for _, ch := range value {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isSixDigitCode(value string) bool {
+	if len(value) != 6 {
+		return false
+	}
+	for _, ch := range value {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		panic(fmt.Sprintf("invalid boolean value for %s: %q", key, value))
+	}
 }
 
 func getEnv(key, fallback string) string {
