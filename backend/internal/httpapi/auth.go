@@ -54,7 +54,7 @@ func issueSMSCodeForPhone(phone string) (string, error) {
 	return issueSMSCode()
 }
 
-func RequestSMSCode/(w http.ResponseWriter, r *http.Request) {
+func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -98,7 +98,7 @@ func RequestSMSCode/(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if appState.SMSSender != nil && !reviewPhone {
-		sendCtx/, sendCancel := context.WithTimeout(r.Context(), 12*time.Second)
+		sendCtx, sendCancel := context.WithTimeout(r.Context(), 12*time.Second)
 		err = appState.SMSSender.SendLoginCode(sendCtx, req.Phone, code)
 		sendCancel()
 		if err != nil {
