@@ -41,7 +41,20 @@ var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}$`)
 // smoke tests usable without weakening production authentication.
 const developmentSMSCode = "111111"
 
-func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
+func isReviewPhone(phone string) bool {
+	return appState.ReviewOnlyMode &&
+		appState.ReviewSMSPhone != "" &&
+		normalizePhone(phone) == appState.ReviewSMSPhone
+}
+
+func issueSMSCodeForPhone(phone string) (string, error) {
+	if isReviewPhone(phone) && appState.ReviewSMSCode != "" {
+		return appState.ReviewSMSCode, nil
+	}
+	return issueSMSCode()
+}
+
+func RequestSMSCode/(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -62,7 +75,8 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, err := issueSMSCode()
+	reviewPhone := isReviewPhone(req.Phone)
+	code, err := issueSMSCodeForPhone(req.Phone)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to generate code")
 		return
@@ -83,8 +97,8 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if appState.SMSSender != nil {
-		sendCtx, sendCancel := context.WithTimeout(r.Context(), 12*time.Second)
+	if appState.SMSSender != nil && !reviewPhone {
+		sendCtx/, sendCancel := context.WithTimeout(r.Context(), 12*time.Second)
 		err = appState.SMSSender.SendLoginCode(sendCtx, req.Phone, code)
 		sendCancel()
 		if err != nil {
@@ -92,7 +106,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusBadGateway, "failed to deliver login code")
 			return
 		}
-	} else if appState.IsProduction {
+	} else if appState.IsProduction && !reviewPhone {
 		cleanupSMSCode(codeID)
 		Error(w, http.StatusServiceUnavailable, "SMS service is unavailable")
 		return
