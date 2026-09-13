@@ -2757,3 +2757,30 @@ h1 em, h2 span, .demo-copy em { color: var(--brand); }
     transition-duration: .01ms !important;
   }
 }
+
+/* STROY infinite marquee — 2026-09-13 */
+.marquee-track {
+  width: max-content;
+  display: flex;
+  align-items: center;
+  animation: marquee-infinite 32s linear infinite;
+  will-change: transform;
+}
+.marquee-group {
+  display: flex;
+  align-items: center;
+  gap: 33px;
+  flex: 0 0 auto;
+  padding-right: 33px;
+}
+.marquee-group span,
+.marquee-group i {
+  flex: 0 0 auto;
+}
+@keyframes marquee-infinite {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; transform: none; }
+}
