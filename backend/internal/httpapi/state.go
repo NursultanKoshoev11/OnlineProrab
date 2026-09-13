@@ -53,9 +53,9 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		UploadDir:               cfg.UploadDir,
 		MaxUploadBytes:          cfg.MaxUploadBytes,
 		IsProduction:            cfg.IsProduction(),
-		ReviewOnlyMode:          cfg.ReviewOnlyMode
-		ReviewSMSPhone:          cfg.ReviewSMSPhone
-		ReviewSMSCode:           cfg.ReviewSMSCode
+		ReviewOnlyMode:          cfg.ReviewOnlyMode,
+		ReviewSMSPhone:          cfg.ReviewSMSPhone,
+		ReviewSMSCode:           cfg.ReviewSMSCode,
 		SMSSender:               smsSender,
 		SupportTelegramBotToken: cfg.SupportTelegramBotToken,
 		SupportTelegramChatID:   cfg.SupportTelegramChatID,
