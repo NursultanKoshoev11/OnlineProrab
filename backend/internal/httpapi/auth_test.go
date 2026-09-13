@@ -151,3 +151,29 @@ func TestHashLoginCodeDependsOnPhoneAndCode(t *testing.T) {
 		t.Fatal("expected hash to change when code changes")
 	}
 }
+
+
+func TestIssueSMSCodeForPhoneUsesConfiguredReviewCodeOnlyForReviewPhone(t *testing.T) {
+	oldState := appState
+	defer func() { appState = oldState }()
+
+	appState.IsProduction = true
+	appState.ReviewOnlyMode = true
+	appState.ReviewSMSPhone = "+996700000001"
+	appState.ReviewSMSCode = "111111"
+	appState.SMSSender = nil
+
+	code, err := issueSMSCodeForPhone("+996 700 000 001")
+	if err != nil {
+		t.Fatalf("issueSMSCodeForPhone returned error: %v", err)
+	}
+	if code != "111111" {
+		t.Fatalf("expected configured review code, got %q", code)
+	}
+	if !isReviewPhone("+996700000001") {
+		t.Fatal("expected exact configured phone to be recognized")
+	}
+	if isReviewPhone("+996700000002") {
+		t.Fatal("a different phone must not be recognized as review phone")
+	}
+}
