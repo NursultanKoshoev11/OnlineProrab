@@ -2784,3 +2784,20 @@ h1 em, h2 span, .demo-copy em { color: var(--brand); }
 @media (prefers-reduced-motion: reduce) {
   .marquee-track { animation: none; transform: none; }
 }
+/* STROY marquee spacing refinement — 2026-09-13 */
+.marquee-group {
+  gap: 48px;
+  padding-right: 48px;
+}
+.marquee-group span {
+  white-space: nowrap;
+}
+.marquee-group i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  margin: 0;
+  flex: 0 0 18px;
+  text-align: center;
+}
