@@ -1,161 +1,212 @@
-const menuButton = document.querySelector('.menu-button');
-const mobileNav = document.querySelector('.mobile-nav');
+"use strict";
 
-menuButton?.addEventListener('click', () => {
-  const isOpen = mobileNav.classList.toggle('open');
-  menuButton.setAttribute('aria-expanded', String(isOpen));
-  mobileNav.setAttribute('aria-hidden', String(!isOpen));
+// Navigation uses a single source of truth for visibility and accessibility.
+const menuButton = document.querySelector(".menu-button");
+const mobileNav = document.querySelector("#mobile-nav");
+function setMenu(open) {
+  mobileNav.hidden = !open;
+  menuButton.setAttribute("aria-expanded", String(open));
+  menuButton.setAttribute("aria-label", open ? "Закрыть меню" : "Открыть меню");
+}
+menuButton.addEventListener("click", () => setMenu(mobileNav.hidden));
+mobileNav.addEventListener("click", (event) => {
+  if (event.target.closest("a")) setMenu(false);
 });
-
-mobileNav?.querySelectorAll('a').forEach((link) => {
-  link.addEventListener('click', () => {
-    mobileNav.classList.remove('open');
-    menuButton?.setAttribute('aria-expanded', 'false');
-    mobileNav.setAttribute('aria-hidden', 'true');
-  });
-});
-
-const demoContent = {
-  object: {
-    number: '01',
-    title: 'Объект — это<br /><em>единая картина.</em>',
-    text: 'Фото, ключевые показатели и текущий статус собраны на одном экране — без поиска по чатам и заметкам.',
-    points: ['✓ Фото объекта', '✓ Общая сумма', '✓ Статус работы'],
-    visual: {
-      kicker: 'ОБЪЕКТ', title: 'Дом у озера', status: 'В работе', photoLabel: 'июнь 2026',
-      statOneLabel: 'Всего потрачено', statOneValue: '1 248 500', statOneUnit: 'сом',
-      statTwoLabel: 'Дата начала', statTwoValue: '09 сентября 2026', mode: 'object',
-    },
-  },
-  expenses: {
-    number: '02',
-    title: 'Каждый расход<br /><em>под контролем.</em>',
-    text: 'Добавляйте покупку за несколько секунд, прикладывайте чек и сразу видьте, как меняется бюджет объекта.',
-    points: ['✓ Название и сумма', '✓ Фото чека', '✓ Дата и описание'],
-    visual: {
-      kicker: 'РАСХОДЫ', title: 'Контроль бюджета', status: 'Всё учтено', photoLabel: 'последние 30 дней',
-      statOneLabel: 'Всего расходов', statOneValue: '1 248 500', statOneUnit: 'сом',
-      statTwoLabel: 'Операций', statTwoValue: '38 покупок', mode: 'expenses',
-    },
-  },
-  report: {
-    number: '03',
-    title: 'Отчёт готов<br /><em>для решения.</em>',
-    text: 'Общий итог, расходы и PDF‑предпросмотр — в одном понятном экране для владельца, клиента и команды.',
-    points: ['✓ Общий итог', '✓ PDF‑предпросмотр', '✓ Поделиться отчётом'],
-    visual: {
-      kicker: 'ОТЧЁТ', title: 'Отчёт по объекту', status: 'Готов', photoLabel: 'июнь 2026',
-      statOneLabel: 'Прогресс', statOneValue: '84%', statOneUnit: '',
-      statTwoLabel: 'Обновлён', statTwoValue: 'Сегодня, 12:40', mode: 'report',
-    },
-  },
-};
-
-const demoVisualKicker = document.querySelector('#demoVisualKicker');
-const demoVisualTitle = document.querySelector('#demoVisualTitle');
-const demoVisualStatus = document.querySelector('#demoVisualStatus');
-const demoVisualPhoto = document.querySelector('#demoVisualPhoto');
-const demoVisualPhotoLabel = document.querySelector('#demoVisualPhotoLabel');
-const demoStatOneLabel = document.querySelector('#demoStatOneLabel');
-const demoStatOneValue = document.querySelector('#demoStatOneValue');
-const demoStatOneUnit = document.querySelector('#demoStatOneUnit');
-const demoStatTwoLabel = document.querySelector('#demoStatTwoLabel');
-const demoStatTwoValue = document.querySelector('#demoStatTwoValue');
-
-const setDemo = (name) => {
-  const item = demoContent[name];
-  if (!item) return;
-  document.querySelectorAll('.demo-tab').forEach((tab) => tab.classList.toggle('active', tab.getAttribute('data-demo') === name));
-  document.querySelector('#demoNumber').textContent = item.number;
-  document.querySelector('#demoTitle').innerHTML = item.title;
-  document.querySelector('#demoText').textContent = item.text;
-  document.querySelector('#demoPoints').innerHTML = item.points.map((point) => `<span>${point}</span>`).join('');
-  const visual = document.querySelector('#demoVisual');
-  const card = item.visual;
-  visual.setAttribute('data-mode', card.mode);
-  if (demoVisualKicker) demoVisualKicker.textContent = card.kicker;
-  if (demoVisualTitle) demoVisualTitle.textContent = card.title;
-  if (demoVisualStatus) demoVisualStatus.textContent = card.status;
-  if (demoVisualPhotoLabel) demoVisualPhotoLabel.textContent = card.photoLabel;
-  if (demoStatOneLabel) demoStatOneLabel.textContent = card.statOneLabel;
-  if (demoStatOneValue) demoStatOneValue.firstChild.textContent = card.statOneValue;
-  if (demoStatOneUnit) demoStatOneUnit.textContent = card.statOneUnit;
-  if (demoStatTwoLabel) demoStatTwoLabel.textContent = card.statTwoLabel;
-  if (demoStatTwoValue) demoStatTwoValue.textContent = card.statTwoValue;
-};
-
-document.querySelectorAll('.demo-tab').forEach((tab) => tab.addEventListener('click', () => setDemo(tab.getAttribute('data-demo'))));
-
-const flowItems = document.querySelectorAll('.flow-item');
-const flowVisualImage = document.querySelector('[data-flow-visual-image]');
-const flowVisualLabel = document.querySelector('[data-flow-visual-label]');
-const flowVisualStatus = document.querySelector('[data-flow-visual-status]');
-const flowProgress = document.querySelector('[data-flow-progress]');
-const flowProgressBar = document.querySelector('[data-flow-progress-bar]');
-
-const setFlowStep = (item) => {
-  flowItems.forEach((other) => other.classList.remove('active'));
-  item.classList.add('active');
-
-  const progress = item.getAttribute('data-flow-progress') || '78';
-  const nextLabel = item.getAttribute('data-flow-label') || '';
-  const nextStatus = item.getAttribute('data-flow-status') || '';
-  const nextImage = item.getAttribute('data-flow-image') || '';
-  if (flowVisualLabel) flowVisualLabel.textContent = nextLabel;
-  if (flowVisualStatus) flowVisualStatus.textContent = nextStatus;
-  if (flowProgress) flowProgress.textContent = `${progress}%`;
-  if (flowProgressBar) flowProgressBar.style.width = `${progress}%`;
-
-  if (flowVisualImage && nextImage && flowVisualImage.getAttribute('src') !== nextImage) {
-    flowVisualImage.classList.add('is-changing');
-    window.setTimeout(() => {
-      flowVisualImage.setAttribute('src', nextImage);
-      flowVisualImage.onload = () => flowVisualImage.classList.remove('is-changing');
-    }, 140);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !mobileNav.hidden) {
+    setMenu(false);
+    menuButton.focus();
   }
-};
+});
+const mobileBreakpoint = window.matchMedia("(max-width: 700px)");
+mobileBreakpoint.addEventListener("change", () => setMenu(false));
 
-flowItems.forEach((item) => {
-  item.addEventListener('mouseenter', () => setFlowStep(item));
-  item.addEventListener('focusin', () => setFlowStep(item));
-  item.addEventListener('click', () => setFlowStep(item));
-  item.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+// The demo stays local to this page. Refreshing restores the example data.
+const tabs = [...document.querySelectorAll("[data-tab]")];
+const panels = [...document.querySelectorAll('[role="tabpanel"]')];
+const tablist = document.querySelector(".demo-tabs");
+function syncTabOrientation() {
+  tablist.setAttribute(
+    "aria-orientation",
+    mobileBreakpoint.matches ? "horizontal" : "vertical",
+  );
+}
+syncTabOrientation();
+mobileBreakpoint.addEventListener("change", syncTabOrientation);
+function selectTab(name, focus = false) {
+  const selected = tabs.find((tab) => tab.dataset.tab === name);
+  if (!selected) return;
+  tabs.forEach((tab) => {
+    const active = tab === selected;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+  });
+  panels.forEach((panel) => {
+    panel.hidden = panel.id !== `panel-${name}`;
+  });
+  document.querySelector("#breadcrumb").textContent =
+    selected.querySelector("span").textContent;
+  if (focus) selected.focus();
+}
+tabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+  tab.addEventListener("keydown", (event) => {
+    const nextKeys = mobileBreakpoint.matches ? ["ArrowRight"] : ["ArrowDown"];
+    const previousKeys = mobileBreakpoint.matches ? ["ArrowLeft"] : ["ArrowUp"];
+    let next;
+    if (nextKeys.includes(event.key)) next = (index + 1) % tabs.length;
+    if (previousKeys.includes(event.key))
+      next = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") next = 0;
+    if (event.key === "End") next = tabs.length - 1;
+    if (next !== undefined) {
       event.preventDefault();
-      setFlowStep(item);
+      selectTab(tabs[next].dataset.tab, true);
     }
   });
 });
-
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const finePointer = window.matchMedia('(pointer: fine)').matches;
-
-if (!reduceMotion && finePointer) {
-  document.querySelectorAll('.browser-screen, .feature-card').forEach((card) => {
-    const surface = card.matches('.browser-screen') ? card.querySelector('.browser-window') : card;
-    if (!surface) return;
-
-    card.addEventListener('pointermove', (event) => {
-      const rect = card.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / rect.width - 0.5;
-      const y = (event.clientY - rect.top) / rect.height - 0.5;
-      const tiltX = (-y * 3.2).toFixed(2);
-      const tiltY = (x * 3.2).toFixed(2);
-      surface.style.transform = `perspective(1100px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-7px)`;
-    });
-
-    card.addEventListener('pointerleave', () => {
-      surface.style.transform = '';
+document.querySelectorAll("[data-open-demo]").forEach((link) => {
+  link.addEventListener("click", () => selectTab(link.dataset.openDemo));
+});
+document
+  .querySelector("#project-filter")
+  .addEventListener("change", (event) => {
+    const filter = event.target.value;
+    document.querySelectorAll("[data-status]").forEach((project) => {
+      project.hidden = filter !== "all" && project.dataset.status !== filter;
     });
   });
+
+const expenses = [
+  { name: "Бетон М300", category: "Материалы", amount: 248000 },
+  { name: "Арматура А500", category: "Материалы", amount: 186400 },
+  { name: "Аренда техники", category: "Техника", amount: 320000 },
+  { name: "Монтажные работы", category: "Работы", amount: 494100 },
+];
+const money = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
+const total = () =>
+  expenses.reduce((sum, expense) => sum + Math.round(expense.amount * 100), 0) /
+  100;
+function renderExpenses() {
+  const rows = expenses.map((expense) => {
+    const row = document.createElement("tr");
+    [expense.name, expense.category, money.format(expense.amount)].forEach(
+      (value) => {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.append(cell);
+      },
+    );
+    return row;
+  });
+  document.querySelector("#expense-rows").replaceChildren(...rows);
+  document.querySelectorAll("[data-expense-total]").forEach((element) => {
+    element.textContent = `${money.format(total())} сом`;
+  });
+  document.querySelector("#project-expense-total").textContent =
+    `${money.format(total())} сом`;
+  const overallTotal = document.querySelector(
+    ".app-stats > div:nth-child(2) strong",
+  );
+  overallTotal.replaceChildren(
+    document.createTextNode(`${money.format(11231500 + total())} `),
+  );
+  const unit = document.createElement("small");
+  unit.textContent = "сом";
+  overallTotal.append(unit);
+  const categories = ["Материалы", "Работы", "Техника"].map((category) => {
+    const row = document.createElement("div");
+    const label = document.createElement("span");
+    const value = document.createElement("span");
+    label.textContent = category;
+    value.textContent = `${money.format(expenses.filter((item) => item.category === category).reduce((sum, item) => sum + Math.round(item.amount * 100), 0) / 100)} сом`;
+    row.append(label, value);
+    return row;
+  });
+  document.querySelector("#report-categories").replaceChildren(...categories);
 }
+renderExpenses();
 
-const revealObserver = 'IntersectionObserver' in window
-  ? new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) entry.target.classList.add('is-visible');
-      });
-    }, { threshold: 0.16 })
-  : null;
+let toastTimer;
+function notify(message) {
+  const toast = document.querySelector("#toast");
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 4000);
+}
+const dialog = document.querySelector("#expense-dialog");
+const form = document.querySelector("#expense-form");
+document
+  .querySelector("#add-expense")
+  .addEventListener("click", () => dialog.showModal());
+dialog
+  .querySelector(".dialog-close")
+  .addEventListener("click", () => dialog.close());
+dialog.addEventListener("click", (event) => {
+  const bounds = dialog.getBoundingClientRect();
+  if (
+    event.target === dialog &&
+    (event.clientX < bounds.left ||
+      event.clientX > bounds.right ||
+      event.clientY < bounds.top ||
+      event.clientY > bounds.bottom)
+  )
+    dialog.close();
+});
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const fields = new FormData(form);
+  const name = String(fields.get("name")).trim();
+  const amount = Number(fields.get("amount"));
+  if (!name) {
+    form.elements.name.setCustomValidity("Укажите название расхода.");
+    form.elements.name.reportValidity();
+    return;
+  }
+  if (!Number.isFinite(amount) || amount < 1 || amount > 100000000) return;
+  expenses.unshift({
+    name,
+    category: String(fields.get("category")),
+    amount: Math.round(amount * 100) / 100,
+  });
+  renderExpenses();
+  dialog.close();
+  form.reset();
+  notify("Расход добавлен. Итоги и отчёт обновлены.");
+});
+form.elements.name.addEventListener("input", () =>
+  form.elements.name.setCustomValidity(""),
+);
 
-revealObserver?.observe(document.querySelector('.screen-showcase-grid'));
+function csvCell(value) {
+  // Quoting alone does not prevent spreadsheet formula interpretation.
+  const text = String(value);
+  const safe = /^[=+\-@\t\r\n]/.test(text) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+document.querySelector("#download-report").addEventListener("click", () => {
+  const rows = [
+    ["STROY — Демонстрационный отчёт", "Дом у озера", ""],
+    ["Название", "Категория", "Сумма (сом)"],
+    ...expenses.map((expense) => [
+      expense.name,
+      expense.category,
+      expense.amount.toFixed(2).replace(".", ","),
+    ]),
+    ["Итого", "", total().toFixed(2).replace(".", ",")],
+  ];
+  const csv =
+    "\uFEFF" + rows.map((row) => row.map(csvCell).join(";")).join("\r\n");
+  const url = URL.createObjectURL(
+    new Blob([csv], { type: "text/csv;charset=utf-8;" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "stroy-demo-report.csv";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  notify("Демо-отчёт скачан в формате CSV.");
+});

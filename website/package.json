@@ -1,0 +1,18 @@
+{
+  "name": "stroy-website",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tailwindcss -i ./src/styles.css -o ./styles.css --minify",
+    "dev": "tailwindcss -i ./src/styles.css -o ./styles.css --watch",
+    "check": "node --check script.js && prettier --check src/*.css index.html privacy/index.html terms/index.html support/index.html account-deletion/index.html script.js package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "prettier": "^3.9.7",
+    "tailwindcss": "^4.3.3"
+  }
+}

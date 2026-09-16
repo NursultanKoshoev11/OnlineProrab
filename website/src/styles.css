@@ -1,0 +1,32 @@
+/* Tailwind entry point. Build with npm run build; do not edit /styles.css. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+/* Retain the site's existing reset so document lists and native dialogs stay unchanged. */
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@import "./base.css" layer(base);
+@import "./components.css" layer(components);
+@import "./legal.css" layer(components);
+
+@source "../index.html";
+@source "../privacy/index.html";
+@source "../terms/index.html";
+@source "../support/index.html";
+@source "../account-deletion/index.html";
+@source "../script.js";
+
+/* Match the inclusive breakpoints used by component styles and JavaScript. */
+@custom-variant compact (@media (max-width: 1150px));
+@custom-variant tablet (@media (max-width: 900px));
+@custom-variant mobile (@media (max-width: 700px));
+
+@theme {
+  --color-paper: #f6f7f2;
+  --color-ink: #203c32;
+  --color-muted: #65715f;
+  --color-green: #305d45;
+  --color-lime: #d8f68a;
+  --color-line: #dfe3d9;
+  --color-soft: #edf0e7;
+  --radius-card: 18px;
+  --font-sans: Arial, Helvetica, sans-serif;
+}

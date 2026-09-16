@@ -1,0 +1,312 @@
+/* Document pages share the landing page tokens and typography. */
+.legal-container {
+  width: min(1180px, calc(100% - 96px));
+  @apply mx-auto;
+}
+.legal-topbar {
+  @apply sticky top-0 z-20;
+  border-bottom: 1px solid var(--color-line);
+  @apply bg-[#f6f7f2f2];
+  backdrop-filter: blur(16px);
+}
+.legal-nav {
+  @apply min-h-22 flex items-center gap-7;
+}
+.legal-nav nav {
+  @apply flex flex-wrap items-center gap-6 ml-auto;
+}
+.legal-nav nav a {
+  @apply text-[15px] text-[#737e69];
+}
+.legal-nav nav a:hover {
+  @apply text-ink;
+}
+.legal-nav-button {
+  padding: 12px 18px;
+  @apply rounded-[7px] bg-ink text-white text-[15px];
+}
+.legal-nav-button span {
+  @apply ml-3 text-lime;
+}
+.legal-main {
+  padding: 76px 0 100px;
+}
+.legal-kicker {
+  @apply text-[13px] tracking-[1.8px] font-semibold text-[#728562];
+}
+.legal-main h1 {
+  @apply max-w-[1000px];
+  margin: 23px 0;
+  font-size: clamp(40px, 5.8vw, 76px);
+  @apply leading-[1.05] tracking-[-3px] font-medium;
+  overflow-wrap: break-word;
+}
+.legal-lead {
+  @apply max-w-[700px] text-[#7b8670] text-[18px] leading-[1.8];
+}
+.legal-grid {
+  @apply grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  @apply gap-16 mt-16 items-start;
+}
+.legal-aside {
+  @apply sticky top-[115px] flex flex-col gap-[17px] pt-5.5;
+  border-top: 1px solid var(--color-line);
+}
+.legal-aside:before {
+  content: "В ЭТОМ ДОКУМЕНТЕ";
+  @apply text-[12px] font-semibold tracking-[1.2px] text-[#8b977c] mb-2;
+}
+.legal-aside a {
+  @apply text-[16px] text-[#6f7e61] leading-[1.5];
+}
+.legal-aside a:hover {
+  @apply underline;
+  text-underline-offset: 4px;
+}
+.legal-content {
+  @apply min-w-0;
+  padding: 34px 40px;
+  border: 1px solid var(--color-line);
+  @apply rounded-[14px] bg-white;
+}
+.legal-content h2 {
+  margin: 35px 0 15px;
+  @apply text-[25px] leading-[1.25] tracking-[-0.8px];
+  scroll-margin-top: 115px;
+}
+.legal-content p,
+.legal-content li {
+  @apply text-[#65735a] text-[18px] leading-[1.85];
+}
+.legal-content p {
+  @apply mb-[17px];
+}
+.legal-content ul,
+.legal-content ol {
+  @apply pl-[21px];
+  margin: 0 0 20px;
+}
+.legal-content li {
+  margin: 8px 0;
+  @apply pl-1;
+}
+.legal-content strong {
+  @apply text-ink font-semibold;
+}
+.legal-content a {
+  @apply text-[#4f703e] underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.legal-meta {
+  @apply flex items-center justify-between gap-5 pb-6;
+  border-bottom: 1px solid var(--color-line);
+  @apply text-[14px] text-[#909b81];
+}
+.legal-meta strong {
+  @apply text-[14px] text-[#6b8157] font-medium;
+}
+.legal-notice {
+  margin: 25px 0 30px;
+  padding: 19px 22px;
+  border-left: 3px solid #a4c174;
+  border-radius: 0 8px 8px 0;
+  @apply bg-[#eff3e7] text-[#60744c] text-[17px] leading-[1.8];
+}
+.legal-notice strong {
+  @apply font-semibold;
+}
+.legal-content .legal-footnote {
+  @apply pt-[23px];
+  border-top: 1px solid var(--color-line);
+  @apply text-[15px] text-[#8b977d];
+}
+.legal-action {
+  @apply inline-flex items-center justify-center gap-5;
+  margin: 0 0 17px;
+  padding: 14px 18px;
+  @apply rounded-[7px] bg-ink;
+  color: #fff !important;
+  @apply text-[16px];
+  text-decoration: none !important;
+}
+.legal-action:hover {
+  @apply bg-[#426044];
+}
+.legal-action span {
+  @apply text-[18px] text-lime;
+}
+.legal-steps {
+  padding-left: 21px !important;
+}
+.legal-steps li::marker {
+  @apply text-[#7f9a5c] font-semibold;
+}
+.support-contact-card {
+  @apply flex items-center gap-4;
+  margin: 26px 0 35px;
+  padding: 23px 20px;
+  border: 1px solid #dfe6d2;
+  @apply rounded-[10px] bg-[#f3f6ed];
+}
+.support-icon {
+  @apply grid place-items-center w-[43px] h-[43px] bg-ink text-lime rounded-lg text-[20px] shrink-0;
+}
+.support-label {
+  @apply block mb-[5px] text-[12px] tracking-[1px] text-[#8b967c];
+}
+.support-email {
+  @apply text-[18px];
+}
+.support-contact-card p {
+  margin: 4px 0 0;
+  @apply text-[14px] text-[#8b967c];
+}
+.legal-footer {
+  padding: 31px 0;
+  border-top: 1px solid var(--color-line);
+  @apply bg-[#ecefe5];
+}
+.legal-footer-row {
+  @apply flex items-center gap-[25px];
+}
+.legal-footer-links {
+  @apply flex flex-wrap gap-5 ml-auto;
+}
+.legal-footer-links a {
+  @apply text-[14px] text-[#7e8a71];
+}
+.legal-footer-links a:hover {
+  @apply underline;
+}
+.legal-copy {
+  @apply text-[13px] text-[#8c987d];
+}
+.legal-nav .brand-mark,
+.legal-footer .brand-mark {
+  @apply bg-transparent text-ink;
+}
+@media (max-width: 1000px) {
+  .legal-container {
+    width: calc(100% - 64px);
+  }
+  .legal-nav nav {
+    @apply gap-4;
+  }
+  .legal-nav nav a {
+    @apply text-[14px];
+  }
+  .legal-grid {
+    grid-template-columns: 180px minmax(0, 1fr);
+    @apply gap-[35px];
+  }
+  .legal-content {
+    @apply p-7;
+  }
+  .legal-footer-row {
+    @apply flex-wrap;
+  }
+  .legal-footer-links {
+    @apply gap-4;
+  }
+}
+@media (max-width: 800px) {
+  .legal-nav nav {
+    @apply hidden;
+  }
+  .legal-nav-button {
+    @apply ml-auto;
+  }
+  .legal-grid {
+    @apply grid-cols-1 gap-7 mt-10;
+  }
+  .legal-aside {
+    @apply static grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 13px 22px;
+  }
+  .legal-aside:before {
+    @apply col-span-full mb-1;
+  }
+  .legal-content {
+    @apply p-7;
+  }
+  .legal-main {
+    padding: 55px 0 70px;
+  }
+  .legal-main h1 {
+    @apply text-[52px] tracking-[-2px];
+  }
+  .legal-lead {
+    @apply text-[18px];
+  }
+  .legal-footer-links {
+    @apply ml-0;
+    flex: 1;
+  }
+  .legal-footer .brand {
+    @apply text-[23px];
+  }
+}
+@media (max-width: 500px) {
+  .legal-container {
+    width: calc(100% - 40px);
+  }
+  .legal-nav {
+    @apply min-h-18 gap-4;
+  }
+  .legal-nav-button {
+    padding: 11px 14px;
+    @apply text-[14px];
+  }
+  .legal-main h1 {
+    @apply text-[38px] tracking-[-1.7px];
+    overflow-wrap: anywhere;
+  }
+  .legal-main {
+    @apply pt-[43px];
+  }
+  .legal-lead {
+    @apply text-[17px];
+  }
+  .legal-content {
+    padding: 23px 20px;
+  }
+  .legal-content h2 {
+    @apply text-[22px];
+  }
+  .legal-content p,
+  .legal-content li {
+    @apply text-[17px];
+  }
+  .legal-meta {
+    @apply flex-col items-start gap-1.5;
+  }
+  .legal-aside a {
+    @apply text-[15px];
+  }
+  .legal-action {
+    @apply text-[15px];
+    padding: 12px 14px;
+    @apply gap-3;
+  }
+  .support-contact-card {
+    @apply p-4.5 flex-col items-start;
+  }
+  .support-email {
+    @apply text-[18px];
+  }
+  .support-contact-card p {
+    @apply text-[14px];
+  }
+  .legal-footer-row {
+    @apply items-start flex-col gap-5;
+  }
+  .legal-footer-links {
+    gap: 15px 20px;
+  }
+  .legal-notice {
+    @apply p-4 text-[16px];
+  }
+}

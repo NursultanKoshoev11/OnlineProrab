@@ -1,0 +1,68 @@
+/* Minimal document reset, shared by the landing and legal pages. */
+* {
+  @apply box-border;
+}
+html {
+  @apply scroll-smooth;
+  scroll-padding-top: 105px;
+}
+body {
+  @apply m-0 bg-paper text-ink font-sans text-[18px] leading-[1.5];
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: inherit;
+  @apply no-underline;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button,
+a,
+input,
+select,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  @apply cursor-pointer;
+}
+button:disabled {
+  @apply cursor-wait;
+}
+button,
+select {
+  color: inherit;
+}
+img {
+  @apply block max-w-full object-cover;
+}
+svg {
+  @apply block;
+}
+h1,
+h2,
+h3,
+h4,
+p {
+  @apply m-0;
+}
+button {
+  border: 0;
+}
+a,
+button {
+  @apply touch-manipulation;
+}
+::selection {
+  @apply bg-lime text-ink;
+}
+:focus-visible {
+  outline: 3px solid #77923c;
+  outline-offset: 5px;
+}
+[hidden] {
+  display: none !important;
+}
