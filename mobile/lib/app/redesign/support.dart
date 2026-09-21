@@ -92,7 +92,7 @@ class _SupportScreenState extends State<_SupportScreen> {
           const SizedBox(height: 18),
           const Text(
             'Канал связи',
-            style: TextStyle(fontWeight: FontWeight.w800),
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           SegmentedButton<String>(

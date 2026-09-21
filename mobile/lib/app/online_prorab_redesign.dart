@@ -38,12 +38,12 @@ part 'redesign/expense_form.dart';
 part 'redesign/widgets.dart';
 part 'redesign/helpers.dart';
 
-const _ink = Color(0xFF111815);
-const _muted = Color(0xFF6F7C75);
-const _surface = Color(0xFFF4F7F4);
-const _brand = Color(0xFF087A3D);
-const _brandSoft = Color(0xFFE5F5EB);
-const _line = Color(0xFFE8ECE9);
+const _ink = Color(0xFF222925);
+const _muted = Color(0xFF626D66);
+const _surface = Color(0xFFF6F5F1);
+const _brand = Color(0xFF244D40);
+const _brandSoft = Color(0xFFE8EEE8);
+const _line = Color(0xFFDDDFD8);
 const _warningSoft = Color(0xFFFFF0D6);
 const _warning = Color(0xFFC27A16);
 const _offlineDemo = bool.fromEnvironment('OFFLINE_DEMO', defaultValue: false);
@@ -114,6 +114,15 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         ),
         scaffoldBackgroundColor: _surface,
         fontFamily: 'Roboto',
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: _ink),
+          bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: _ink),
+          titleMedium: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: _ink,
+          ),
+        ),
         appBarTheme: const AppBarTheme(
           backgroundColor: _surface,
           foregroundColor: _ink,
@@ -124,7 +133,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           titleTextStyle: TextStyle(
             color: _ink,
             fontSize: 18,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         cardTheme: CardThemeData(
@@ -133,7 +142,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           color: Colors.white,
           surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             side: const BorderSide(color: _line),
           ),
         ),
@@ -147,23 +156,23 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
             vertical: 14,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: _line),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: _line),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: _brand, width: 1.5),
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: Colors.redAccent),
           ),
           focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
           ),
         ),
@@ -177,7 +186,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
               fontWeight: FontWeight.w700,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
         ),
@@ -187,7 +196,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
             minimumSize: const Size.fromHeight(50),
             side: const BorderSide(color: _line),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(8),
             ),
             textStyle: const TextStyle(fontWeight: FontWeight.w700),
           ),
@@ -234,7 +243,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
           elevation: 0,
           indicatorColor: _brandSoft,
           indicatorShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(8),
           ),
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           labelTextStyle: WidgetStateProperty.resolveWith(

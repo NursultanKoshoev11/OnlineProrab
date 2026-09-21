@@ -66,7 +66,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 12, 0),
+              padding: const EdgeInsets.fromLTRB(24, 16, 16, 12),
               child: Row(
                 children: [
                   const _BrandWordmark(),
@@ -114,16 +114,19 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                     onRefresh: _reload,
                     color: _brand,
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
                       children: [
                         _PageHeader(
                           title: _showArchived ? 'Архив объектов' : 'Объекты',
+                          subtitle: _showArchived
+                              ? 'Завершённые проекты'
+                              : 'Ваше рабочее пространство',
                           action: !_showArchived
                               ? IconButton.filled(
                                   style: IconButton.styleFrom(
                                     backgroundColor: _brand,
                                     foregroundColor: Colors.white,
-                                    minimumSize: const Size(44, 44),
+                                    minimumSize: const Size(48, 48),
                                   ),
                                   tooltip: 'Добавить объект',
                                   onPressed: _createProject,
@@ -138,7 +141,17 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                           decoration: InputDecoration(
                             hintText: 'Поиск объектов',
                             prefixIcon: const Icon(Icons.search_rounded),
-                            fillColor: const Color(0xFFEDF1EE),
+                            suffixIcon: _search.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Очистить поиск объектов',
+                                    icon: const Icon(Icons.close_rounded),
+                                    onPressed: () {
+                                      FocusScope.of(context).unfocus();
+                                      setState(_search.clear);
+                                    },
+                                  ),
+                            fillColor: Colors.white,
                             border: const OutlineInputBorder(
                               borderRadius: BorderRadius.all(
                                 Radius.circular(11),
@@ -177,7 +190,29 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                             onSelected: _toggleArchived,
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _showArchived ? 'В архиве' : 'Текущие проекты',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: _muted,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${projects.length}',
+                              style: const TextStyle(
+                                color: _muted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
                         if (projects.isEmpty)
                           _EmptyCard(
                             icon: Icons.home_work_outlined,
@@ -225,12 +260,10 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
           navigationBarTheme: NavigationBarThemeData(
             height: 68,
             backgroundColor: Colors.white,
-            indicatorColor: _ink,
+            indicatorColor: _brandSoft,
             iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
               (states) => IconThemeData(
-                color: states.contains(WidgetState.selected)
-                    ? Colors.white
-                    : _muted,
+                color: states.contains(WidgetState.selected) ? _brand : _muted,
               ),
             ),
             labelTextStyle: WidgetStateProperty.resolveWith(
@@ -309,7 +342,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
             children: [
               const Text(
                 'Профиль',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 14),
               _InfoRow(

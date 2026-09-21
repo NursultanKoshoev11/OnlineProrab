@@ -10,6 +10,7 @@ class ProjectTeamScreen extends StatefulWidget {
     required this.projectId,
     required this.repository,
     this.canManage = true,
+    this.embedded = false,
     this.openInviteOnLoad = false,
     this.realtime,
     super.key,
@@ -17,6 +18,7 @@ class ProjectTeamScreen extends StatefulWidget {
 
   final String projectId;
   final ProjectTeamRepository repository;
+  final bool embedded;
   final bool canManage;
   final bool openInviteOnLoad;
   final RealtimeService? realtime;
@@ -75,18 +77,20 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text('Команда'),
-        actions: [
-          IconButton(
-            tooltip: 'Обновить',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              centerTitle: true,
+              title: const Text('Команда'),
+              actions: [
+                IconButton(
+                  tooltip: 'Обновить',
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+                const SizedBox(width: 6),
+              ],
+            ),
       body: FutureBuilder<List<RemoteProjectMember>>(
         future: membersFuture,
         builder: (context, snapshot) {
@@ -111,7 +115,7 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
                   style: const TextStyle(
                     fontSize: 30,
                     height: 1.05,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.6,
                   ),
                 ),
@@ -419,7 +423,7 @@ class _ProjectMemberCard extends StatelessWidget {
                 initial,
                 style: const TextStyle(
                   color: OnlineProrabColors.primary,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

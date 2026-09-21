@@ -4,6 +4,52 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:online_prorab/services/demo_mode.dart';
 
 void main() {
+  test('archiving preserves project details and allows restoring', () async {
+    final client = DemoHttpClient();
+    addTearDown(client.close);
+    final project = Uri.parse(
+      'http://offline.demo/api/v1/projects/demo-project-1',
+    );
+    expect((await client.delete(project)).statusCode, 200);
+    final active =
+        jsonDecode(
+              (await client.get(
+                Uri.parse('http://offline.demo/api/v1/projects'),
+              )).body,
+            )
+            as List;
+    expect(active.any((p) => p['id'] == 'demo-project-1'), isFalse);
+    final archived = jsonDecode((await client.get(project)).body);
+    expect(archived['status'], 'archived');
+    final costs =
+        jsonDecode(
+              (await client.get(
+                Uri.parse(
+                  'http://offline.demo/api/v1/cost-items?project_id=demo-project-1',
+                ),
+              )).body,
+            )
+            as List;
+    expect(costs, hasLength(3));
+    await client.patch(project, body: jsonEncode({'status': 'active'}));
+    expect(jsonDecode((await client.get(project)).body)['status'], 'active');
+  });
+  test(
+    'loads project details and returns 404 for an unknown project',
+    () async {
+      final client = DemoHttpClient();
+      addTearDown(client.close);
+      final response = await client.get(
+        Uri.parse('http://offline.demo/api/v1/projects/demo-project-1'),
+      );
+      expect(response.statusCode, 200);
+      expect(jsonDecode(response.body)['name'], 'Дом на Иссык-Куле');
+      final missing = await client.get(
+        Uri.parse('http://offline.demo/api/v1/projects/missing'),
+      );
+      expect(missing.statusCode, 404);
+    },
+  );
   test('serves seeded projects without a network connection', () async {
     final client = DemoHttpClient();
     addTearDown(client.close);
@@ -56,7 +102,10 @@ void main() {
       ),
     );
 
-    expect((jsonDecode(expenses.body) as List<dynamic>).first['title'], 'Краска');
+    expect(
+      (jsonDecode(expenses.body) as List<dynamic>).first['title'],
+      'Краска',
+    );
     expect(
       (jsonDecode(reports.body) as List<dynamic>).first['summary'],
       'Проверили офлайн-режим',
@@ -91,7 +140,10 @@ void main() {
       }),
     );
     expect(invite.statusCode, 200);
-    expect((jsonDecode(invite.body) as Map<String, dynamic>)['status'], 'added');
+    expect(
+      (jsonDecode(invite.body) as Map<String, dynamic>)['status'],
+      'added',
+    );
 
     final membersResponse = await client.get(
       Uri.parse(
@@ -99,9 +151,9 @@ void main() {
       ),
     );
     final members = jsonDecode(membersResponse.body) as List<dynamic>;
-    final invited = members.firstWhere(
-      (item) => item['phone'] == '+996777000000',
-    ) as Map<String, dynamic>;
+    final invited =
+        members.firstWhere((item) => item['phone'] == '+996777000000')
+            as Map<String, dynamic>;
 
     final updated = await client.patch(
       Uri.parse(
@@ -110,7 +162,10 @@ void main() {
       body: jsonEncode({'role': 'manager'}),
     );
     expect(updated.statusCode, 200);
-    expect((jsonDecode(updated.body) as Map<String, dynamic>)['role'], 'manager');
+    expect(
+      (jsonDecode(updated.body) as Map<String, dynamic>)['role'],
+      'manager',
+    );
 
     final removed = await client.delete(
       Uri.parse(
@@ -125,8 +180,9 @@ void main() {
       ),
     );
     expect(
-      (jsonDecode(afterRemoval.body) as List<dynamic>)
-          .where((item) => item['user_id'] == invited['user_id']),
+      (jsonDecode(afterRemoval.body) as List<dynamic>).where(
+        (item) => item['user_id'] == invited['user_id'],
+      ),
       isEmpty,
     );
   });

@@ -1,17 +1,22 @@
-# online_prorab
+# STROY mobile
 
-A new Flutter project.
+Flutter construction-project workspace, redesigned from the supplied OnlineProrab archive.
 
-## Getting Started
+## Run
 
-This project is a starting point for a Flutter application.
+```powershell
+flutter pub get
+flutter run -d emulator-5556 --dart-define=OFFLINE_DEMO=true
+```
 
-A few resources to get you started if this is your first Flutter project:
+The demo uses seeded, in-memory projects and expenses. Changes reset when the process restarts. The default build uses the live API configured through `API_BASE_URL` (default: `https://api.stroy.com.kg`). No backend source was included.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Checks
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```powershell
+flutter analyze --no-pub
+flutter test --no-pub
+flutter drive --no-pub -d emulator-5556 --driver=test_driver/design_driver.dart --target=integration_test/offline_design_test.dart --dart-define=OFFLINE_DEMO=true
+```
+
+The emulator test writes screenshots to `evidence/`. See `QA_REPORT.md` for the completed run and its limitations, `DESIGN_NOTES.md` for visual decisions, and `ARCHIVE_REPAIR.md` for extraction recovery and compatibility changes. The original ZIP was not modified.

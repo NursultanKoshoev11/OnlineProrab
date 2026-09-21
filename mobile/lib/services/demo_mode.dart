@@ -206,7 +206,9 @@ class DemoDataState {
   http.Response handle(http.BaseRequest request) {
     final path = request.url.path;
     final method = request.method.toUpperCase();
-    final body = request is http.Request ? _decode(request.body) : <String, dynamic>{};
+    final body = request is http.Request
+        ? _decode(request.body)
+        : <String, dynamic>{};
 
     if (method == 'POST' && path == '/api/v1/auth/sms/request') {
       return _json({'dev_code': '111111'});
@@ -232,8 +234,13 @@ class DemoDataState {
 
     if (path == '/api/v1/projects') {
       if (method == 'GET') {
-        final includeArchived = request.url.queryParameters['include_archived'] == 'true';
-        return _json(projects.where((item) => includeArchived || item['status'] != 'archived').toList());
+        final includeArchived =
+            request.url.queryParameters['include_archived'] == 'true';
+        return _json(
+          projects
+              .where((item) => includeArchived || item['status'] != 'archived')
+              .toList(),
+        );
       }
       if (method == 'POST') {
         final item = _newProject(body);
@@ -255,6 +262,10 @@ class DemoDataState {
     }
     final projectId = _idAfter(path, '/api/v1/projects/');
     if (projectId != null) {
+      if (method == 'GET') {
+        final item = _find(projects, projectId);
+        return item == null ? _notFound() : _json(item);
+      }
       if (method == 'PATCH') {
         final item = _find(projects, projectId);
         if (item == null) return _notFound();
@@ -262,14 +273,19 @@ class DemoDataState {
         return _json(item);
       }
       if (method == 'DELETE') {
-        projects.removeWhere((item) => item['id'] == projectId);
+        final item = _find(projects, projectId);
+        if (item == null) return _notFound();
+        // The app's archive action uses DELETE; retain its data for restore.
+        item['status'] = 'archived';
         return _json({});
       }
     }
 
     final costProjectId = request.url.queryParameters['project_id'];
     if (path == '/api/v1/cost-items' && method == 'GET') {
-      return _json(costs.where((item) => item['project_id'] == costProjectId).toList());
+      return _json(
+        costs.where((item) => item['project_id'] == costProjectId).toList(),
+      );
     }
     if (path == '/api/v1/expense-ai/search' && method == 'POST') {
       final projectCosts = costs
@@ -280,7 +296,18 @@ class DemoDataState {
           .split(RegExp(r'\s+'))
           .map((value) => value.replaceAll(RegExp(r'[?!,.;:]'), ''))
           .where((value) => value.length >= 3)
-          .where((value) => !const {'сколько', 'потратил', 'потрачено', 'на', 'по', 'за', 'и', 'в'}.contains(value))
+          .where(
+            (value) => !const {
+              'сколько',
+              'потратил',
+              'потрачено',
+              'на',
+              'по',
+              'за',
+              'и',
+              'в',
+            }.contains(value),
+          )
           .toList();
       final matched = projectCosts.where((item) {
         final haystack = [
@@ -328,7 +355,9 @@ class DemoDataState {
 
     final reportProjectId = request.url.queryParameters['project_id'];
     if (path == '/api/v1/daily-reports' && method == 'GET') {
-      return _json(reports.where((item) => item['project_id'] == reportProjectId).toList());
+      return _json(
+        reports.where((item) => item['project_id'] == reportProjectId).toList(),
+      );
     }
     if (path == '/api/v1/daily-reports' && method == 'POST') {
       final item = _newReport(body);
@@ -350,7 +379,9 @@ class DemoDataState {
     }
 
     if (path == '/api/v1/files' && method == 'GET') {
-      return _json(files.where((item) => item['project_id'] == costProjectId).toList());
+      return _json(
+        files.where((item) => item['project_id'] == costProjectId).toList(),
+      );
     }
     if (path == '/api/v1/files' && method == 'POST') {
       final item = _newFile(body);
@@ -406,13 +437,11 @@ class DemoDataState {
       final projectId = body['project_id']?.toString() ?? '';
       final phone = body['phone']?.toString() ?? '';
       if (members.any(
-        (item) =>
-            item['project_id'] == projectId && item['phone'] == phone,
+        (item) => item['project_id'] == projectId && item['phone'] == phone,
       )) {
-        return _json(
-          {'error': 'user is already a project member'},
-          status: 409,
-        );
+        return _json({
+          'error': 'user is already a project member',
+        }, status: 409);
       }
       members.add({
         'user_id': _nextId('user'),
@@ -422,14 +451,12 @@ class DemoDataState {
         'role': body['role']?.toString() ?? 'viewer',
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
-      return _json(
-        {
-          'status': 'added',
-          'project_id': projectId,
-          'user_id': members.last['user_id'],
-          'role': members.last['role'],
-        },
-      );
+      return _json({
+        'status': 'added',
+        'project_id': projectId,
+        'user_id': members.last['user_id'],
+        'role': members.last['role'],
+      });
     }
     if (path.startsWith('/api/v1/project-members/') && method == 'PATCH') {
       final memberId = _idAfter(path, '/api/v1/project-members/');
@@ -544,5 +571,6 @@ class DemoDataState {
     headers: {'content-type': 'application/json'},
   );
 
-  http.Response _notFound() => _json({'error': 'Demo route not found'}, status: 404);
+  http.Response _notFound() =>
+      _json({'error': 'Demo route not found'}, status: 404);
 }

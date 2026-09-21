@@ -28,31 +28,34 @@ class _LoginScreenState extends State<_LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _surface,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 460),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+              padding: const EdgeInsets.fromLTRB(28, 40, 28, 32),
               children: [
-                const Center(child: _BrandMark(size: 78)),
-                const SizedBox(height: 18),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: _BrandWordmark(),
+                ),
+                const SizedBox(height: 64),
                 const Text(
-                  'STROY',
-                  textAlign: TextAlign.center,
+                  'Каждый объект.\nКаждая деталь.',
+                  textAlign: TextAlign.left,
                   style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: _brand,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 24),
                 Text(
                   _requested
                       ? 'Введите код из SMS'
-                      : 'Строительство под контролем',
-                  textAlign: TextAlign.center,
+                      : 'Войдите в рабочее пространство',
+                  textAlign: TextAlign.left,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -63,8 +66,8 @@ class _LoginScreenState extends State<_LoginScreen> {
                 Text(
                   _requested
                       ? 'Мы отправили 6-значный код на указанный номер.'
-                      : 'Объекты и расходы — просто и понятно.',
-                  textAlign: TextAlign.center,
+                      : 'Расходы, документы и команда ваших объектов — в одном месте.',
+                  textAlign: TextAlign.left,
                   style: const TextStyle(
                     fontSize: 14,
                     height: 1.4,
@@ -114,7 +117,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                             child: Text(
                               'Код для разработки: $_devCode',
                               style: const TextStyle(
-                                color: _brand,
+                                color: _ink,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -128,7 +131,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                   const SizedBox(height: 12),
                   Text(
                     _error!,
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.left,
                     style: const TextStyle(color: Colors.redAccent),
                   ),
                 ],

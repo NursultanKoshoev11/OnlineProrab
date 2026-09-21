@@ -56,17 +56,18 @@ android {
             }
         }
         release {
-            if (System.getenv("STROY_APPLICATION_ID").isNullOrBlank()) {
+            val releaseRequested = gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }
+            if (releaseRequested && System.getenv("STROY_APPLICATION_ID").isNullOrBlank()) {
                 throw GradleException(
                     "Release package id requires STROY_APPLICATION_ID to match the Play Console app",
                 )
             }
-            if (!stroyKeystore.exists()) {
+            if (releaseRequested && !stroyKeystore.exists()) {
                 throw GradleException(
                     "Release signing requires STROY_KEYSTORE_PATH to point to a production keystore",
                 )
             }
-            signingConfig = signingConfigs.getByName("stroyStable")
+            if (stroyKeystore.exists()) signingConfig = signingConfigs.getByName("stroyStable")
         }
     }
 }

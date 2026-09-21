@@ -39,19 +39,15 @@ class _OverviewTab extends StatelessWidget {
           style: const TextStyle(
             fontSize: 27,
             height: 1.08,
-            fontWeight: FontWeight.w900,
-            color: Colors.black,
+            fontWeight: FontWeight.w700,
+            color: _ink,
           ),
         ),
         if (project.address.isNotEmpty) ...[
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(
-                Icons.location_on_outlined,
-                size: 18,
-                color: _brand,
-              ),
+              const Icon(Icons.location_on_outlined, size: 18, color: _brand),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
@@ -63,25 +59,45 @@ class _OverviewTab extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 20),
-        Card(
+        Container(
+          decoration: BoxDecoration(
+            color: _brandSoft,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
-            child: Row(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _OverviewValue(
-                    label: 'Потрачено',
-                    value: _moneyTotals(costs),
+                const Text(
+                  'Всего потрачено',
+                  style: TextStyle(color: _brand, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _moneyTotals(costs),
+                  style: const TextStyle(
+                    color: _brand,
+                    fontSize: 32,
+                    height: 1.2,
+                    letterSpacing: -1,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _OverviewValue(
-                    label: 'Дата начала',
-                    value: parsedStartDate == null
-                        ? 'Не указана'
-                        : _displayLongDate(parsedStartDate),
-                  ),
+                const SizedBox(height: 6),
+                Text(
+                  '${costs.length} ${_expenseWord(costs.length)} по объекту',
+                  style: const TextStyle(color: _muted, fontSize: 13),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Divider(height: 1, color: Color(0xFFCDD8CE)),
+                ),
+                _DetailRow(
+                  label: 'Дата начала',
+                  value: parsedStartDate == null
+                      ? 'Не указана'
+                      : _displayLongDate(parsedStartDate),
                 ),
               ],
             ),
@@ -91,9 +107,9 @@ class _OverviewTab extends StatelessWidget {
         const Text(
           'Разделы объекта',
           style: TextStyle(
-            color: Colors.black,
+            color: _ink,
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 10),
@@ -175,18 +191,15 @@ class _OverviewSectionRow extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      color: Colors.black,
+                      color: _ink,
                       fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: _ink, fontSize: 12),
                   ),
                 ],
               ),
@@ -194,9 +207,9 @@ class _OverviewSectionRow extends StatelessWidget {
             Text(
               '$count',
               style: const TextStyle(
-                color: Colors.black,
+                color: _ink,
                 fontSize: 13,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(width: 7),
@@ -212,41 +225,6 @@ class _OverviewSectionRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _OverviewValue extends StatelessWidget {
-  const _OverviewValue({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: _muted, fontSize: 12)),
-        const SizedBox(height: 4),
-        SizedBox(
-          width: double.infinity,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              maxLines: 1,
-              softWrap: false,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

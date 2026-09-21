@@ -46,182 +46,148 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.viewInsetsOf(context);
-    final availableHeight =
-        MediaQuery.sizeOf(context).height - viewInsets.bottom;
-    final sheetHeight = (availableHeight * .86).clamp(
-      280.0,
-      700.0,
-    ).toDouble();
+    final insets = MediaQuery.viewInsetsOf(context);
+    final height = (MediaQuery.sizeOf(context).height - insets.bottom) * .86;
     return SafeArea(
       top: false,
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 180),
-        padding: EdgeInsets.only(bottom: viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: insets.bottom),
         child: SizedBox(
-          height: sheetHeight,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Text(
-                widget.initial == null ? 'Добавить расход' : 'Изменить расход',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: _ink,
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Название',
-                style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _title,
-                enabled: !_busy,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  hintText: 'Например: Цемент М500',
-                  prefixIcon: Icon(Icons.receipt_long_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Сумма',
-                style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _amount,
-                enabled: !_busy,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  hintText: '0',
-                  suffixText: 'сом',
-                  prefixIcon: const Icon(Icons.payments_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
+          height: height.clamp(180.0, 700.0),
+          child: Column(
+            children: [
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-              const Text(
-                'Описание',
-                style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _description,
-                enabled: !_busy,
-                textCapitalization: TextCapitalization.sentences,
-                minLines: 3,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  hintText: 'Например: доставка и разгрузка материала на объекте',
-                  prefixIcon: Padding(
-                    padding: EdgeInsets.only(bottom: 42),
-                    child: Icon(Icons.notes_outlined),
-                  ),
-                  alignLabelWithHint: true,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Чек',
-                style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _busy ? null : _pickReceipt,
-                icon: const Icon(Icons.attach_file_rounded),
-                label: Text(
-                  _receiptFile == null
-                      ? (widget.initial?.receiptFileId.isNotEmpty ?? false)
-                          ? 'Заменить прикреплённый чек'
-                          : 'Прикрепить фото или PDF'
-                      : _receiptFile!.name,
-                ),
-              ),
-              if (_receiptFile != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  _fileSize(_receiptFile!.lengthSync() ?? 0),
-                  style: const TextStyle(color: _muted, fontSize: 12),
-                ),
-              ],
-              const SizedBox(height: 16),
-              const Text(
-                'Дата',
-                style: TextStyle(fontWeight: FontWeight.w700, color: _ink),
-              ),
-              const SizedBox(height: 8),
-              InkWell(
-                borderRadius: BorderRadius.circular(15),
-                onTap: _busy ? null : _pickSpentAt,
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.calendar_today_outlined),
-                  ),
-                  child: Text(
-                    _displayDate(_spentAt),
-                    style: const TextStyle(
-                      color: _ink,
-                      fontWeight: FontWeight.w600,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                  children: [
+                    Text(
+                      widget.initial == null
+                          ? 'Добавить расход'
+                          : 'Изменить расход',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                        color: _ink,
+                      ),
                     ),
-                  ),
-                ),
-              ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Название',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _title,
+                      enabled: !_busy,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        hintText: 'Например: Цемент М500',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Сумма',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _amount,
+                      enabled: !_busy,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: '0',
+                        suffixText: 'сом',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Описание',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _description,
+                      enabled: !_busy,
+                      textCapitalization: TextCapitalization.sentences,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        hintText:
+                            'Например: доставка и разгрузка материала на объекте',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Чек',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _pickReceipt,
+                      icon: const Icon(Icons.attach_file_rounded, size: 20),
+                      label: Text(
+                        _receiptFile?.name ??
+                            ((widget.initial?.receiptFileId.isNotEmpty ?? false)
+                                ? 'Заменить прикреплённый чек'
+                                : 'Прикрепить фото или PDF'),
+                      ),
+                    ),
+                    if (_receiptFile != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _fileSize(_receiptFile!.lengthSync() ?? 0),
+                        style: const TextStyle(color: _muted, fontSize: 12),
+                      ),
                     ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .07),
-                      blurRadius: 12,
-                      offset: const Offset(0, -4),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Дата',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: _busy ? null : _pickSpentAt,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.calendar_today_outlined),
+                        ),
+                        child: Text(_displayDate(_spentAt)),
+                      ),
                     ),
                   ],
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _busy ? null : _save,
-                      child: _busy
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              widget.initial == null
-                                  ? 'Сохранить расход'
-                                  : 'Сохранить изменения',
-                            ),
-                    ),
-                  ),
+              ),
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: _line)),
+                ),
+                child: FilledButton(
+                  onPressed: _busy ? null : _save,
+                  child: _busy
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          widget.initial == null
+                              ? 'Сохранить расход'
+                              : 'Сохранить изменения',
+                        ),
                 ),
               ),
             ],
           ),
-        ),
         ),
       ),
     );

@@ -31,7 +31,7 @@ class _CostDetailsState extends State<_CostDetails> {
         centerTitle: true,
         title: const Text(
           'Расход',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
         actions: [
           if (widget.canContribute)
@@ -78,7 +78,7 @@ class _CostDetailsState extends State<_CostDetails> {
                           widget.item.title,
                           style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                             color: _ink,
                           ),
                         ),
@@ -87,7 +87,7 @@ class _CostDetailsState extends State<_CostDetails> {
                           _money(widget.item.amount, widget.item.currency),
                           style: const TextStyle(
                             fontSize: 23,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                             color: _brand,
                           ),
                         ),
@@ -272,7 +272,7 @@ class _ProjectFormState extends State<_ProjectForm> {
         centerTitle: true,
         title: Text(
           _editing ? 'Изменить объект' : 'Новый объект',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       body: ListView(
@@ -732,7 +732,7 @@ class _ProjectCoverPicker extends StatelessWidget {
                       emptyTitle,
                       style: const TextStyle(
                         fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: _ink,
                       ),
                     ),
@@ -766,17 +766,12 @@ class _DashedOutlinePainter extends CustomPainter {
       ..strokeWidth = 1.2;
     final path = Path()
       ..addRRect(
-        RRect.fromRectAndRadius(
-          Offset.zero & size,
-          Radius.circular(radius),
-        ),
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
       );
 
     for (final metric in path.computeMetrics()) {
       for (double distance = 0; distance < metric.length; distance += 8) {
-        final end = distance + 5 < metric.length
-            ? distance + 5
-            : metric.length;
+        final end = distance + 5 < metric.length ? distance + 5 : metric.length;
         canvas.drawPath(metric.extractPath(distance, end), paint);
       }
     }

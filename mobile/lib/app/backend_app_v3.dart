@@ -778,6 +778,7 @@ class _ProjectFormScreenState extends State<_ProjectFormScreen> {
     try {
       await widget.repository.createProject(
         name: name,
+        startDate: DateTime.now().toIso8601String().split('T').first,
         address: _addressController.text.trim(),
       );
       if (mounted) Navigator.of(context).pop(true);

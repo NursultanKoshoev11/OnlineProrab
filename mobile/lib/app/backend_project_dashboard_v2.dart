@@ -6,6 +6,7 @@ import 'package:online_prorab/features/projects/project_repository.dart';
 class BackendProjectDashboardScreenV2 extends StatefulWidget {
   const BackendProjectDashboardScreenV2({
     required this.project,
+    this.embedded = false,
     required this.costItemRepository,
     required this.dailyReportRepository,
     required this.taskRepository,
@@ -13,6 +14,7 @@ class BackendProjectDashboardScreenV2 extends StatefulWidget {
     super.key,
   });
 
+  final bool embedded;
   final RemoteProject project;
   final CostItemRepository costItemRepository;
   final DailyReportRepository dailyReportRepository;
@@ -58,7 +60,7 @@ class _BackendProjectDashboardScreenV2State
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.embedded ? null : AppBar(
         title: Text(
           widget.project.name.isEmpty ? 'Project' : widget.project.name,
         ),
@@ -373,7 +375,7 @@ class _BackendFileUploadScreenV2State extends State<BackendFileUploadScreenV2> {
           if (selectedFile != null) ...[
             const SizedBox(height: 8),
             Text(
-              '${_formatBytes(selectedFile!.size)} selected',
+              '${_formatBytes((selectedFile!.lengthSync() ?? 0))} selected',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -404,14 +406,12 @@ class _BackendFileUploadScreenV2State extends State<BackendFileUploadScreenV2> {
   Future<void> _pickFile() async {
     setState(() => error = null);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        allowMultiple: false,
-        withData: false,
       );
-      if (!mounted || result == null || result.files.isEmpty) return;
-      final file = result.files.single;
+      if (!mounted || result.isEmpty) return;
+      final file = result.first;
       if (file.path == null || file.path!.isEmpty) {
         setState(() {
           selectedFile = null;
@@ -547,6 +547,7 @@ class _BackendExpenseFormScreenV2State
         projectId: widget.projectId,
         title: title,
         amount: amount,
+        spentAt: DateTime.now().toIso8601String().split('T').first,
         category: categoryController.text.trim(),
         vendor: vendorController.text.trim(),
       );

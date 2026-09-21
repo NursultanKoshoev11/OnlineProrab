@@ -480,6 +480,7 @@ class _BackendProjectFormScreenV2State
     try {
       await widget.projectRepository.createProject(
         name: name,
+        startDate: DateTime.now().toIso8601String().split('T').first,
         address: addressController.text.trim(),
       );
       if (mounted) Navigator.of(context).pop(true);

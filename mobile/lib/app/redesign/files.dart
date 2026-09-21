@@ -23,7 +23,7 @@ class _FileUploadFormState extends State<_FileUploadForm> {
         centerTitle: true,
         title: const Text(
           'Добавить файл',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       body: ListView(
@@ -31,7 +31,7 @@ class _FileUploadFormState extends State<_FileUploadForm> {
         children: [
           const Text(
             'Файл объекта',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           const Text(

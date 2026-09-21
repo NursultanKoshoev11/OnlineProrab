@@ -55,9 +55,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
           Text(
             widget.project.name.isEmpty ? 'Объект' : widget.project.name,
             style: const TextStyle(
-              color: Colors.black,
+              color: _ink,
               fontSize: 26,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               height: 1.08,
             ),
           ),
@@ -93,7 +93,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
                           '30 дней Pro бесплатно',
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -101,7 +101,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
                         '$_participantCount/$_participantLimit',
                         style: const TextStyle(
                           color: _brand,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -150,7 +150,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
       const SizedBox(height: 20),
       const Text(
         'Выберите план',
-        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: 10),
       _PlanChoice(
@@ -189,7 +189,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
       const SizedBox(height: 20),
       const Text(
         'Способ оплаты',
-        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: 5),
       const Text(
@@ -295,7 +295,7 @@ class _PlanChoice extends StatelessWidget {
                     children: [
                       Text(
                         name,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       if (recommended) ...[
                         const SizedBox(width: 7),
@@ -304,7 +304,7 @@ class _PlanChoice extends StatelessWidget {
                           style: TextStyle(
                             color: _brand,
                             fontSize: 9,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
@@ -321,7 +321,7 @@ class _PlanChoice extends StatelessWidget {
             Text(
               price,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
             ),
           ],
         ),
@@ -375,7 +375,7 @@ class _BankChoice extends StatelessWidget {
                 style: TextStyle(
                   color: selected ? Colors.white : _brand,
                   fontSize: 16,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -384,7 +384,10 @@ class _BankChoice extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
@@ -429,7 +432,7 @@ class _PaymentSummary extends StatelessWidget {
           ),
           Text(
             price == 0 ? 'Бесплатно' : '$price сом',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -452,7 +455,7 @@ class _QrPaymentPreview extends StatelessWidget {
           children: [
             Text(
               'QR для оплаты через $bankName',
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 5),
             Text(
@@ -480,13 +483,17 @@ class _DemoQrCode extends StatelessWidget {
   static const _size = 15;
 
   bool _dark(int row, int column) {
-    final finder = (row < 7 && column < 7) ||
+    final finder =
+        (row < 7 && column < 7) ||
         (row < 7 && column >= _size - 7) ||
         (row >= _size - 7 && column < 7);
     if (finder) {
       final top = row < 7 ? row : row - (_size - 7);
       final left = column < 7 ? column : column - (_size - 7);
-      return top == 0 || top == 6 || left == 0 || left == 6 ||
+      return top == 0 ||
+          top == 6 ||
+          left == 0 ||
+          left == 6 ||
           (top >= 2 && top <= 4 && left >= 2 && left <= 4);
     }
     return ((row * 7 + column * 11 + row * column) % 5) < 2;
