@@ -10,7 +10,7 @@ class _BrandMark extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: _brand,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(size * .18),
       ),
       clipBehavior: Clip.antiAlias,
