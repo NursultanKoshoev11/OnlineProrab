@@ -14,7 +14,13 @@ class _BrandMark extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * .18),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Image.asset('assets/branding/stroy_icon.png', fit: BoxFit.cover),
+      child: Transform.scale(
+        scale: 1.12,
+        child: Image.asset(
+          'assets/branding/stroy_icon.png',
+          fit: BoxFit.cover,
+        ),
+      ),
     );
   }
 }
