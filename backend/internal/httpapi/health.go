@@ -13,5 +13,5 @@ func Health(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	JSON(w, http.StatusOK, HealthResponse{Status: "ok", Service: "onlineprorab-api", Version: "0.1.0"})
+	JSON(w, http.StatusOK, HealthResponse{Status: "ok", Service: "onlineprorab-api", Version: "0.1.1"})
 }
