@@ -5,20 +5,47 @@ class _SubscriptionScreen extends StatefulWidget {
     required this.project,
     required this.members,
     required this.canManage,
+    required this.apiClient,
   });
 
   final RemoteProject project;
   final List<RemoteProjectMember> members;
   final bool canManage;
+  final ApiClient apiClient;
 
   @override
   State<_SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
 class _SubscriptionScreenState extends State<_SubscriptionScreen> {
-  String _selectedPlan = 'standard';
+  String _selectedPlan = 'trial';
+  String _currentPlan = 'trial';
   String _selectedBank = 'mbank';
   bool _showQr = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadCurrentSubscription());
+  }
+
+  Future<void> _loadCurrentSubscription() async {
+    try {
+      final data = await widget.apiClient.getJson(
+        '/api/v1/subscriptions/status',
+      );
+      if (!mounted || data is! Map) return;
+      final plan = data['plan']?.toString();
+      if (plan == 'trial' || plan == 'standard' || plan == 'max') {
+        setState(() {
+          _currentPlan = plan!;
+          _selectedPlan = plan;
+        });
+      }
+    } catch (_) {
+      // The trial default keeps the screen useful while offline or before login.
+    }
+  }
 
   int get _participantCount => widget.members
       .where((member) => member.role.trim().toLowerCase() != 'owner')
@@ -158,6 +185,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         description: '1 объект · только владелец',
         price: '0 сом',
         selected: _selectedPlan == 'trial',
+        current: _currentPlan == 'trial',
         onTap: () => setState(() {
           _selectedPlan = 'trial';
           _showQr = false;
@@ -169,6 +197,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         description: '5 объектов · 5 участников на объект',
         price: '3 000 сом/мес',
         selected: _selectedPlan == 'standard',
+        current: _currentPlan == 'standard',
         recommended: true,
         onTap: () => setState(() {
           _selectedPlan = 'standard';
@@ -181,6 +210,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         description: '20 объектов · 20 участников на объект',
         price: '5 000 сом/мес',
         selected: _selectedPlan == 'max',
+        current: _currentPlan == 'max',
         onTap: () => setState(() {
           _selectedPlan = 'max';
           _showQr = false;
@@ -256,6 +286,7 @@ class _PlanChoice extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.recommended = false,
+    this.current = false,
   });
 
   final String name;
@@ -263,6 +294,7 @@ class _PlanChoice extends StatelessWidget {
   final String price;
   final bool selected;
   final bool recommended;
+  final bool current;
   final VoidCallback onTap;
 
   @override
@@ -294,14 +326,16 @@ class _PlanChoice extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         name,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      if (recommended) ...[
-                        const SizedBox(width: 7),
+                      if (recommended)
                         const Text(
                           'ПОПУЛЯРНЫЙ',
                           style: TextStyle(
@@ -310,7 +344,6 @@ class _PlanChoice extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ],
                     ],
                   ),
                   const SizedBox(height: 3),
@@ -318,13 +351,33 @@ class _PlanChoice extends StatelessWidget {
                     description,
                     style: const TextStyle(color: _muted, fontSize: 11),
                   ),
+                  if (current) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Ваша текущая подписка',
+                      style: TextStyle(
+                        color: _brand,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            Text(
-              price,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            const SizedBox(width: 8),
+            Flexible(
+              fit: FlexFit.loose,
+              child: Text(
+                price,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ],
         ),

@@ -291,6 +291,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
           project: _currentProject,
           members: _members,
           canManage: _canManage,
+          apiClient: widget.deps.apiClient,
         ),
       ),
     );
