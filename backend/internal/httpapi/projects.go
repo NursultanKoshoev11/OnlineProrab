@@ -198,6 +198,15 @@ func createProject(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
+	if err := ensureProjectCreationAllowed(ctx, tx, userID); err != nil {
+		if status, message, ok := subscriptionHTTPError(err); ok {
+			Error(w, status, message)
+			return
+		}
+		Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
+		return
+	}
+
 	var item ProjectDTO
 	err = tx.QueryRow(ctx, `
 		INSERT INTO projects (owner_id, name, address, budget_amount, currency, start_date)
@@ -300,6 +309,15 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(ctx)
+
+	if err := ensureProjectCreationAllowed(ctx, tx, userID); err != nil {
+		if status, message, ok := subscriptionHTTPError(err); ok {
+			Error(w, status, message)
+			return
+		}
+		Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
+		return
+	}
 
 	var item ProjectDTO
 	err = tx.QueryRow(ctx, `

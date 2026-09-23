@@ -152,6 +152,16 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer tx.Rollback(ctx)
+
+		if err := ensureProjectMemberCapacity(ctx, tx, req.ProjectID, req.Phone); err != nil {
+			if status, message, ok := subscriptionHTTPError(err); ok {
+				Error(w, status, message)
+				return
+			}
+			Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
+			return
+		}
+
 		result, err := tx.Exec(ctx, `
 			INSERT INTO project_members (project_id, user_id, role)
 			VALUES ($1, $2, $3)
@@ -193,6 +203,25 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 			"user_id":    targetUserID,
 			"role":       req.Role,
 		})
+		return
+	}
+
+	guardTx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to start subscription check")
+		return
+	}
+	if err := ensureProjectMemberCapacity(ctx, guardTx, req.ProjectID, req.Phone); err != nil {
+		_ = guardTx.Rollback(ctx)
+		if status, message, ok := subscriptionHTTPError(err); ok {
+			Error(w, status, message)
+			return
+		}
+		Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
+		return
+	}
+	if err := guardTx.Commit(ctx); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to finish subscription check")
 		return
 	}
 
@@ -287,6 +316,15 @@ func AcceptProjectInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if normalizePhone(userPhone) != normalizePhone(phone) {
 		Error(w, http.StatusForbidden, "invitation belongs to another phone number")
+		return
+	}
+
+	if err := ensureProjectMemberCapacity(ctx, tx, projectID, phone); err != nil {
+		if status, message, ok := subscriptionHTTPError(err); ok {
+			Error(w, status, message)
+			return
+		}
+		Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
 		return
 	}
 

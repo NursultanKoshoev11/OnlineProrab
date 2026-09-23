@@ -1,19 +1,30 @@
 package httpapi
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+	"time"
+)
 
 func ListPlans(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"plans": []map[string]any{
-			{"id": "free", "name": "Free", "price_kgs": 0, "max_projects": 1},
-			{"id": "pro", "name": "Pro", "price_kgs": 990, "max_projects": 5},
-			{"id": "business", "name": "Business", "price_kgs": 2990, "max_projects": 25},
-		},
-	})
+
+	plans := make([]map[string]any, 0, len(subscriptionPlans))
+	for _, plan := range subscriptionPlans {
+		plans = append(plans, map[string]any{
+			"id":                  plan.ID,
+			"name":                plan.Name,
+			"price_kgs":           plan.PriceKGS,
+			"billing_period":      "month",
+			"trial_days":          plan.TrialDays,
+			"max_projects":        plan.MaxProjects,
+			"max_invited_members": plan.MaxInvitedMembers,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plans": plans})
 }
 
 func SubscriptionStatus(w http.ResponseWriter, r *http.Request) {
@@ -21,9 +32,32 @@ func SubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
-		"user_id": userIDFromContext(r.Context()),
-		"plan":    "free",
-		"status":  "active",
-	})
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "database is not available")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	userID := userIDFromContext(r.Context())
+	state, err := ensureSubscription(ctx, appState.DB.Pool, userID, false)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to load subscription")
+		return
+	}
+
+	response := map[string]any{
+		"user_id":             userID,
+		"plan":                state.Plan.ID,
+		"status":              state.Status,
+		"started_at":          state.StartedAt.UTC().Format(time.RFC3339),
+		"trial_ends_at":       state.TrialEndsAt.UTC().Format(time.RFC3339),
+		"max_projects":        state.Plan.MaxProjects,
+		"max_invited_members": state.Plan.MaxInvitedMembers,
+	}
+	if state.CurrentPeriodEnd != nil {
+		response["current_period_end"] = state.CurrentPeriodEnd.UTC().Format(time.RFC3339)
+	}
+	writeJSON(w, http.StatusOK, response)
 }

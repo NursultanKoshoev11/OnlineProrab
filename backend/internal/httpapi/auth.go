@@ -219,7 +219,7 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 	// This keeps the normal flow to: manager enters a phone, partner logs in,
 	// and the object appears without exposing an invitation token in production.
 	rows, err := tx.Query(ctx, `
-		SELECT id::text, project_id::text, role
+		SELECT id::text, project_id::text, phone, role
 		FROM project_invites
 		WHERE phone = $1
 		  AND accepted_at IS NULL
@@ -235,12 +235,13 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 	type pendingProjectInvite struct {
 		id        string
 		projectID string
+		phone     string
 		role      string
 	}
 	pendingInvites := make([]pendingProjectInvite, 0)
 	for rows.Next() {
 		var invite pendingProjectInvite
-		if err := rows.Scan(&invite.id, &invite.projectID, &invite.role); err != nil {
+		if err := rows.Scan(&invite.id, &invite.projectID, &invite.phone, &invite.role); err != nil {
 			rows.Close()
 			Error(w, http.StatusInternalServerError, "failed to read project invitation")
 			return
@@ -255,6 +256,14 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 	rows.Close()
 
 	for _, invite := range pendingInvites {
+		if err := ensureProjectMemberCapacity(ctx, tx, invite.projectID, invite.phone); err != nil {
+			if _, message, ok := subscriptionHTTPError(err); ok {
+				log.Printf("verify sms: invitation %s not applied: %s", invite.id, message)
+				continue
+			}
+			Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
+			return
+		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO project_members (project_id, user_id, role)
 			VALUES ($1, $2, $3)

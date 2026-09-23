@@ -16,7 +16,7 @@ class _SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<_SubscriptionScreen> {
-  String _selectedPlan = 'pro';
+  String _selectedPlan = 'standard';
   String _selectedBank = 'mbank';
   bool _showQr = false;
 
@@ -25,15 +25,15 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
       .length;
 
   int get _participantLimit => switch (_selectedPlan) {
-    'free' => 3,
-    'team' => 10,
+    'trial' => 0,
+    'max' => 20,
     _ => 5,
   };
 
   int get _planPrice => switch (_selectedPlan) {
-    'free' => 0,
-    'team' => 2_990,
-    _ => 990,
+    'trial' => 0,
+    'max' => 5_000,
+    _ => 3_000,
   };
 
   @override
@@ -90,7 +90,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
                       const SizedBox(width: 11),
                       const Expanded(
                         child: Text(
-                          '30 дней Pro бесплатно',
+                          '30 дней бесплатно',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -108,7 +108,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'Пробный период включает расходы, команду, чеки и PDF-предпросмотр.',
+                    'Пробный период: 1 объект, только владелец. После 30 дней нужна подписка.',
                     style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
                   ),
                 ],
@@ -154,35 +154,35 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
       ),
       const SizedBox(height: 10),
       _PlanChoice(
-        name: 'Free',
-        description: '1 объект · 3 участника',
+        name: 'Пробный',
+        description: '1 объект · только владелец',
         price: '0 сом',
-        selected: _selectedPlan == 'free',
+        selected: _selectedPlan == 'trial',
         onTap: () => setState(() {
-          _selectedPlan = 'free';
+          _selectedPlan = 'trial';
           _showQr = false;
         }),
       ),
       const SizedBox(height: 9),
       _PlanChoice(
-        name: 'Pro',
-        description: '5 объектов · 5 участников',
-        price: '990 сом/мес',
-        selected: _selectedPlan == 'pro',
+        name: 'Стандартный',
+        description: '5 объектов · 5 участников на объект',
+        price: '3 000 сом/мес',
+        selected: _selectedPlan == 'standard',
         recommended: true,
         onTap: () => setState(() {
-          _selectedPlan = 'pro';
+          _selectedPlan = 'standard';
           _showQr = false;
         }),
       ),
       const SizedBox(height: 9),
       _PlanChoice(
-        name: 'Team',
-        description: '10 объектов · 10 участников',
-        price: '2 990 сом/мес',
-        selected: _selectedPlan == 'team',
+        name: 'Максимальный',
+        description: '20 объектов · 20 участников на объект',
+        price: '5 000 сом/мес',
+        selected: _selectedPlan == 'max',
         onTap: () => setState(() {
-          _selectedPlan = 'team';
+          _selectedPlan = 'max';
           _showQr = false;
         }),
       ),
@@ -233,6 +233,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         _QrPaymentPreview(
           bankName: _selectedBank == 'mbank' ? 'MBANK' : 'Optima Bank',
           amount: _planPrice,
+          planName: _selectedPlan == 'standard'
+              ? 'STROY Standard'
+              : 'STROY Max',
         ),
       ],
       const SizedBox(height: 10),
@@ -441,10 +444,15 @@ class _PaymentSummary extends StatelessWidget {
 }
 
 class _QrPaymentPreview extends StatelessWidget {
-  const _QrPaymentPreview({required this.bankName, required this.amount});
+  const _QrPaymentPreview({
+    required this.bankName,
+    required this.amount,
+    required this.planName,
+  });
 
   final String bankName;
   final int amount;
+  final String planName;
 
   @override
   Widget build(BuildContext context) {
@@ -459,7 +467,7 @@ class _QrPaymentPreview extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              '$amount сом · STROY Pro',
+              '$amount сом · $planName',
               style: const TextStyle(color: _muted, fontSize: 12),
             ),
             const SizedBox(height: 15),
