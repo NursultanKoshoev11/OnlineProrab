@@ -11,7 +11,6 @@ COPY assets /usr/share/nginx/html/assets
 COPY privacy /usr/share/nginx/html/privacy
 COPY terms /usr/share/nginx/html/terms
 COPY support /usr/share/nginx/html/support
-COPY account-deletion /usr/share/nginx/html/account-deletion
 COPY --from=styles /build/styles.css /usr/share/nginx/html/styles.css
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
