@@ -414,7 +414,8 @@ func validExpenseSelection(items []CostItemDTO, selectedIDs []string) []CostItem
 var expenseSearchStopWords = map[string]struct{}{
 	"сколько": {}, "потратил": {}, "потратили": {}, "потрачено": {},
 	"расход": {}, "расходы": {}, "расходов": {}, "покажи": {}, "показать": {},
-	"найди": {}, "найти": {}, "общая": {}, "общий": {}, "общую": {},
+	"найди": {}, "найти": {}, "посчитай": {}, "подсчитай": {}, "рассчитай": {},
+	"оплатил": {}, "оплатили": {}, "суммарно": {}, "общая": {}, "общий": {}, "общую": {}, "общие": {},
 	"итого": {}, "сумма": {}, "сумму": {}, "всего": {}, "все": {}, "весь": {},
 	"период": {}, "денег": {}, "деньги": {}, "на": {}, "по": {}, "за": {},
 	"и": {}, "в": {}, "рублей": {}, "рубль": {}, "сом": {}, "сома": {},
@@ -449,6 +450,30 @@ func isExpenseAggregateQuery(query string) bool {
 	return len(expenseSearchTerms(query)) == 0
 }
 
+var expenseSearchSuffixes = []string{
+	"иями", "ами", "ями", "ого", "ему", "ому", "ов", "ев",
+	"ам", "ям", "ах", "ях", "ом", "ем", "ой", "ий", "ый",
+	"ая", "ое", "ые", "ы", "и", "а", "я", "е", "у", "ю",
+}
+
+func expenseSearchTermMatches(text, term string) bool {
+	if strings.Contains(text, term) {
+		return true
+	}
+	termRunes := []rune(term)
+	for _, suffix := range expenseSearchSuffixes {
+		suffixRunes := []rune(suffix)
+		if len(termRunes) <= len(suffixRunes)+3 || !strings.HasSuffix(term, suffix) {
+			continue
+		}
+		stem := string(termRunes[:len(termRunes)-len(suffixRunes)])
+		if strings.Contains(text, stem) {
+			return true
+		}
+	}
+	return false
+}
+
 func localExpenseMatches(items []CostItemDTO, query string) []CostItemDTO {
 	terms := expenseSearchTerms(query)
 	if len(terms) == 0 {
@@ -460,7 +485,7 @@ func localExpenseMatches(items []CostItemDTO, query string) []CostItemDTO {
 			item.Title, item.Description, item.Category, item.Vendor,
 		}, " "))
 		for _, term := range terms {
-			if strings.Contains(text, term) {
+			if expenseSearchTermMatches(text, term) {
 				matched = append(matched, item)
 				break
 			}

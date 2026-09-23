@@ -183,4 +183,11 @@ func TestLocalExpenseMatchesFindsSpecificExpense(t *testing.T) {
 	if len(got) != 1 || got[0].ID != "expense-1" {
 		t.Fatalf("expected the cement expense, got %#v", got)
 	}
+
+	got = localExpenseMatches([]CostItemDTO{
+		{ID: "expense-3", Title: "Материал", Amount: 300, Currency: "KGS"},
+	}, "Сколько потратили на материалы?")
+	if len(got) != 1 || got[0].ID != "expense-3" {
+		t.Fatalf("expected the material expense, got %#v", got)
+	}
 }
