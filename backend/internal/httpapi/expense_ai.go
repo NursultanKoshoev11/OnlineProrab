@@ -116,9 +116,17 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		selection, provider, model, analyzedCount, callErr := askExpenseAIForAllExpenseIDs(ctx, req.Query, items)
 		aiAnalyzedCount = analyzedCount
 		if callErr != nil {
-			// Never return a partial AI result: use the deterministic search over every loaded expense.
+			// Keep successful chunks and add deterministic matches. A single
+			// provider/network failure must not erase valid AI selections.
 			log.Printf("all expense AI chunks did not complete: %v", callErr)
-			note = fmt.Sprintf("AI не завершил анализ всех расходов (%d из %d); показан обычный поиск по всем расходам.", analyzedCount, len(items))
+			selected = mergeExpenseSelections(
+				items,
+				validExpenseSelection(items, selection.SelectedIDs),
+				localExpenseMatches(items, req.Query),
+			)
+			note = fmt.Sprintf("AI проанализировал %d из %d расходов; показаны подтверждённые совпадения, резервный поиск добавлен.", analyzedCount, len(items))
+			modelSummary = strings.TrimSpace(selection.Summary)
+			modelName = model
 		} else {
 			selected = validExpenseSelection(items, selection.SelectedIDs)
 			mode = provider
@@ -297,13 +305,14 @@ func runExpenseAIChunks(ctx context.Context, query string, items []CostItemDTO, 
 			summaries = append(summaries, summary)
 		}
 	}
-	if failedChunks > 0 {
-		return expenseAIModelResponse{}, strings.Join(providerNames, "+"), strings.Join(modelNames, "+"), analyzedCount, fmt.Errorf("%d of %d expense AI chunks failed", failedChunks, len(chunks))
-	}
-	return expenseAIModelResponse{
+	selection := expenseAIModelResponse{
 		SelectedIDs: selectedIDs,
 		Summary:     strings.Join(summaries, " "),
-	}, strings.Join(providerNames, "+"), strings.Join(modelNames, "+"), analyzedCount, nil
+	}
+	if failedChunks > 0 {
+		return selection, strings.Join(providerNames, "+"), strings.Join(modelNames, "+"), analyzedCount, fmt.Errorf("%d of %d expense AI chunks failed", failedChunks, len(chunks))
+	}
+	return selection, strings.Join(providerNames, "+"), strings.Join(modelNames, "+"), analyzedCount, nil
 }
 
 func askGeminiForExpenseIDs(ctx context.Context, query string, items []CostItemDTO) (expenseAIModelResponse, error) {
@@ -406,6 +415,24 @@ func validExpenseSelection(items []CostItemDTO, selectedIDs []string) []CostItem
 		}
 	}
 	return selected
+}
+
+func mergeExpenseSelections(items []CostItemDTO, selections ...[]CostItemDTO) []CostItemDTO {
+	wanted := make(map[string]struct{})
+	for _, selection := range selections {
+		for _, item := range selection {
+			if item.ID != "" {
+				wanted[item.ID] = struct{}{}
+			}
+		}
+	}
+	merged := make([]CostItemDTO, 0, len(wanted))
+	for _, item := range items {
+		if _, ok := wanted[item.ID]; ok {
+			merged = append(merged, item)
+		}
+	}
+	return merged
 }
 
 var expenseSearchStopWords = map[string]struct{}{

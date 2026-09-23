@@ -274,7 +274,7 @@ func postExpenseAIJSON(ctx context.Context, provider expenseAIProviderConfig, en
 	}
 	response, err := (&http.Client{Timeout: expenseAIProviderTimeout}).Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("request failed")
+		return nil, fmt.Errorf("request failed: %v", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -282,7 +282,7 @@ func postExpenseAIJSON(ctx context.Context, provider expenseAIProviderConfig, en
 	}
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 256*1024))
 	if err != nil {
-		return nil, fmt.Errorf("response could not be read")
+		return nil, fmt.Errorf("response could not be read: %v", err)
 	}
 	return responseBody, nil
 }

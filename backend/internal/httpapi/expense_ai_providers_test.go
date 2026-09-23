@@ -161,6 +161,33 @@ func TestRunExpenseAIChunksAnalyzesEveryExpense(t *testing.T) {
 	}
 }
 
+func TestRunExpenseAIChunksKeepsSuccessfulSelectionsWhenChunkFails(t *testing.T) {
+	items := make([]CostItemDTO, 0, 250)
+	for i := 0; i < 250; i++ {
+		items = append(items, CostItemDTO{ID: fmt.Sprintf("expense-%d", i), Title: "материал"})
+	}
+	providers := []expenseAIProviderConfig{{name: "test", model: "test-model", apiKey: "test-key"}}
+
+	result, _, _, analyzed, err := runExpenseAIChunks(
+		context.Background(),
+		"материал",
+		items,
+		providers,
+		func(_ context.Context, _ expenseAIProviderConfig, _ string, chunk []CostItemDTO) (expenseAIModelResponse, error) {
+			if chunk[0].ID == "expense-0" {
+				return expenseAIModelResponse{}, errors.New("temporary provider failure")
+			}
+			return expenseAIModelResponse{SelectedIDs: []string{chunk[0].ID}}, nil
+		},
+	)
+	if err == nil {
+		t.Fatal("expected an error for the failed chunk")
+	}
+	if analyzed == 0 || len(result.SelectedIDs) == 0 {
+		t.Fatalf("expected successful chunk selections to be preserved: analyzed=%d result=%#v", analyzed, result)
+	}
+}
+
 func TestLocalExpenseMatchesReturnsAllForAggregateQuery(t *testing.T) {
 	items := []CostItemDTO{
 		{ID: "expense-1", Title: "Цемент", Amount: 100, Currency: "KGS"},
