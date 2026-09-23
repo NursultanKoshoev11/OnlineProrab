@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -69,5 +72,31 @@ func TestParseExpenseAISelectionAllowsFencedJSON(t *testing.T) {
 	}
 	if len(result.SelectedIDs) != 1 || result.SelectedIDs[0] != "id-1" || result.Summary != "материалы" {
 		t.Fatalf("unexpected selection: %#v", result)
+	}
+}
+
+func TestCompactExpenseAIModelItemsRespectsPromptBudget(t *testing.T) {
+	items := make([]CostItemDTO, 0, 300)
+	for i := 0; i < 300; i++ {
+		items = append(items, CostItemDTO{
+			ID:          fmt.Sprintf("expense-%d", i),
+			Title:       strings.Repeat("long title ", 40),
+			Description: strings.Repeat("long description ", 100),
+			Vendor:      strings.Repeat("vendor ", 40),
+			Amount:      100,
+			Currency:    "KGS",
+		})
+	}
+
+	compact := compactExpenseAIModelItems(items)
+	encoded, err := json.Marshal(compact)
+	if err != nil {
+		t.Fatalf("json.Marshal returned error: %v", err)
+	}
+	if len(encoded) > maxExpenseAIPromptBytes {
+		t.Fatalf("compact AI payload is too large: %d bytes", len(encoded))
+	}
+	if len(compact) == 0 || len(compact) >= len(items) {
+		t.Fatalf("expected a non-empty compacted subset, got %d of %d", len(compact), len(items))
 	}
 }

@@ -12,7 +12,11 @@ import (
 	"time"
 )
 
-const expenseAIProviderTimeout = 7 * time.Second
+const (
+	expenseAIProviderTimeout = 7 * time.Second
+	maxExpenseAIPromptBytes  = 48 * 1024
+	maxExpenseAIOutputTokens = 1024
+)
 
 type expenseAIProviderConfig struct {
 	name     string
@@ -131,15 +135,44 @@ func callExpenseAIProvider(ctx context.Context, provider expenseAIProviderConfig
 	return callOpenAICompatibleExpenseAI(ctx, provider, prompt)
 }
 
-func buildExpenseAIPrompt(query string, items []CostItemDTO) (string, error) {
+func compactExpenseAIModelItems(items []CostItemDTO) []expenseAIModelItem {
 	modelItems := make([]expenseAIModelItem, 0, len(items))
+	totalBytes := 2
 	for _, item := range items {
-		modelItems = append(modelItems, expenseAIModelItem{
-			ID: item.ID, Title: item.Title, Description: item.Description,
-			Category: item.Category, Amount: item.Amount, Currency: item.Currency,
-			Vendor: item.Vendor, SpentAt: item.SpentAt,
-		})
+		candidate := expenseAIModelItem{
+			ID:          item.ID,
+			Title:       trimExpenseAIText(item.Title, 160),
+			Description: trimExpenseAIText(item.Description, 240),
+			Category:    trimExpenseAIText(item.Category, 100),
+			Amount:      item.Amount,
+			Currency:    item.Currency,
+			Vendor:      trimExpenseAIText(item.Vendor, 120),
+			SpentAt:     item.SpentAt,
+		}
+		encoded, err := json.Marshal(candidate)
+		if err != nil {
+			continue
+		}
+		if len(modelItems) > 0 && totalBytes+len(encoded)+1 > maxExpenseAIPromptBytes {
+			break
+		}
+		modelItems = append(modelItems, candidate)
+		totalBytes += len(encoded) + 1
 	}
+	return modelItems
+}
+
+func trimExpenseAIText(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return strings.TrimSpace(string(runes[:maxRunes]))
+}
+
+func buildExpenseAIPrompt(query string, items []CostItemDTO) (string, error) {
+	modelItems := compactExpenseAIModelItems(items)
 	records, err := json.Marshal(modelItems)
 	if err != nil {
 		return "", err
@@ -203,7 +236,7 @@ func callOpenAICompatibleExpenseAI(ctx context.Context, provider expenseAIProvid
 			"content": prompt,
 		}},
 		"temperature": 0.1,
-		"max_tokens":  512,
+		"max_tokens":  maxExpenseAIOutputTokens,
 	}
 	body, err := json.Marshal(requestBody)
 	if err != nil {
