@@ -14,11 +14,18 @@ func ListPlans(w http.ResponseWriter, r *http.Request) {
 
 	plans := make([]map[string]any, 0, len(subscriptionPlans))
 	for _, plan := range subscriptionPlans {
+		annualPrice, _ := planPrice(plan, "year")
 		plans = append(plans, map[string]any{
-			"id":                  plan.ID,
-			"name":                plan.Name,
-			"price_kgs":           plan.PriceKGS,
-			"billing_period":      "month",
+			"id":                      plan.ID,
+			"name":                    plan.Name,
+			"price_kgs":               plan.PriceKGS,
+			"billing_period":          "month",
+			"annual_price_kgs":        annualPrice,
+			"annual_discount_percent": plan.AnnualDiscountPercent,
+			"billing_options": []map[string]any{
+				{"period": "month", "price_kgs": plan.PriceKGS, "discount_percent": 0},
+				{"period": "year", "price_kgs": annualPrice, "discount_percent": plan.AnnualDiscountPercent},
+			},
 			"trial_days":          plan.TrialDays,
 			"max_projects":        plan.MaxProjects,
 			"max_invited_members": plan.MaxInvitedMembers,
@@ -47,12 +54,26 @@ func SubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	endsAt := state.TrialEndsAt
+	if state.CurrentPeriodEnd != nil {
+		endsAt = *state.CurrentPeriodEnd
+	}
+	priceKGS, _ := planPrice(state.Plan, state.BillingPeriod)
+	discountPercent := 0
+	if state.BillingPeriod == "year" {
+		discountPercent = state.Plan.AnnualDiscountPercent
+	}
+
 	response := map[string]any{
 		"user_id":             userID,
 		"plan":                state.Plan.ID,
 		"status":              state.Status,
+		"billing_period":      state.BillingPeriod,
+		"price_kgs":           priceKGS,
+		"discount_percent":    discountPercent,
 		"started_at":          state.StartedAt.UTC().Format(time.RFC3339),
 		"trial_ends_at":       state.TrialEndsAt.UTC().Format(time.RFC3339),
+		"ends_at":             endsAt.UTC().Format(time.RFC3339),
 		"max_projects":        state.Plan.MaxProjects,
 		"max_invited_members": state.Plan.MaxInvitedMembers,
 	}

@@ -5,10 +5,10 @@ The app should read subscription state from backend.
 Plans:
 
 - Trial: 30 days, 1 active project, owner only, no invited participants.
-- Standard: 3,000 KGS/month, up to 5 active projects and 5 invited
-  participants per project.
-- Max: 5,000 KGS/month, up to 20 active projects and 20 invited
-  participants per project.
+- Standard: 3,000 KGS/month or 32,400 KGS/year (10% discount), up to 5
+  active projects and 5 invited participants per project.
+- Max: 5,000 KGS/month or 51,000 KGS/year (15% discount), up to 20 active
+  projects and 20 invited participants per project.
 
 Screens:
 
@@ -16,8 +16,8 @@ Screens:
 - Plan selection
 - Manage subscription
 - Error state
-- Owner payment screen with MBANK and Optima Bank UI
-- QR payment preview for the demo APK
+- Billing period selector with monthly and annual pricing
+- Payment unavailable state until an official bank checkout and webhook are connected
 
 States:
 

@@ -12,18 +12,41 @@ import (
 )
 
 type subscriptionPlan struct {
-	ID                string
-	Name              string
-	PriceKGS          int
-	MaxProjects       int
-	MaxInvitedMembers int
-	TrialDays         int
+	ID                    string
+	Name                  string
+	PriceKGS              int
+	AnnualDiscountPercent int
+	MaxProjects           int
+	MaxInvitedMembers     int
+	TrialDays             int
 }
 
 var subscriptionPlans = []subscriptionPlan{
-	{ID: "trial", Name: "Пробный период", PriceKGS: 0, MaxProjects: 1, MaxInvitedMembers: 0, TrialDays: 30},
-	{ID: "standard", Name: "Стандартный", PriceKGS: 3000, MaxProjects: 5, MaxInvitedMembers: 5},
-	{ID: "max", Name: "Максимальный", PriceKGS: 5000, MaxProjects: 20, MaxInvitedMembers: 20},
+	{
+		ID:                    "trial",
+		Name:                  "Пробный период",
+		PriceKGS:              0,
+		AnnualDiscountPercent: 0,
+		MaxProjects:           1,
+		MaxInvitedMembers:     0,
+		TrialDays:             30,
+	},
+	{
+		ID:                    "standard",
+		Name:                  "Стандартный",
+		PriceKGS:              3000,
+		AnnualDiscountPercent: 10,
+		MaxProjects:           5,
+		MaxInvitedMembers:     5,
+	},
+	{
+		ID:                    "max",
+		Name:                  "Максимальный",
+		PriceKGS:              5000,
+		AnnualDiscountPercent: 15,
+		MaxProjects:           20,
+		MaxInvitedMembers:     20,
+	},
 }
 
 var (
@@ -35,6 +58,7 @@ var (
 type subscriptionState struct {
 	Plan             subscriptionPlan
 	Status           string
+	BillingPeriod    string
 	StartedAt        time.Time
 	TrialEndsAt      time.Time
 	CurrentPeriodEnd *time.Time
@@ -54,6 +78,17 @@ func planByCode(code string) (subscriptionPlan, error) {
 	return subscriptionPlan{}, fmt.Errorf("unknown subscription plan %q", code)
 }
 
+func planPrice(plan subscriptionPlan, billingPeriod string) (int, error) {
+	switch billingPeriod {
+	case "month":
+		return plan.PriceKGS, nil
+	case "year":
+		return plan.PriceKGS * 12 * (100 - plan.AnnualDiscountPercent) / 100, nil
+	default:
+		return 0, fmt.Errorf("unknown billing period %q", billingPeriod)
+	}
+}
+
 func ensureSubscription(ctx context.Context, db subscriptionQuerier, userID string, lock bool) (subscriptionState, error) {
 	if _, err := db.Exec(ctx, `
         INSERT INTO account_subscriptions (user_id, plan_code, status, started_at, trial_ends_at)
@@ -66,7 +101,7 @@ func ensureSubscription(ctx context.Context, db subscriptionQuerier, userID stri
 	}
 
 	query := `
-        SELECT plan_code, status, started_at, trial_ends_at, current_period_end
+        SELECT plan_code, status, billing_period, started_at, trial_ends_at, current_period_end
         FROM account_subscriptions
         WHERE user_id = $1`
 	if lock {
@@ -79,6 +114,7 @@ func ensureSubscription(ctx context.Context, db subscriptionQuerier, userID stri
 	if err := db.QueryRow(ctx, query, userID).Scan(
 		&planCode,
 		&state.Status,
+		&state.BillingPeriod,
 		&state.StartedAt,
 		&state.TrialEndsAt,
 		&currentPeriodEnd,
@@ -92,6 +128,9 @@ func ensureSubscription(ctx context.Context, db subscriptionQuerier, userID stri
 	}
 	state.Plan = plan
 	state.CurrentPeriodEnd = currentPeriodEnd
+	if state.BillingPeriod == "" {
+		state.BillingPeriod = "month"
+	}
 
 	now := time.Now().UTC()
 	expired := state.Status == "trialing" && !state.TrialEndsAt.After(now)
