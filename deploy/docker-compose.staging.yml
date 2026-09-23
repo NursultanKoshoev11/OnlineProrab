@@ -1,4 +1,4 @@
-services:
+﻿services:
   postgres:
     image: postgres:16-alpine
     container_name: stroy-postgres
@@ -30,6 +30,8 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://stroy.com.kg}
       UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      SUPPORT_TELEGRAM_BOT_TOKEN: ${SUPPORT_TELEGRAM_BOT_TOKEN:-}
+      SUPPORT_TELEGRAM_CHAT_ID: ${SUPPORT_TELEGRAM_CHAT_ID:-}
       SMS_PROVIDER: ${SMS_PROVIDER:-}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_API_KEY_SID: ${TWILIO_API_KEY_SID:-}
@@ -70,3 +72,4 @@ volumes:
     name: stroy_postgres_data
   stroy_uploads:
     name: stroy_uploads
+
