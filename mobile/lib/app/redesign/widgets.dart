@@ -6,17 +6,13 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: _brand,
-        borderRadius: BorderRadius.circular(size * .24),
-      ),
-      clipBehavior: Clip.antiAlias,
       child: Image.asset(
-        'assets/branding/stroy_icon.png',
-        fit: BoxFit.cover,
+        'assets/branding/stroy-mobile-icon-v3.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
       ),
     );
   }
@@ -34,9 +30,9 @@ class _BrandWordmark extends StatelessWidget {
           'STROY',
           style: TextStyle(
             color: _ink,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.4,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 2.4,
           ),
         ),
       ],
@@ -63,9 +59,9 @@ class _PageHeader extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 30,
-                  height: 1.05,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 32,
+                  height: 1.15,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -0.6,
                   color: _ink,
                 ),
@@ -82,10 +78,7 @@ class _PageHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (action != null) ...[
-          const SizedBox(width: 12),
-          action!,
-        ],
+        if (action != null) ...[const SizedBox(width: 12), action!],
       ],
     );
   }
@@ -104,14 +97,14 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            active ? Icons.check_circle_rounded : Icons.archive_outlined,
-            size: 14,
+            active ? Icons.circle : Icons.archive_outlined,
+            size: 7,
             color: foreground,
           ),
           const SizedBox(width: 4),
@@ -176,7 +169,7 @@ class _SectionCard extends StatelessWidget {
                           title,
                           style: const TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
@@ -286,7 +279,7 @@ class _EmptyCard extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
             Text(

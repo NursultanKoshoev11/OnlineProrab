@@ -99,7 +99,7 @@ class _ReportMetric extends StatelessWidget {
             style: const TextStyle(
               color: _ink,
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

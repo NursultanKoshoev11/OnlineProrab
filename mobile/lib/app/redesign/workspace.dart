@@ -156,10 +156,15 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        centerTitle: true,
-        title: const Text(
-          'Обзор объекта',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        centerTitle: false,
+        title: Text(
+          const [
+            'Обзор объекта',
+            'Расходы объекта',
+            'Отчёт расходов',
+            'Разделы объекта',
+          ][_tab],
+          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         actions: [
           PopupMenuButton<String>(

@@ -337,6 +337,7 @@ class _BackendExpenseFormScreenState extends State<BackendExpenseFormScreen> {
         projectId: widget.projectId,
         title: title,
         amount: amount,
+        spentAt: DateTime.now().toIso8601String().split('T').first,
         category: categoryController.text.trim(),
         vendor: vendorController.text.trim(),
       );

@@ -4,7 +4,7 @@ import 'package:online_prorab/features/projects/project_repository.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-const _stroyGreen = PdfColor(0.031, 0.478, 0.239);
+const _stroyGreen = PdfColor(0.141, 0.302, 0.251);
 const _stroyInk = PdfColor(0.067, 0.094, 0.082);
 const _stroyMuted = PdfColor(0.38, 0.44, 0.41);
 const _stroyLine = PdfColor(0.88, 0.91, 0.89);
@@ -215,7 +215,7 @@ Future<Uint8List> buildExpenseReportPdf({
             },
             children: [
               _tableRow(
-                const ['№', 'Дата', 'Расход / описание', 'Сумма'],
+                const ['№', 'Дата', 'Расход и описание', 'Сумма'],
                 font: font,
                 header: true,
               ),

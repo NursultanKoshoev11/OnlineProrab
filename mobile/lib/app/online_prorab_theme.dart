@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 abstract final class OnlineProrabColors {
-  static const background = Color(0xFFF6F8F6);
+  static const background = Color(0xFFF6F5F1);
   static const surface = Color(0xFFFFFFFF);
   static const surfaceSoft = Color(0xFFF0F4F1);
-  static const primary = Color(0xFF315F4D);
+  static const primary = Color(0xFF244D40);
   static const primaryDark = Color(0xFF244C3D);
   static const mint = Color(0xFFDCEDE3);
   static const text = Color(0xFF18201C);
-  static const textMuted = Color(0xFF718078);
-  static const border = Color(0xFFE3E9E5);
+  static const textMuted = Color(0xFF626D66);
+  static const border = Color(0xFFDDDFD8);
   static const warning = Color(0xFFB77722);
   static const warningSoft = Color(0xFFFFF0D9);
 }
@@ -22,7 +22,7 @@ ThemeData buildOnlineProrabTheme() {
   );
 
   final border = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(18),
+    borderRadius: BorderRadius.circular(8),
     borderSide: BorderSide.none,
   );
 
@@ -47,7 +47,7 @@ ThemeData buildOnlineProrabTheme() {
       margin: EdgeInsets.zero,
       color: OnlineProrabColors.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: OnlineProrabColors.border),
       ),
     ),
@@ -72,7 +72,7 @@ ThemeData buildOnlineProrabTheme() {
         foregroundColor: Colors.white,
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontWeight: FontWeight.w700),
       ),
     ),
@@ -81,7 +81,7 @@ ThemeData buildOnlineProrabTheme() {
         foregroundColor: OnlineProrabColors.primary,
         minimumSize: const Size(0, 52),
         side: const BorderSide(color: OnlineProrabColors.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     ),
     chipTheme: ChipThemeData(
@@ -115,20 +115,20 @@ ThemeData buildOnlineProrabTheme() {
       headlineLarge: TextStyle(
         fontSize: 30,
         height: 1.1,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.6,
         color: OnlineProrabColors.text,
       ),
       headlineMedium: TextStyle(
         fontSize: 25,
         height: 1.15,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.35,
         color: OnlineProrabColors.text,
       ),
       titleLarge: TextStyle(
         fontSize: 20,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         color: OnlineProrabColors.text,
       ),
       titleMedium: TextStyle(

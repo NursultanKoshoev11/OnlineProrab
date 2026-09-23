@@ -458,6 +458,7 @@ class _BackendProjectFormScreenState extends State<BackendProjectFormScreen> {
     try {
       await BackendServices.of(context).projectRepository.createProject(
         name: name,
+        startDate: DateTime.now().toIso8601String().split('T').first,
         address: addressController.text.trim(),
       );
       if (mounted) Navigator.of(context).pop(true);

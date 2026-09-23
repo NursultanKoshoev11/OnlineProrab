@@ -15,128 +15,118 @@ class _ProjectCard extends StatelessWidget {
   final VoidCallback? onEdit;
   final bool showDivider;
 
-  bool get _canEdit {
-    final role = project.role.trim().toLowerCase();
-    return role == 'owner' || role == 'manager';
-  }
+  bool get _canEdit =>
+      const {'owner', 'manager'}.contains(project.role.trim().toLowerCase());
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          border: showDivider
-              ? const Border(bottom: BorderSide(color: _line))
-              : null,
+    return Padding(
+      padding: EdgeInsets.only(bottom: showDivider ? 16 : 0),
+      child: Material(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: _line),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ProjectCoverImage(
-              apiClient: apiClient,
-              fileId: project.coverFileId,
-              width: 70,
-              height: 70,
-              borderRadius: 10,
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      project.name.isEmpty ? 'Без названия' : project.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        height: 1.18,
-                        fontWeight: FontWeight.w900,
-                        color: _ink,
-                      ),
-                    ),
-                    if (project.address.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_outlined,
-                            size: 15,
-                            color: _muted,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              project.address,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: _muted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (project.startDate.isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.schedule_rounded,
-                            size: 14,
-                            color: _muted,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              _projectDurationText(project.startDate),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: _muted,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 7),
                     _StatusPill(status: project.status),
+                    const Spacer(),
+                    if (_canEdit && onEdit != null)
+                      IconButton(
+                        tooltip: 'Изменить объект',
+                        onPressed: onEdit,
+                        icon: const Icon(
+                          Icons.edit_outlined,
+                          size: 19,
+                          color: _muted,
+                        ),
+                      ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(width: 5),
-            Column(
-              children: [
-                if (_canEdit && onEdit != null)
-                  IconButton(
-                    tooltip: 'Изменить объект',
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            project.name.isEmpty
+                                ? 'Без названия'
+                                : project.name,
+                            style: const TextStyle(
+                              fontSize: 21,
+                              height: 1.2,
+                              letterSpacing: -.4,
+                              fontWeight: FontWeight.w600,
+                              color: _ink,
+                            ),
+                          ),
+                          if (project.address.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              project.address,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: _muted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    padding: EdgeInsets.zero,
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined, color: _muted),
-                  ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: Icon(Icons.chevron_right_rounded, color: _muted),
+                    if (project.coverFileId.isNotEmpty) ...[
+                      const SizedBox(width: 16),
+                      _ProjectCoverImage(
+                        apiClient: apiClient,
+                        fileId: project.coverFileId,
+                        width: 64,
+                        height: 64,
+                        borderRadius: 6,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 22),
+                const Divider(height: 1, color: _line),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 15,
+                      color: _muted,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        project.startDate.isEmpty
+                            ? 'Дата начала не указана'
+                            : _projectDurationText(project.startDate),
+                        style: const TextStyle(color: _muted, fontSize: 12),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 20,
+                      color: _brand,
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );

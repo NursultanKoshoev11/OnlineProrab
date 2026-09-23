@@ -81,22 +81,22 @@ class _ExpensesTabState extends State<_ExpensesTab> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
             children: [
               const Text(
-                'РАСХОДЫ',
+                'Расходы',
                 style: TextStyle(
                   color: _muted,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: .8,
+                  letterSpacing: .2,
                 ),
               ),
               const SizedBox(height: 7),
               Text(
                 widget.project.name.isEmpty ? 'Объект' : widget.project.name,
                 style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 27,
+                  color: _ink,
+                  fontSize: 26,
                   height: 1.08,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               if (widget.project.address.isNotEmpty) ...[
@@ -136,14 +136,33 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: Padding(
                     padding: const EdgeInsets.all(6),
-                    child: IconButton.filled(
-                      style: IconButton.styleFrom(
-                        backgroundColor: _brand,
-                        foregroundColor: Colors.white,
-                      ),
-                      tooltip: 'Голосовой поиск расходов',
-                      onPressed: _voiceSearch,
-                      icon: const Icon(Icons.mic_rounded),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_search.text.isNotEmpty)
+                          IconButton(
+                            tooltip: 'Очистить поиск расходов',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              FocusScope.of(context).unfocus();
+                              setState(() {
+                                _search.clear();
+                                _aiReportOpen = false;
+                                _aiResult = null;
+                                _aiError = null;
+                              });
+                            },
+                          ),
+                        IconButton.filled(
+                          style: IconButton.styleFrom(
+                            backgroundColor: _brand,
+                            foregroundColor: Colors.white,
+                          ),
+                          tooltip: 'Голосовой поиск расходов',
+                          onPressed: _voiceSearch,
+                          icon: const Icon(Icons.mic_rounded),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -188,8 +207,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black,
+                          fontWeight: FontWeight.w600,
+                          color: _ink,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -240,8 +259,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                                     Text(
                                       item.title,
                                       style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.black,
+                                        fontWeight: FontWeight.w600,
+                                        color: _ink,
                                       ),
                                     ),
                                     if (item.spentAt.isNotEmpty) ...[
@@ -273,8 +292,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                               Text(
                                 _money(item.amount, item.currency),
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                  color: _ink,
                                 ),
                               ),
                             ],
@@ -440,7 +459,7 @@ class _AiExpenseResultCard extends StatelessWidget {
                 const Expanded(
                   child: Text(
                     'Мини-отчёт по запросу',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
                 Text(
@@ -465,7 +484,7 @@ class _AiExpenseResultCard extends StatelessWidget {
             if (entries.isEmpty)
               const Text(
                 '0 сом',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               )
             else
               ...entries.map(
@@ -473,7 +492,7 @@ class _AiExpenseResultCard extends StatelessWidget {
                   _money(entry.value, entry.key),
                   style: const TextStyle(
                     fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -654,7 +673,7 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
                 const Expanded(
                   child: Text(
                     'Голосовой поиск',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                   ),
                 ),
                 IconButton(

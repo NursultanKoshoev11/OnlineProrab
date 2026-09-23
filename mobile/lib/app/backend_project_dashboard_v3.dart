@@ -1089,6 +1089,7 @@ class _ExpenseFormScreenV3State extends State<ExpenseFormScreenV3> {
         projectId: widget.projectId,
         title: title,
         amount: amount,
+        spentAt: DateTime.now().toIso8601String().split('T').first,
         category: _category.text.trim(),
         vendor: _vendor.text.trim(),
       );
@@ -1334,7 +1335,7 @@ class _FileUploadScreenV3State extends State<FileUploadScreenV3> {
           if (_selectedFile != null) ...[
             const SizedBox(height: 8),
             Text(
-              _formatBytes(_selectedFile!.size),
+              _formatBytes((_selectedFile!.lengthSync() ?? 0)),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -1368,11 +1369,9 @@ class _FileUploadScreenV3State extends State<FileUploadScreenV3> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        allowMultiple: false,
-        withData: false,
       );
-      if (!mounted || result == null || result.files.isEmpty) return;
-      final file = result.files.single;
+      if (!mounted || result.isEmpty) return;
+      final file = result.first;
       if (file.path == null || file.path!.isEmpty) {
         setState(() {
           _selectedFile = null;

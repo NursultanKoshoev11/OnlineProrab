@@ -377,11 +377,11 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> createSupportTicket({
-    required String channel,
     required String subject,
     required String message,
   }) => postJson('/api/v1/support/tickets', {
-    'channel': channel,
+    // The backend keeps the provider contract; users do not choose a channel.
+    'channel': 'telegram',
     'subject': subject,
     'message': message,
   });
