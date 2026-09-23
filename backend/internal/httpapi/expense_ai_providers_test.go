@@ -100,3 +100,63 @@ func TestCompactExpenseAIModelItemsRespectsPromptBudget(t *testing.T) {
 		t.Fatalf("expected a non-empty compacted subset, got %d of %d", len(compact), len(items))
 	}
 }
+
+func TestSplitExpenseAIItemsKeepsEveryItem(t *testing.T) {
+	items := make([]CostItemDTO, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		items = append(items, CostItemDTO{
+			ID:          fmt.Sprintf("expense-%d", i),
+			Title:       strings.Repeat("материал ", 35),
+			Description: strings.Repeat("подробное описание ", 60),
+			Category:    "материалы",
+			Vendor:      strings.Repeat("поставщик ", 25),
+			Amount:      float64(i),
+			Currency:    "KGS",
+		})
+	}
+
+	chunks := splitExpenseAIItems(items)
+	count := 0
+	for _, chunk := range chunks {
+		if len(chunk) == 0 || len(chunk) > expenseAIChunkSize {
+			t.Fatalf("invalid chunk size: %d", len(chunk))
+		}
+		if got := len(compactExpenseAIModelItems(chunk)); got != len(chunk) {
+			t.Fatalf("chunk contains items omitted from AI prompt: %d of %d", got, len(chunk))
+		}
+		count += len(chunk)
+	}
+	if count != len(items) {
+		t.Fatalf("split lost items: got %d of %d", count, len(items))
+	}
+}
+
+func TestRunExpenseAIChunksAnalyzesEveryExpense(t *testing.T) {
+	items := make([]CostItemDTO, 0, 250)
+	for i := 0; i < 250; i++ {
+		items = append(items, CostItemDTO{ID: fmt.Sprintf("expense-%d", i), Title: "бетон", Amount: 100, Currency: "KGS"})
+	}
+	providers := []expenseAIProviderConfig{{name: "test", model: "test-model", apiKey: "test-key"}}
+
+	result, provider, model, analyzed, err := runExpenseAIChunks(
+		context.Background(),
+		"бетон",
+		items,
+		providers,
+		func(_ context.Context, _ expenseAIProviderConfig, _ string, chunk []CostItemDTO) (expenseAIModelResponse, error) {
+			return expenseAIModelResponse{
+				SelectedIDs: []string{chunk[len(chunk)-1].ID},
+				Summary:     "бетон",
+			}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("runExpenseAIChunks returned error: %v", err)
+	}
+	if analyzed != len(items) || provider != "test" || model != "test-model" {
+		t.Fatalf("unexpected analysis metadata: analyzed=%d provider=%q model=%q", analyzed, provider, model)
+	}
+	if len(result.SelectedIDs) != len(splitExpenseAIItems(items)) {
+		t.Fatalf("expected one selected ID per chunk, got %d", len(result.SelectedIDs))
+	}
+}

@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	maxExpenseAIQueryLength = 500
-	maxExpenseAIItems       = 300
+	maxExpenseAIQueryLength      = 500
+	expenseAISearchTimeout       = 90 * time.Second
+	expenseAIChunkSize           = 100
+	maxExpenseAIConcurrentChunks = 4
 )
 
 type expenseAISearchRequest struct {
@@ -45,15 +48,18 @@ type expenseAIGroup struct {
 }
 
 type expenseAISearchResponse struct {
-	Query        string             `json:"query"`
-	Mode         string             `json:"mode"`
-	Summary      string             `json:"summary,omitempty"`
-	Note         string             `json:"note,omitempty"`
-	MatchedCount int                `json:"matched_count"`
-	Totals       map[string]float64 `json:"totals"`
-	Items        []CostItemDTO      `json:"items"`
-	Model        string             `json:"model,omitempty"`
-	Breakdown    []expenseAIGroup   `json:"breakdown,omitempty"`
+	Query           string             `json:"query"`
+	Mode            string             `json:"mode"`
+	Summary         string             `json:"summary,omitempty"`
+	Note            string             `json:"note,omitempty"`
+	MatchedCount    int                `json:"matched_count"`
+	Totals          map[string]float64 `json:"totals"`
+	Items           []CostItemDTO      `json:"items"`
+	Model           string             `json:"model,omitempty"`
+	Breakdown       []expenseAIGroup   `json:"breakdown,omitempty"`
+	TotalCount      int                `json:"total_count"`
+	AIAnalyzedCount int                `json:"ai_analyzed_count"`
+	AIComplete      bool               `json:"ai_complete"`
 }
 
 // ExpenseAISearch interprets a natural-language expense query with the
@@ -81,7 +87,7 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 18*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), expenseAISearchTimeout)
 	defer cancel()
 	if !canAccessProject(ctx, userIDFromContext(r.Context()), req.ProjectID) {
 		Error(w, http.StatusForbidden, "project access denied")
@@ -96,33 +102,40 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 
 	selected := localExpenseMatches(items, req.Query)
 	mode := "local"
-	note := "AI-провайдеры не настроены на сервере; показан обычный поиск."
+	note := "AI-провайдеры не настроены на сервере; показан обычный поиск по всем расходам."
 	modelSummary := ""
 	modelName := ""
+	aiAnalyzedCount := 0
+	aiComplete := false
 	if len(configuredExpenseAIProviders()) > 0 {
-		selection, provider, model, callErr := askExpenseAIForExpenseIDs(ctx, req.Query, items)
+		selection, provider, model, analyzedCount, callErr := askExpenseAIForAllExpenseIDs(ctx, req.Query, items)
+		aiAnalyzedCount = analyzedCount
 		if callErr != nil {
-			// Keep the feature useful if every provider is temporarily unavailable.
-			log.Printf("all expense AI providers failed: %v", callErr)
-			note = "AI временно недоступен; показан обычный поиск."
+			// Never return a partial AI result: use the deterministic search over every loaded expense.
+			log.Printf("all expense AI chunks did not complete: %v", callErr)
+			note = fmt.Sprintf("AI не завершил анализ всех расходов (%d из %d); показан обычный поиск по всем расходам.", analyzedCount, len(items))
 		} else {
 			selected = validExpenseSelection(items, selection.SelectedIDs)
 			mode = provider
-			note = fmt.Sprintf("Ответ получен через %s; сумма пересчитана сервером по расходам объекта.", provider)
+			aiComplete = true
+			note = fmt.Sprintf("AI проанализировал все %d расходов; сумма пересчитана сервером по реальным записям.", len(items))
 			modelSummary = strings.TrimSpace(selection.Summary)
 			modelName = model
 		}
 	}
 
 	response := expenseAISearchResponse{
-		Query:        req.Query,
-		Mode:         mode,
-		Summary:      modelSummary,
-		Note:         note,
-		MatchedCount: len(selected),
-		Totals:       make(map[string]float64),
-		Items:        make([]CostItemDTO, 0, len(selected)),
-		Model:        modelName,
+		Query:           req.Query,
+		Mode:            mode,
+		Summary:         modelSummary,
+		Note:            note,
+		MatchedCount:    len(selected),
+		Totals:          make(map[string]float64),
+		Items:           make([]CostItemDTO, 0, len(selected)),
+		Model:           modelName,
+		TotalCount:      len(items),
+		AIAnalyzedCount: aiAnalyzedCount,
+		AIComplete:      aiComplete,
 	}
 	for _, item := range selected {
 		response.Items = append(response.Items, item)
@@ -149,8 +162,7 @@ func loadExpenseAIItems(ctx context.Context, projectID string) ([]CostItemDTO, e
 		FROM cost_items
 		WHERE project_id = $1 AND deleted_at IS NULL
 		ORDER BY spent_at DESC, created_at DESC
-		LIMIT $2
-	`, projectID, maxExpenseAIItems)
+	`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +177,127 @@ func loadExpenseAIItems(ctx context.Context, projectID string) ([]CostItemDTO, e
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func askExpenseAIForAllExpenseIDs(ctx context.Context, query string, items []CostItemDTO) (expenseAIModelResponse, string, string, int, error) {
+	return runExpenseAIChunks(ctx, query, items, configuredExpenseAIProviders(), callExpenseAIProvider)
+}
+
+func splitExpenseAIItems(items []CostItemDTO) [][]CostItemDTO {
+	if len(items) == 0 {
+		return nil
+	}
+	chunks := make([][]CostItemDTO, 0, (len(items)+expenseAIChunkSize-1)/expenseAIChunkSize)
+	current := make([]CostItemDTO, 0, expenseAIChunkSize)
+	for _, item := range items {
+		if len(current) >= expenseAIChunkSize {
+			chunks = append(chunks, current)
+			current = make([]CostItemDTO, 0, expenseAIChunkSize)
+		}
+		candidate := append(append([]CostItemDTO(nil), current...), item)
+		if len(current) > 0 && len(compactExpenseAIModelItems(candidate)) < len(candidate) {
+			chunks = append(chunks, current)
+			current = []CostItemDTO{item}
+			continue
+		}
+		current = candidate
+	}
+	if len(current) > 0 {
+		chunks = append(chunks, current)
+	}
+	return chunks
+}
+
+func runExpenseAIChunks(ctx context.Context, query string, items []CostItemDTO, providers []expenseAIProviderConfig, call expenseAIProviderCall) (expenseAIModelResponse, string, string, int, error) {
+	if len(items) == 0 {
+		return expenseAIModelResponse{}, "", "", 0, nil
+	}
+	if len(providers) == 0 {
+		return expenseAIModelResponse{}, "", "", 0, fmt.Errorf("no AI providers are configured")
+	}
+
+	chunks := splitExpenseAIItems(items)
+	type chunkResult struct {
+		selection expenseAIModelResponse
+		provider  string
+		model     string
+		count     int
+		err       error
+	}
+	results := make([]chunkResult, len(chunks))
+	semaphore := make(chan struct{}, maxExpenseAIConcurrentChunks)
+	var waitGroup sync.WaitGroup
+	for index, chunk := range chunks {
+		waitGroup.Add(1)
+		go func(index int, chunk []CostItemDTO) {
+			defer waitGroup.Done()
+			select {
+			case semaphore <- struct{}{}:
+			case <-ctx.Done():
+				results[index] = chunkResult{count: len(chunk), err: ctx.Err()}
+				return
+			}
+			defer func() { <-semaphore }()
+			selection, provider, model, err := runExpenseAIProviders(ctx, query, chunk, providers, call)
+			results[index] = chunkResult{
+				selection: selection,
+				provider:  provider,
+				model:     model,
+				count:     len(chunk),
+				err:       err,
+			}
+		}(index, chunk)
+	}
+	waitGroup.Wait()
+
+	selectedIDs := make([]string, 0)
+	selectedSeen := make(map[string]struct{})
+	providerNames := make([]string, 0)
+	providerSeen := make(map[string]struct{})
+	modelNames := make([]string, 0)
+	modelSeen := make(map[string]struct{})
+	summaries := make([]string, 0)
+	analyzedCount := 0
+	failedChunks := 0
+	for _, result := range results {
+		if result.err != nil {
+			failedChunks++
+			continue
+		}
+		analyzedCount += result.count
+		if result.provider != "" {
+			if _, ok := providerSeen[result.provider]; !ok {
+				providerSeen[result.provider] = struct{}{}
+				providerNames = append(providerNames, result.provider)
+			}
+		}
+		if result.model != "" {
+			if _, ok := modelSeen[result.model]; !ok {
+				modelSeen[result.model] = struct{}{}
+				modelNames = append(modelNames, result.model)
+			}
+		}
+		for _, id := range result.selection.SelectedIDs {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+			if _, ok := selectedSeen[id]; !ok {
+				selectedSeen[id] = struct{}{}
+				selectedIDs = append(selectedIDs, id)
+			}
+		}
+		if summary := trimExpenseAIText(result.selection.Summary, 300); summary != "" {
+			summaries = append(summaries, summary)
+		}
+	}
+	if failedChunks > 0 {
+		return expenseAIModelResponse{}, strings.Join(providerNames, "+"), strings.Join(modelNames, "+"), analyzedCount, fmt.Errorf("%d of %d expense AI chunks failed", failedChunks, len(chunks))
+	}
+	return expenseAIModelResponse{
+		SelectedIDs: selectedIDs,
+		Summary:     strings.Join(summaries, " "),
+	}, strings.Join(providerNames, "+"), strings.Join(modelNames, "+"), analyzedCount, nil
 }
 
 func askGeminiForExpenseIDs(ctx context.Context, query string, items []CostItemDTO) (expenseAIModelResponse, error) {

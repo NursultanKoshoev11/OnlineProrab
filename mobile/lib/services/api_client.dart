@@ -191,10 +191,17 @@ class ApiClient {
   Future<Map<String, dynamic>> searchExpensesWithAI({
     required String projectId,
     required String query,
-  }) => postJson('/api/v1/expense-ai/search', {
-    'project_id': projectId,
-    'query': query,
-  });
+  }) async {
+    final response = await _send(
+      () => _httpClient.post(
+        ApiConfig.endpoint('/api/v1/expense-ai/search'),
+        headers: _headers(),
+        body: jsonEncode({'project_id': projectId, 'query': query}),
+      ),
+      timeout: const Duration(seconds: 90),
+    );
+    return _decodeObject(response);
+  }
 
   Future<Map<String, dynamic>> createCostItem({
     required String projectId,
@@ -440,8 +447,9 @@ class ApiClient {
   Future<http.Response> _send(
     Future<http.Response> Function() request, {
     bool retry = true,
+    Duration? timeout,
   }) async {
-    final response = await _perform(request);
+    final response = await _perform(request, timeout: timeout);
     if (response.statusCode != 401 || !retry) return response;
 
     final refreshed = await _refreshTokens();
@@ -450,16 +458,17 @@ class ApiClient {
       return response;
     }
 
-    final retried = await _perform(request);
+    final retried = await _perform(request, timeout: timeout);
     if (retried.statusCode == 401) await _expireSession();
     return retried;
   }
 
   Future<http.Response> _perform(
-    Future<http.Response> Function() request,
-  ) async {
+    Future<http.Response> Function() request, {
+    Duration? timeout,
+  }) async {
     try {
-      return await request().timeout(_timeout);
+      return await request().timeout(timeout ?? _timeout);
     } on TimeoutException {
       throw const ApiException(
         408,
