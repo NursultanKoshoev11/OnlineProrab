@@ -160,3 +160,27 @@ func TestRunExpenseAIChunksAnalyzesEveryExpense(t *testing.T) {
 		t.Fatalf("expected one selected ID per chunk, got %d", len(result.SelectedIDs))
 	}
 }
+
+func TestLocalExpenseMatchesReturnsAllForAggregateQuery(t *testing.T) {
+	items := []CostItemDTO{
+		{ID: "expense-1", Title: "Цемент", Amount: 100, Currency: "KGS"},
+		{ID: "expense-2", Title: "Песок", Amount: 200, Currency: "KGS"},
+	}
+
+	got := localExpenseMatches(items, "сколько всего потрачено за весь период")
+	if len(got) != len(items) {
+		t.Fatalf("expected all expenses for aggregate query, got %d", len(got))
+	}
+}
+
+func TestLocalExpenseMatchesFindsSpecificExpense(t *testing.T) {
+	items := []CostItemDTO{
+		{ID: "expense-1", Title: "Цемент М500", Amount: 100, Currency: "KGS"},
+		{ID: "expense-2", Title: "Песок", Amount: 200, Currency: "KGS"},
+	}
+
+	got := localExpenseMatches(items, "Сколько потратили на цемент?")
+	if len(got) != 1 || got[0].ID != "expense-1" {
+		t.Fatalf("expected the cement expense, got %#v", got)
+	}
+}

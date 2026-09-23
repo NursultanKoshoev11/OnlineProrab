@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	expenseAIProviderTimeout = 7 * time.Second
-	maxExpenseAIPromptBytes  = 48 * 1024
+	expenseAIProviderTimeout = 12 * time.Second
+	maxExpenseAIPromptBytes  = 16 * 1024
 	maxExpenseAIOutputTokens = 1024
 )
 

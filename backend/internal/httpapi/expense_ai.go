@@ -116,9 +116,17 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 			note = fmt.Sprintf("AI не завершил анализ всех расходов (%d из %d); показан обычный поиск по всем расходам.", analyzedCount, len(items))
 		} else {
 			selected = validExpenseSelection(items, selection.SelectedIDs)
+			// A query asking only for the overall total has no expense-specific
+			// filter. If a provider returns an empty selection for it, use every
+			// loaded record instead of showing a misleading zero.
+			if isExpenseAggregateQuery(req.Query) {
+				selected = append([]CostItemDTO(nil), items...)
+				note = fmt.Sprintf("AI завершил анализ; для общего итога учтены все %d расходов.", len(items))
+			} else {
+				note = fmt.Sprintf("AI проанализировал все %d расходов; сумма пересчитана сервером по реальным записям.", len(items))
+			}
 			mode = provider
 			aiComplete = true
-			note = fmt.Sprintf("AI проанализировал все %d расходов; сумма пересчитана сервером по реальным записям.", len(items))
 			modelSummary = strings.TrimSpace(selection.Summary)
 			modelName = model
 		}
@@ -152,6 +160,7 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 			response.Summary = "Найдены связанные расходы по вашему запросу."
 		}
 	}
+	log.Printf("expense AI result mode=%s total_items=%d analyzed=%d complete=%t matched=%d currencies=%d", response.Mode, response.TotalCount, response.AIAnalyzedCount, response.AIComplete, response.MatchedCount, len(response.Totals))
 	JSON(w, http.StatusOK, response)
 }
 
@@ -402,24 +411,54 @@ func validExpenseSelection(items []CostItemDTO, selectedIDs []string) []CostItem
 	return selected
 }
 
-func localExpenseMatches(items []CostItemDTO, query string) []CostItemDTO {
-	words := strings.Fields(strings.ToLower(strings.ReplaceAll(query, "ё", "е")))
-	stopWords := map[string]struct{}{"сколько": {}, "потратил": {}, "потрачено": {}, "на": {}, "по": {}, "за": {}, "и": {}, "в": {}, "рублей": {}, "сом": {}}
+var expenseSearchStopWords = map[string]struct{}{
+	"сколько": {}, "потратил": {}, "потратили": {}, "потрачено": {},
+	"расход": {}, "расходы": {}, "расходов": {}, "покажи": {}, "показать": {},
+	"найди": {}, "найти": {}, "общая": {}, "общий": {}, "общую": {},
+	"итого": {}, "сумма": {}, "сумму": {}, "всего": {}, "все": {}, "весь": {},
+	"период": {}, "денег": {}, "деньги": {}, "на": {}, "по": {}, "за": {},
+	"и": {}, "в": {}, "рублей": {}, "рубль": {}, "сом": {}, "сома": {},
+	"сомов": {}, "кгс": {}, "kgs": {},
+}
+
+func normalizeExpenseSearchText(value string) string {
+	value = strings.ToLower(strings.ReplaceAll(value, "ё", "е"))
+	value = strings.NewReplacer(
+		",", " ", ".", " ", "!", " ", "?", " ", ":", " ", ";", " ",
+		"-", " ", "_", " ", "/", " ",
+	).Replace(value)
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func expenseSearchTerms(query string) []string {
+	words := strings.Fields(normalizeExpenseSearchText(query))
 	terms := make([]string, 0, len(words))
 	for _, word := range words {
-		word = strings.Trim(word, "?!,.;:")
-		if len([]rune(word)) >= 3 {
-			if _, stop := stopWords[word]; !stop {
-				terms = append(terms, word)
-			}
+		if len([]rune(word)) < 3 {
+			continue
 		}
+		if _, stop := expenseSearchStopWords[word]; stop {
+			continue
+		}
+		terms = append(terms, word)
 	}
+	return terms
+}
+
+func isExpenseAggregateQuery(query string) bool {
+	return len(expenseSearchTerms(query)) == 0
+}
+
+func localExpenseMatches(items []CostItemDTO, query string) []CostItemDTO {
+	terms := expenseSearchTerms(query)
 	if len(terms) == 0 {
-		return nil
+		return append([]CostItemDTO(nil), items...)
 	}
 	matched := make([]CostItemDTO, 0)
 	for _, item := range items {
-		text := strings.ToLower(strings.Join([]string{item.Title, item.Description, item.Category, item.Vendor}, " "))
+		text := normalizeExpenseSearchText(strings.Join([]string{
+			item.Title, item.Description, item.Category, item.Vendor,
+		}, " "))
 		for _, term := range terms {
 			if strings.Contains(text, term) {
 				matched = append(matched, item)
