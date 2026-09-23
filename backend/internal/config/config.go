@@ -18,6 +18,7 @@ const (
 
 const (
 	SMSProviderTwilio = "twilio"
+	SMSProviderNikita = "nikita"
 )
 
 const (
@@ -44,6 +45,11 @@ type Config struct {
 	TwilioAPIKeySecret        string
 	TwilioFrom                string
 	TwilioMessagingServiceSID string
+	NikitaAPIURL              string
+	NikitaLogin               string
+	NikitaPassword            string
+	NikitaSender              string
+	NikitaTestMode            bool
 	SupportTelegramBotToken   string
 	SupportTelegramChatID     string
 	SupportTelegramURL        string
@@ -82,6 +88,11 @@ func Load() Config {
 	cfg.TwilioAPIKeySecret = strings.TrimSpace(os.Getenv("TWILIO_API_KEY_SECRET"))
 	cfg.TwilioFrom = strings.TrimSpace(os.Getenv("TWILIO_FROM"))
 	cfg.TwilioMessagingServiceSID = strings.TrimSpace(os.Getenv("TWILIO_MESSAGING_SERVICE_SID"))
+	cfg.NikitaAPIURL = getEnv("NIKITA_API_URL", "https://smspro.nikita.kg/api/message")
+	cfg.NikitaLogin = strings.TrimSpace(os.Getenv("NIKITA_LOGIN"))
+	cfg.NikitaPassword = strings.TrimSpace(os.Getenv("NIKITA_PASSWORD"))
+	cfg.NikitaSender = strings.TrimSpace(os.Getenv("NIKITA_SENDER"))
+	cfg.NikitaTestMode = getEnvBool("NIKITA_TEST_MODE", false)
 	cfg.SupportTelegramBotToken = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_BOT_TOKEN"))
 	cfg.SupportTelegramChatID = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_CHAT_ID"))
 	cfg.SupportTelegramURL = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_URL"))
@@ -125,11 +136,14 @@ func (cfg Config) Validate() error {
 	if cfg.MaxUploadBytes <= 0 {
 		problems = append(problems, "MAX_UPLOAD_MB must be greater than 0")
 	}
-	if cfg.SMSProvider != "" && cfg.SMSProvider != SMSProviderTwilio {
-		problems = append(problems, "SMS_PROVIDER must be twilio when configured")
+	if cfg.SMSProvider != "" && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
+		problems = append(problems, "SMS_PROVIDER must be twilio or nikita when configured")
 	}
 	if cfg.SMSProvider == SMSProviderTwilio {
 		problems = append(problems, validateTwilioConfig(cfg)...)
+	}
+	if cfg.SMSProvider == SMSProviderNikita {
+		problems = append(problems, validateNikitaConfig(cfg)...)
 	}
 
 	reviewPhoneSet := cfg.ReviewSMSPhone != ""
@@ -166,8 +180,8 @@ func (cfg Config) Validate() error {
 				break
 			}
 		}
-		if !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio {
-			problems = append(problems, "SMS_PROVIDER=twilio is required in production unless REVIEW_ONLY_MODE is enabled")
+		if !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
+			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in production unless REVIEW_ONLY_MODE is enabled")
 		}
 	}
 
@@ -195,6 +209,23 @@ func validateTwilioConfig(cfg Config) []string {
 	}
 	if serviceSet && (!strings.HasPrefix(cfg.TwilioMessagingServiceSID, "MG") || len(cfg.TwilioMessagingServiceSID) < 10) {
 		problems = append(problems, "TWILIO_MESSAGING_SERVICE_SID must be a Messaging Service SID")
+	}
+	return problems
+}
+
+func validateNikitaConfig(cfg Config) []string {
+	var problems []string
+	if strings.TrimSpace(cfg.NikitaAPIURL) == "" {
+		problems = append(problems, "NIKITA_API_URL is required")
+	}
+	if strings.TrimSpace(cfg.NikitaLogin) == "" {
+		problems = append(problems, "NIKITA_LOGIN is required")
+	}
+	if strings.TrimSpace(cfg.NikitaPassword) == "" {
+		problems = append(problems, "NIKITA_PASSWORD is required")
+	}
+	if strings.TrimSpace(cfg.NikitaSender) == "" {
+		problems = append(problems, "NIKITA_SENDER is required")
 	}
 	return problems
 }

@@ -115,6 +115,37 @@ func TestValidateAcceptsSafeProductionConfig(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.SMSProvider = SMSProviderNikita
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+	cfg.NikitaAPIURL = "https://smspro.nikita.kg/api/message"
+	cfg.NikitaLogin = "test-login"
+	cfg.NikitaPassword = "test-password"
+	cfg.NikitaSender = "SMSPRO.KG"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid Nikita production config, got %v", err)
+	}
+}
+
+func TestValidateRejectsIncompleteNikitaConfig(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.SMSProvider = SMSProviderNikita
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+	cfg.NikitaLogin = ""
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected incomplete Nikita config to be rejected")
+	}
+}
+
 func TestSplitCSVTrimsEmptyValues(t *testing.T) {
 	got := splitCSV(" https://a.example, ,https://b.example ")
 	if len(got) != 2 {
@@ -142,7 +173,6 @@ func validProductionConfig() Config {
 		TwilioFrom:         "+15550000000",
 	}
 }
-
 
 func TestValidateAllowsProductionReviewOnlyWithoutSMSProvider(t *testing.T) {
 	cfg := validProductionConfig()

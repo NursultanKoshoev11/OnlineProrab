@@ -34,6 +34,18 @@ func Run() {
 			log.Fatalf("failed to initialize SMS provider: %v", err)
 		}
 		smsSender = sender
+	} else if cfg.SMSProvider == config.SMSProviderNikita {
+		sender, err := sms.NewNikitaSender(sms.NikitaConfig{
+			APIURL:   cfg.NikitaAPIURL,
+			Login:    cfg.NikitaLogin,
+			Password: cfg.NikitaPassword,
+			Sender:   cfg.NikitaSender,
+			TestMode: cfg.NikitaTestMode,
+		})
+		if err != nil {
+			log.Fatalf("failed to initialize SMS provider: %v", err)
+		}
+		smsSender = sender
 	}
 	if cfg.IsProduction() && smsSender == nil && !cfg.ReviewOnlyMode {
 		log.Fatal("SMS provider is required in production unless review-only mode is enabled")
