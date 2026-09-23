@@ -100,6 +100,7 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	aggregateQuery := isExpenseAggregateQuery(req.Query)
 	selected := localExpenseMatches(items, req.Query)
 	mode := "local"
 	note := "AI-провайдеры не настроены на сервере; показан обычный поиск по всем расходам."
@@ -107,7 +108,11 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 	modelName := ""
 	aiAnalyzedCount := 0
 	aiComplete := false
-	if len(configuredExpenseAIProviders()) > 0 {
+	if aggregateQuery {
+		// An overall total is a deterministic database calculation. Do not
+		// call an external provider for a query that has no semantic filter.
+		note = fmt.Sprintf("Общий итог рассчитан сервером по всем %d расходам.", len(items))
+	} else if len(configuredExpenseAIProviders()) > 0 {
 		selection, provider, model, analyzedCount, callErr := askExpenseAIForAllExpenseIDs(ctx, req.Query, items)
 		aiAnalyzedCount = analyzedCount
 		if callErr != nil {
@@ -116,17 +121,9 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 			note = fmt.Sprintf("AI не завершил анализ всех расходов (%d из %d); показан обычный поиск по всем расходам.", analyzedCount, len(items))
 		} else {
 			selected = validExpenseSelection(items, selection.SelectedIDs)
-			// A query asking only for the overall total has no expense-specific
-			// filter. If a provider returns an empty selection for it, use every
-			// loaded record instead of showing a misleading zero.
-			if isExpenseAggregateQuery(req.Query) {
-				selected = append([]CostItemDTO(nil), items...)
-				note = fmt.Sprintf("AI завершил анализ; для общего итога учтены все %d расходов.", len(items))
-			} else {
-				note = fmt.Sprintf("AI проанализировал все %d расходов; сумма пересчитана сервером по реальным записям.", len(items))
-			}
 			mode = provider
 			aiComplete = true
+			note = fmt.Sprintf("AI проанализировал все %d расходов; сумма пересчитана сервером по реальным записям.", len(items))
 			modelSummary = strings.TrimSpace(selection.Summary)
 			modelName = model
 		}
