@@ -13,7 +13,7 @@ val stroyStorePassword = System.getenv("STROY_KEYSTORE_PASSWORD") ?: "android"
 val stroyKeyAlias = System.getenv("STROY_KEY_ALIAS") ?: "androiddebugkey"
 val stroyKeyPassword = System.getenv("STROY_KEY_PASSWORD") ?: "android"
 val stroyApplicationId = System.getenv("STROY_APPLICATION_ID")
-    ?: "com.onlineprorab.online_prorab"
+    ?: "kg.com.stroy.app"
 
 android {
     namespace = "com.onlineprorab.online_prorab"
