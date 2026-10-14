@@ -435,6 +435,27 @@ h2 {
   @apply bg-[#86a870];
   border-radius: 4px 4px 0 0;
 }
+.bar-chart > i:nth-child(1) {
+  --bar: 38%;
+}
+.bar-chart > i:nth-child(2) {
+  --bar: 58%;
+}
+.bar-chart > i:nth-child(3) {
+  --bar: 45%;
+}
+.bar-chart > i:nth-child(4) {
+  --bar: 76%;
+}
+.bar-chart > i:nth-child(5) {
+  --bar: 63%;
+}
+.bar-chart > i:nth-child(6) {
+  --bar: 100%;
+}
+.bar-chart > i:nth-child(7) {
+  --bar: 83%;
+}
 .bar-chart > i:nth-child(2n) {
   @apply bg-[#a8c484];
 }

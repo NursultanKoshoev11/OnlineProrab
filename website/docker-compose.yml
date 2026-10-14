@@ -1,9 +1,34 @@
 services:
   stroy-website:
+    image: stroy-website:production
     build:
       context: .
       dockerfile: Dockerfile
     container_name: stroy-website
     ports:
-      - "8090:80"
+      - "127.0.0.1:8090:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO- http://127.0.0.1:8080/ |
+          grep -Fq '<title>STROY — стройте больше. Управляйте проще.</title>'
+          && wget -qO- http://127.0.0.1:8080/account-deletion/ |
+          grep -Fq '<title>Удаление аккаунта — STROY</title>'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

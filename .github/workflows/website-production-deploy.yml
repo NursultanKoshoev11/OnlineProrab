@@ -1,0 +1,141 @@
+name: Website Production Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'push' ||
+      github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: production-website
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      DEPLOY_HOST: ${{ vars.WEBSITE_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.WEBSITE_DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.WEBSITE_DEPLOY_PATH }}
+    steps:
+      - name: Check out the CI-tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Validate deployment settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$DEPLOY_PATH" != / && "$DEPLOY_PATH" != */ ]]
+          [[ "$DEPLOY_PATH" != *'//'* && "$DEPLOY_PATH" != *'/./'* && "$DEPLOY_PATH" != */. ]]
+          [[ "$DEPLOY_PATH" != *'/../'* && "$DEPLOY_PATH" != */.. ]]
+
+      - name: Build the tested website image
+        working-directory: website
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --pull \
+            --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
+            --tag stroy-website:production .
+          test "$(docker image inspect --format '{{.Config.User}}' stroy-website:production)" = '101:101'
+          docker save stroy-website:production | gzip -1 > "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.image.tar.gz"
+
+      - name: Package the matching Compose configuration
+        shell: bash
+        run: tar -czf "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.source.tar.gz" website/docker-compose.yml
+
+      - name: Confirm this is still the current main revision
+        id: revision
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          if [[ "$DEPLOY_SHA" == "$current_main_sha" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipped stale website revision $DEPLOY_SHA; current main is $current_main_sha." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install SSH credentials
+        if: steps.revision.outputs.deploy == 'true'
+        shell: bash
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.WEBSITE_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.WEBSITE_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/website_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/website_deploy" "$HOME/.ssh/known_hosts"
+
+      - name: Transfer image and deployment source
+        if: steps.revision.outputs.deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          scp "${ssh_options[@]}" \
+            "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.image.tar.gz" \
+            "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.source.tar.gz" \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
+
+      - name: Deploy and wait for container health
+        if: steps.revision.outputs.deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          printf -v remote_command 'bash -s -- %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH"
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
+
+      - name: Verify the public HTTPS site
+        if: steps.revision.outputs.deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          homepage="$(mktemp)"
+          deletion_page="$(mktemp)"
+          headers="$(mktemp)"
+          trap 'rm -f "$homepage" "$deletion_page" "$headers"' EXIT
+
+          curl --fail --silent --show-error --location --max-time 30 \
+            --output "$homepage" https://stroy.com.kg/
+          grep -Fq '<title>STROY — стройте больше. Управляйте проще.</title>' "$homepage"
+
+          curl --fail --silent --show-error --location --max-time 30 \
+            --output "$deletion_page" https://stroy.com.kg/account-deletion/
+          grep -Fq '<title>Удаление аккаунта — STROY</title>' "$deletion_page"
+
+          curl --fail --silent --show-error --head --max-time 30 \
+            https://stroy.com.kg/ --dump-header "$headers" --output /dev/null
+          grep -Eiq '^Content-Security-Policy:' "$headers"
+          grep -Eiq '^Permissions-Policy:' "$headers"
+          tr -d '\r' < "$headers" | grep -Eiq '^Strict-Transport-Security:[[:space:]]*max-age=31536000([;[:space:]]|$)'
+
+      - name: Remove SSH credentials
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/website_deploy" "$HOME/.ssh/known_hosts"

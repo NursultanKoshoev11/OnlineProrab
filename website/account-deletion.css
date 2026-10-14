@@ -1,0 +1,134 @@
+.account-delete-container {
+  max-width: 900px;
+}
+.account-delete-card {
+  max-width: 760px;
+  margin-top: 48px;
+}
+.account-delete-card h2 {
+  margin-top: 18px;
+}
+.account-delete-form {
+  margin: 28px 0;
+}
+.account-delete-form label {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--legal-ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+.account-delete-input-row {
+  display: flex;
+  gap: 10px;
+}
+.account-delete-input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--legal-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--legal-ink);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+.account-delete-input-row input:focus {
+  border-color: var(--legal-brand);
+  box-shadow: 0 0 0 3px rgba(8, 122, 61, 0.12);
+}
+.account-delete-input-row button,
+.account-delete-danger {
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: var(--legal-brand);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.account-delete-input-row button:disabled,
+.account-delete-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.account-delete-hint,
+.account-delete-help {
+  margin: 10px 0 0;
+  color: var(--legal-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.account-delete-link {
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  color: var(--legal-brand);
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.account-delete-confirm {
+  margin-top: 28px;
+  padding-top: 8px;
+}
+.account-delete-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 18px 0;
+  color: #43564a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.account-delete-check input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--legal-brand);
+}
+.account-delete-danger {
+  background: #a32929;
+}
+.account-delete-status {
+  min-height: 24px;
+  margin: 20px 0 0;
+  color: var(--legal-brand);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.account-delete-status[data-state="error"] {
+  color: #a32929;
+}
+.account-delete-help {
+  padding-top: 18px;
+  border-top: 1px solid var(--legal-line);
+}
+.account-delete-help a {
+  color: var(--legal-brand);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .account-delete-card {
+    margin-top: 34px;
+  }
+  .account-delete-input-row {
+    flex-direction: column;
+  }
+  .account-delete-input-row button {
+    width: 100%;
+  }
+}
