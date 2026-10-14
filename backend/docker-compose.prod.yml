@@ -10,8 +10,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-15}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+      STORAGE_DRIVER: s3
       UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      S3_REGION: ${S3_REGION:?S3_REGION is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_SESSION_TOKEN: ${S3_SESSION_TOKEN:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
       SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_API_KEY_SID: ${TWILIO_API_KEY_SID:-}
@@ -44,4 +52,4 @@ services:
 
 volumes:
   onlineprorab_uploads:
-    name: onlineprorab_uploads
+    name: ${UPLOADS_VOLUME_NAME:-onlineprorab_uploads}

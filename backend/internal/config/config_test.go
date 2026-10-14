@@ -153,6 +153,75 @@ func TestValidateAcceptsSafeProductionConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresS3StorageInProductionLikeEnvironments(t *testing.T) {
+	for _, env := range []string{StagingEnv, ProductionEnv} {
+		t.Run(env, func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.Env = env
+			cfg.StorageDriver = "local"
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "STORAGE_DRIVER=s3") {
+				t.Fatalf("expected local file storage to be rejected for %s, got %v", env, err)
+			}
+		})
+	}
+}
+
+func TestValidateRequiresS3BucketAndRegion(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*Config)
+		want   string
+	}{
+		{name: "missing bucket", change: func(cfg *Config) { cfg.S3Bucket = "" }, want: "S3_BUCKET"},
+		{name: "missing region", change: func(cfg *Config) { cfg.S3Region = "" }, want: "S3_REGION"},
+		{name: "partial credentials", change: func(cfg *Config) { cfg.S3AccessKeyID = "key" }, want: "S3_SECRET_ACCESS_KEY"},
+		{name: "session token without credentials", change: func(cfg *Config) { cfg.S3SessionToken = "token" }, want: "S3_SESSION_TOKEN"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := validStagingConfig()
+			tc.change(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %s configuration to be rejected, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestValidateRequiresHTTPSForProductionS3Endpoint(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.S3Endpoint = "http://objects.example.com:9000"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "S3_ENDPOINT must use HTTPS") {
+		t.Fatalf("expected insecure S3 endpoint to be rejected, got %v", err)
+	}
+}
+
+func TestValidateAcceptsCustomHTTPSStorageEndpoint(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.S3Endpoint = "https://objects.example.com:8443/s3"
+	cfg.S3AccessKeyID = "test-access-key"
+	cfg.S3SecretAccessKey = "test-secret-key"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected secure custom storage endpoint to be accepted, got %v", err)
+	}
+}
+
+func TestValidateRequiresExplicitCredentialsForCustomStorageEndpoint(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.S3Endpoint = "https://objects.example.com"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "S3_ACCESS_KEY_ID") {
+		t.Fatalf("expected custom S3 endpoint without static credentials to be rejected, got %v", err)
+	}
+}
+
 func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.SMSProvider = SMSProviderNikita
@@ -202,6 +271,9 @@ func validProductionConfig() Config {
 		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
 		AccessTokenTTL:     15 * time.Minute,
 		CORSAllowedOrigins: []string{"https://app.example.com"},
+		StorageDriver:      "s3",
+		S3Region:           "us-east-1",
+		S3Bucket:           "onlineprorab-test",
 		UploadDir:          "/var/lib/onlineprorab/uploads",
 		MaxUploadBytes:     10 * 1024 * 1024,
 		SMSProvider:        SMSProviderTwilio,

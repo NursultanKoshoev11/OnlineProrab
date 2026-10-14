@@ -6,6 +6,7 @@ import (
 
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/database"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 var appState = State{
@@ -19,6 +20,7 @@ type SMSSender interface {
 
 type State struct {
 	DB                      *database.DB
+	FileStore               storage.ObjectStore
 	JWTSecret               string
 	AccessTokenTTL          time.Duration
 	UploadDir               string
@@ -48,9 +50,10 @@ type State struct {
 	OpenRouterFallbackModel string
 }
 
-func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
+func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore storage.ObjectStore) {
 	appState = State{
 		DB:                      db,
+		FileStore:               fileStore,
 		JWTSecret:               cfg.JWTSecret,
 		AccessTokenTTL:          cfg.AccessTokenTTL,
 		UploadDir:               cfg.UploadDir,

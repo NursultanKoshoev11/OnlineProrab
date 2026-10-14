@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -251,7 +251,7 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
 	}
-	if strings.TrimSpace(appState.UploadDir) == "" {
+	if appState.FileStore == nil {
 		Error(w, http.StatusServiceUnavailable, "file storage is not configured")
 		return
 	}
@@ -345,7 +345,7 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, 'create', 'project', $2)
 	`, userID, item.ID)
 
-	stored, err := storeUploadedFile(source, header, item.ID, maxBytes)
+	stored, err := storeUploadedFile(ctx, appState.FileStore, source, item.ID, maxBytes)
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -353,7 +353,9 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 	cleanup := true
 	defer func() {
 		if cleanup {
-			_ = os.Remove(stored.absolutePath)
+			if err := removeStoredFile(stored.relativePath); err != nil {
+				log.Printf("request_id=%s failed_to_remove_uncommitted_project_cover=%q error=%v", requestIDFromContext(r.Context()), stored.relativePath, err)
+			}
 		}
 	}()
 	if !isAllowedProjectCoverType(stored.contentType) {

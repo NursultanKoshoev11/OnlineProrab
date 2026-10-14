@@ -13,6 +13,7 @@ import (
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/httpapi"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/sms"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 func Run() {
@@ -51,6 +52,25 @@ func Run() {
 		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
 	}
 
+	var fileStore storage.ObjectStore
+	var storageErr error
+	if cfg.StorageDriver == "s3" {
+		fileStore, storageErr = storage.NewS3(context.Background(), storage.S3Options{
+			Region:          cfg.S3Region,
+			Bucket:          cfg.S3Bucket,
+			Endpoint:        cfg.S3Endpoint,
+			AccessKeyID:     cfg.S3AccessKeyID,
+			SecretAccessKey: cfg.S3SecretAccessKey,
+			SessionToken:    cfg.S3SessionToken,
+			ForcePathStyle:  cfg.S3ForcePathStyle,
+		})
+	} else {
+		fileStore, storageErr = storage.NewLocal(cfg.UploadDir)
+	}
+	if storageErr != nil {
+		log.Fatalf("failed to initialize file storage: %v", storageErr)
+	}
+
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -64,12 +84,17 @@ func Run() {
 	}
 	migrationCancel()
 
-	httpapi.SetState(cfg, db, smsSender)
+	httpapi.SetState(cfg, db, smsSender, fileStore)
+	go storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		return db.Ping(ctx) == nil
+		if db.Ping(ctx) != nil {
+			return false
+		}
+		checker, ok := fileStore.(storage.HealthChecker)
+		return ok && checker.Check(ctx) == nil
 	})
 
 	server := &http.Server{

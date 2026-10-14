@@ -2,10 +2,13 @@ package database
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
@@ -54,6 +57,7 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 		"refresh_sessions",
 		"project_invites",
 		"auth_attempts",
+		"file_storage_deletions",
 	} {
 		var exists bool
 		if err := db.Pool.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+table).Scan(&exists); err != nil {
@@ -111,6 +115,20 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 	if budgetColumns != 2 {
 		t.Fatalf("expected project budget columns, got %d", budgetColumns)
 	}
+	var descriptionColumnExists bool
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = 'public'
+			  AND table_name = 'cost_items'
+			  AND column_name = 'description'
+		)
+	`).Scan(&descriptionColumnExists); err != nil {
+		t.Fatalf("check cost item description column: %v", err)
+	}
+	if !descriptionColumnExists {
+		t.Fatal("expected cost_items.description to exist after migrations")
+	}
 
 	var userID string
 	if err := db.Pool.QueryRow(ctx, `
@@ -138,6 +156,71 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 		VALUES ('project_cover', 'cover.jpg', 'projects/cover.jpg', 'image/jpeg', 1)
 	`); err != nil {
 		t.Fatalf("insert project cover file: %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO files (uploaded_by, kind, original_name, storage_path, content_type, size_bytes)
+		VALUES ($1, 'document', 'account-file.pdf', 'account/delete-me.pdf', 'application/pdf', 1)
+	`, userID); err != nil {
+		t.Fatalf("insert account file: %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID); err != nil {
+		t.Fatalf("delete migration test user: %v", err)
+	}
+	var queuedDeletions int
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM file_storage_deletions WHERE storage_path = 'account/delete-me.pdf'
+	`).Scan(&queuedDeletions); err != nil {
+		t.Fatalf("check account file deletion queue: %v", err)
+	}
+	if queuedDeletions != 1 {
+		t.Fatalf("expected account file removal to be queued by database trigger, got %d rows", queuedDeletions)
+	}
+	store := &migrationTestObjectStore{deleted: make(chan string, 1)}
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	go storage.RunDeletionWorker(workerCtx, db.Pool, store)
+	select {
+	case key := <-store.deleted:
+		if key != "account/delete-me.pdf" {
+			t.Fatalf("worker deleted unexpected object %q", key)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("storage deletion worker did not process the queued object")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var remainingDeletions int
+		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM file_storage_deletions`).Scan(&remainingDeletions); err != nil {
+			t.Fatalf("check remaining storage deletions: %v", err)
+		}
+		if remainingDeletions == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected successfully removed object to leave the outbox empty, got %d rows", remainingDeletions)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+type migrationTestObjectStore struct {
+	deleted chan string
+}
+
+func (s *migrationTestObjectStore) Put(context.Context, string, io.ReadSeeker, int64, string) error {
+	return nil
+}
+
+func (s *migrationTestObjectStore) Get(context.Context, string) (storage.Object, error) {
+	return storage.Object{}, nil
+}
+
+func (s *migrationTestObjectStore) Delete(ctx context.Context, key string) error {
+	select {
+	case s.deleted <- key:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
