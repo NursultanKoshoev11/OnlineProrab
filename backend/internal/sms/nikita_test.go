@@ -79,6 +79,41 @@ func TestNikitaSenderSupportsTestMode(t *testing.T) {
 	}
 }
 
+func TestNikitaSenderDoesNotForwardCredentialsAcrossRedirects(t *testing.T) {
+	var destinationRequests atomic.Int32
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		destinationRequests.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(body), "test-password") {
+			t.Error("Nikita credentials were forwarded to a redirect destination")
+		}
+		_, _ = w.Write([]byte(`<response><status>0</status></response>`))
+	}))
+	defer destination.Close()
+
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", destination.URL)
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer provider.Close()
+
+	sender, err := newNikitaSender(NikitaConfig{
+		APIURL:   provider.URL,
+		Login:    "test-login",
+		Password: "test-password",
+		Sender:   "SMSPRO.KG",
+	}, provider.Client())
+	if err != nil {
+		t.Fatalf("newNikitaSender: %v", err)
+	}
+	if err := sender.SendLoginCode(context.Background(), "+996700000001", "123456"); err == nil {
+		t.Fatal("expected redirect response to fail SMS delivery")
+	}
+	if requests := destinationRequests.Load(); requests != 0 {
+		t.Fatalf("expected redirect destination to receive no requests, got %d", requests)
+	}
+}
+
 func TestNikitaSenderRejectsProviderError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`<response><status>5</status><message>invalid sender</message></response>`))
@@ -90,35 +125,5 @@ func TestNikitaSenderRejectsProviderError(t *testing.T) {
 	}
 	if err := sender.SendLoginCode(context.Background(), "996700000001", "123456"); err == nil {
 		t.Fatal("expected provider error")
-	}
-}
-
-func TestNikitaSenderDoesNotForwardCredentialsAcrossRedirects(t *testing.T) {
-	var redirectedRequestReceived atomic.Bool
-	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		redirectedRequestReceived.Store(true)
-		_, _ = io.Copy(io.Discard, r.Body)
-	}))
-	defer redirectTarget.Close()
-
-	redirectSource := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, redirectTarget.URL, http.StatusTemporaryRedirect)
-	}))
-	defer redirectSource.Close()
-
-	sender, err := newNikitaSender(NikitaConfig{
-		APIURL:   redirectSource.URL,
-		Login:    "test-login",
-		Password: "test-password",
-		Sender:   "SMSPRO.KG",
-	}, redirectSource.Client())
-	if err != nil {
-		t.Fatalf("newNikitaSender: %v", err)
-	}
-	if err := sender.SendLoginCode(context.Background(), "+996700000001", "123456"); err == nil {
-		t.Fatal("expected redirect response to be rejected")
-	}
-	if redirectedRequestReceived.Load() {
-		t.Fatal("Nikita credentials were forwarded to the redirect target")
 	}
 }
