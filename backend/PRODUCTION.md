@@ -26,6 +26,7 @@ This checklist tracks the minimum work required before a real public release.
 - For Nikita: `NIKITA_LOGIN`, `NIKITA_PASSWORD`, and `NIKITA_SENDER`; `NIKITA_API_URL` must be `https://smspro.nikita.kg/api/message` in staging/production.
 
 The API refuses unsafe configuration in staging and production when the JWT secret is missing or still uses the default placeholder.
+Malformed boolean/integer settings and values that overflow duration or upload-size conversions stop startup with a sanitized configuration error; the process does not panic or echo the rejected value into logs.
 
 ## Staging environment
 

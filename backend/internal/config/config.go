@@ -82,10 +82,33 @@ type Config struct {
 	OpenRouterFallbackModel   string
 }
 
-func Load() Config {
+func Load() (Config, error) {
 	processEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
 	if shouldLoadDotEnv(processEnv) {
-		_ = godotenv.Load()
+		if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return Config{}, errors.New("failed to load development .env")
+		}
+	}
+
+	accessTokenTTL, err := getDurationMinutes("ACCESS_TOKEN_TTL_MINUTES", 15)
+	if err != nil {
+		return Config{}, err
+	}
+	devSMSCodeEnabled, err := getEnvBool("DEV_SMS_CODE_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	maxUploadBytes, err := getMegabytes("MAX_UPLOAD_MB", 10)
+	if err != nil {
+		return Config{}, err
+	}
+	reviewOnlyMode, err := getEnvBool("REVIEW_ONLY_MODE", false)
+	if err != nil {
+		return Config{}, err
+	}
+	nikitaTestMode, err := getEnvBool("NIKITA_TEST_MODE", false)
+	if err != nil {
+		return Config{}, err
 	}
 
 	cfg := Config{}
@@ -93,13 +116,13 @@ func Load() Config {
 	cfg.HTTPAddr = getEnv("HTTP_ADDR", ":8080")
 	cfg.DatabaseURL = os.Getenv("DATABASE_URL")
 	cfg.JWTSecret = os.Getenv("JWT_SECRET")
-	cfg.AccessTokenTTL = time.Duration(getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 15)) * time.Minute
-	cfg.DevSMSCodeEnabled = getEnvBool("DEV_SMS_CODE_ENABLED", false)
+	cfg.AccessTokenTTL = accessTokenTTL
+	cfg.DevSMSCodeEnabled = devSMSCodeEnabled
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	cfg.StorageDriver = strings.ToLower(getEnv("STORAGE_DRIVER", "local"))
 	cfg.TrustedProxyCIDRs = splitCSV(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
-	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
+	cfg.MaxUploadBytes = maxUploadBytes
 	cfg.S3Region = strings.TrimSpace(os.Getenv("S3_REGION"))
 	cfg.S3Bucket = strings.TrimSpace(os.Getenv("S3_BUCKET"))
 	cfg.S3DeletionLedgerBucket = strings.TrimSpace(os.Getenv("S3_DELETION_LEDGER_BUCKET"))
@@ -107,7 +130,7 @@ func Load() Config {
 	cfg.AWSSecretAccessKey = strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	cfg.AWSSessionToken = strings.TrimSpace(os.Getenv("AWS_SESSION_TOKEN"))
 	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
-	cfg.ReviewOnlyMode = getEnvBool("REVIEW_ONLY_MODE", false)
+	cfg.ReviewOnlyMode = reviewOnlyMode
 	cfg.ReviewSMSPhone = normalizePhone(os.Getenv("REVIEW_SMS_PHONE"))
 	cfg.ReviewSMSCode = strings.TrimSpace(os.Getenv("REVIEW_SMS_CODE"))
 	cfg.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
@@ -119,7 +142,7 @@ func Load() Config {
 	cfg.NikitaLogin = strings.TrimSpace(os.Getenv("NIKITA_LOGIN"))
 	cfg.NikitaPassword = strings.TrimSpace(os.Getenv("NIKITA_PASSWORD"))
 	cfg.NikitaSender = strings.TrimSpace(os.Getenv("NIKITA_SENDER"))
-	cfg.NikitaTestMode = getEnvBool("NIKITA_TEST_MODE", false)
+	cfg.NikitaTestMode = nikitaTestMode
 	cfg.SupportTelegramBotToken = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_BOT_TOKEN"))
 	cfg.SupportTelegramChatID = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_CHAT_ID"))
 	cfg.SupportTelegramURL = strings.TrimSpace(os.Getenv("SUPPORT_TELEGRAM_URL"))
@@ -135,7 +158,7 @@ func Load() Config {
 	cfg.OpenRouterAPIKey = strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
 	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
-	return cfg
+	return cfg, nil
 }
 
 func shouldLoadDotEnv(processEnv string) bool {
@@ -477,18 +500,18 @@ func isSixDigitCode(value string) bool {
 	return true
 }
 
-func getEnvBool(key string, fallback bool) bool {
+func getEnvBool(key string, fallback bool) (bool, error) {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
 	if value == "" {
-		return fallback
+		return fallback, nil
 	}
 	switch value {
 	case "1", "true", "yes", "on":
-		return true
+		return true, nil
 	case "0", "false", "no", "off":
-		return false
+		return false, nil
 	default:
-		panic(fmt.Sprintf("invalid boolean value for %s: %q", key, value))
+		return false, fmt.Errorf("invalid boolean value for %s", key)
 	}
 }
 
@@ -500,16 +523,45 @@ func getEnv(key, fallback string) string {
 	return value
 }
 
-func getEnvInt(key string, fallback int) int {
+func getEnvInt(key string, fallback int) (int, error) {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
-		return fallback
+		return fallback, nil
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		panic(fmt.Sprintf("invalid integer value for %s: %q", key, value))
+		return 0, fmt.Errorf("invalid integer value for %s", key)
 	}
-	return parsed
+	return parsed, nil
+}
+
+func getDurationMinutes(key string, fallback int) (time.Duration, error) {
+	minutes, err := getEnvInt(key, fallback)
+	if err != nil {
+		return 0, err
+	}
+	const maxInt64 = int64(1<<63 - 1)
+	const minInt64 = -1 << 63
+	maxMinutes := maxInt64 / int64(time.Minute)
+	minMinutes := minInt64 / int64(time.Minute)
+	if int64(minutes) < minMinutes || int64(minutes) > maxMinutes {
+		return 0, fmt.Errorf("%s is outside the supported duration range", key)
+	}
+	return time.Duration(minutes) * time.Minute, nil
+}
+
+func getMegabytes(key string, fallback int) (int64, error) {
+	megabytes, err := getEnvInt(key, fallback)
+	if err != nil {
+		return 0, err
+	}
+	const bytesPerMegabyte = int64(1024 * 1024)
+	const maxInt64 = int64(1<<63 - 1)
+	const minInt64 = -1 << 63
+	if int64(megabytes) < minInt64/bytesPerMegabyte || int64(megabytes) > maxInt64/bytesPerMegabyte {
+		return 0, fmt.Errorf("%s is outside the supported size range", key)
+	}
+	return int64(megabytes) * bytesPerMegabyte, nil
 }
 
 func splitCSV(value string) []string {
