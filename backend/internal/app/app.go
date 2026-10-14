@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -19,7 +20,12 @@ import (
 )
 
 func Run() {
-	cfg := config.Load()
+	observability.Configure(os.Getenv("APP_ENV"))
+	cfg, cfgErr := config.Load()
+	if cfgErr != nil {
+		slog.Error("configuration_load_failed", "error", cfgErr)
+		os.Exit(1)
+	}
 	observability.Configure(cfg.Env)
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
