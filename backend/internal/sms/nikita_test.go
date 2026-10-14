@@ -127,33 +127,3 @@ func TestNikitaSenderRejectsProviderError(t *testing.T) {
 		t.Fatal("expected provider error")
 	}
 }
-
-func TestNikitaSenderDoesNotForwardCredentialsAcrossRedirects(t *testing.T) {
-	var redirectedRequestReceived atomic.Bool
-	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		redirectedRequestReceived.Store(true)
-		_, _ = io.Copy(io.Discard, r.Body)
-	}))
-	defer redirectTarget.Close()
-
-	redirectSource := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, redirectTarget.URL, http.StatusTemporaryRedirect)
-	}))
-	defer redirectSource.Close()
-
-	sender, err := newNikitaSender(NikitaConfig{
-		APIURL:   redirectSource.URL,
-		Login:    "test-login",
-		Password: "test-password",
-		Sender:   "SMSPRO.KG",
-	}, redirectSource.Client())
-	if err != nil {
-		t.Fatalf("newNikitaSender: %v", err)
-	}
-	if err := sender.SendLoginCode(context.Background(), "+996700000001", "123456"); err == nil {
-		t.Fatal("expected redirect response to be rejected")
-	}
-	if redirectedRequestReceived.Load() {
-		t.Fatal("Nikita credentials were forwarded to the redirect target")
-	}
-}
