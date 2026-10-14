@@ -11,6 +11,9 @@ on:
       - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
       - 'deploy/aws/onlineprorab-storage.yaml'
+      - 'deploy/systemd/onlineprorab-backup.service'
+      - 'deploy/systemd/onlineprorab-backup.timer'
+      - 'deploy/systemd/backup.env.example'
       - '.github/workflows/backup-restore.yml'
   pull_request:
     paths:
@@ -20,6 +23,9 @@ on:
       - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
       - 'deploy/aws/onlineprorab-storage.yaml'
+      - 'deploy/systemd/onlineprorab-backup.service'
+      - 'deploy/systemd/onlineprorab-backup.timer'
+      - 'deploy/systemd/backup.env.example'
       - '.github/workflows/backup-restore.yml'
 
 permissions:
@@ -52,6 +58,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Validate systemd backup units
+        run: systemd-analyze verify ../deploy/systemd/onlineprorab-backup.service ../deploy/systemd/onlineprorab-backup.timer
+
+      - name: Check shell syntax
+        run: bash -n deploy-remote.sh scripts/backup.sh scripts/safe-path.sh
 
       - name: Install PostgreSQL client
         run: |

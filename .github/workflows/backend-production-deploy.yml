@@ -154,6 +154,12 @@ jobs:
             "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.image.tar.gz" \
             "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml" \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
+          scp "${ssh_options[@]}" \
+            backend/scripts/backup.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/stroy-api-$DEPLOY_SHA.backup.sh"
+          scp "${ssh_options[@]}" \
+            backend/scripts/safe-path.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/stroy-api-$DEPLOY_SHA.safe-path.sh"
 
       - name: Recheck main immediately before deployment
         env:

@@ -60,8 +60,13 @@ attach permissions to an existing principal automatically.
 
 Configure `S3_BUCKET`, `S3_DELETION_LEDGER_BUCKET`, `S3_BACKUP_BUCKET`, and
 `S3_REGION` from the stack and verify the API's `/ready` endpoint before
-migration. Run `backend/scripts/backup.sh` on a schedule with the backup writer
-identity and alert on nonzero exit status. Back up PostgreSQL and the existing upload
-volume, stop API writes, run the checksum-verified migration described in
+migration. The repository's [`../systemd`](../systemd) units schedule encrypted
+database and S3 object backups daily at 02:00 UTC. Install the runner with an
+identity limited to `BackupWriterPolicyArn`, follow the host setup in
+[`../../backend/PRODUCTION.md`](../../backend/PRODUCTION.md), run the service
+once, and verify the encrypted archive in S3 before enabling the timer. Forward
+failed-unit events to external monitoring and alert on missed daily backups.
+Back up PostgreSQL and the existing upload volume, stop API writes, run the
+checksum-verified migration described in
 [`../../backend/PRODUCTION.md`](../../backend/PRODUCTION.md), and keep the
 source volume until upload, download, deletion, backup, and rollback checks pass.

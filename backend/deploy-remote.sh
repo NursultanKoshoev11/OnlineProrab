@@ -220,12 +220,17 @@ if [[ "$mode" == "rollback" ]]; then
   exit 0
 fi
 
-if [[ ! -f /tmp/stroy-api-$deploy_sha.image.tar.gz || -L /tmp/stroy-api-$deploy_sha.image.tar.gz || ! -f /tmp/stroy-api-$deploy_sha.compose.yml || -L /tmp/stroy-api-$deploy_sha.compose.yml ]]; then
-  echo "transferred image or Compose file is missing" >&2
+backup_script="/tmp/stroy-api-$deploy_sha.backup.sh"
+safe_path_script="/tmp/stroy-api-$deploy_sha.safe-path.sh"
+if [[ ! -f "/tmp/stroy-api-$deploy_sha.image.tar.gz" || -L "/tmp/stroy-api-$deploy_sha.image.tar.gz" || \
+  ! -f "/tmp/stroy-api-$deploy_sha.compose.yml" || -L "/tmp/stroy-api-$deploy_sha.compose.yml" || \
+  ! -f "$backup_script" || -L "$backup_script" || \
+  ! -f "$safe_path_script" || -L "$safe_path_script" ]]; then
+  echo "transferred image, Compose file, or backup scripts are missing" >&2
   exit 1
 fi
 cleanup_transferred_files() {
-  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml"
+  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml" "$backup_script" "$safe_path_script"
 }
 trap cleanup_transferred_files EXIT
 
@@ -308,6 +313,24 @@ for metadata in "$release_dir/previous-release" "$release_dir/image-tag"; do
   fi
 done
 install -m 0644 -- "/tmp/stroy-api-$deploy_sha.compose.yml" "$release_dir/backend/docker-compose.prod.yml"
+scripts_dir="$release_dir/backend/scripts"
+if [[ -e "$scripts_dir" && ( ! -d "$scripts_dir" || -L "$scripts_dir" ) ]]; then
+  echo "release scripts path must be a real directory" >&2
+  exit 1
+fi
+mkdir -p -- "$scripts_dir"
+if [[ "$(realpath -e -- "$scripts_dir")" != "$scripts_dir" ]]; then
+  echo "release scripts path resolves outside its release" >&2
+  exit 1
+fi
+for release_script in "$scripts_dir/backup.sh" "$scripts_dir/safe-path.sh"; do
+  if [[ -e "$release_script" && ( ! -f "$release_script" || -L "$release_script" ) ]]; then
+    echo "release backup script must be a regular file" >&2
+    exit 1
+  fi
+done
+install -m 0644 -- "$backup_script" "$scripts_dir/backup.sh"
+install -m 0644 -- "$safe_path_script" "$scripts_dir/safe-path.sh"
 printf '%s\n' "$release_ref" > "$release_dir/previous-release"
 printf 'stroy-api:%s\n' "$deploy_sha" > "$release_dir/image-tag"
 gzip -t -- "/tmp/stroy-api-$deploy_sha.image.tar.gz"
@@ -332,7 +355,7 @@ on_exit() {
       echo "automatic API rollback failed; inspect Docker and the production database immediately" >&2
     fi
   fi
-  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml"
+  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml" "$backup_script" "$safe_path_script"
   exit "$exit_code"
 }
 trap on_exit EXIT
