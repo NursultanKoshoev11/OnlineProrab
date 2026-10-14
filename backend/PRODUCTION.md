@@ -113,8 +113,8 @@ uploads cannot race the copy. Build the new image without starting the API, then
 copy and SHA-256-verify every active file row against the private bucket:
 
 ```bash
-docker compose -f backend/docker-compose.prod.yml build api
-docker compose -f backend/docker-compose.prod.yml run --rm --no-deps \
+docker build --pull --file backend/Dockerfile --tag stroy-api:storage-migration backend
+API_IMAGE=stroy-api:storage-migration docker compose --env-file /opt/stroy-api/.env -f backend/docker-compose.prod.yml run --rm --no-deps \
   --entrypoint /app/storage-migrate api -direction=local-to-s3
 ```
 
@@ -188,3 +188,23 @@ Until the SMS provider is connected, closed testing can use a single dedicated r
 - leave `SMS_PROVIDER` empty only for this temporary mode
 
 The placeholder above is not a usable code. Keep the actual review phone and code in the deployment secret store; never commit either value. The fixed code is accepted only for the exact configured phone. Other phone numbers receive an SMS-unavailable response and cannot sign in. Do not use a universal code for all numbers. Disable `REVIEW_ONLY_MODE` and configure the real SMS provider before a public release.
+
+## GitHub Actions API deployment
+
+Backend Production Deploy is a manual workflow. It only runs from the current main revision after an explicit confirmation, backend vet/race checks, production Compose validation, and a revision-tagged image build. SSH uses a pinned known_hosts file. The deployment waits for the API container readiness check, probes the public account-deletion endpoint, and restores the prior managed release if either check fails.
+
+Create the production-api GitHub Environment, restrict it to main, and add these variables:
+
+- API_DEPLOY_HOST
+- API_DEPLOY_USER
+- API_DEPLOY_PATH
+- API_DEPLOY_COMPOSE_PROJECT
+- API_STORAGE_CUTOVER_COMPLETE=true, only after provisioning S3, migrating uploads, and verifying object checksums
+
+Add Environment secrets API_DEPLOY_SSH_KEY and API_DEPLOY_KNOWN_HOSTS. Never add application runtime secrets to GitHub; the workflow reads the API .env file already on the host. The .env file must be a regular file owned by the deployment account with mode 0600 or stricter. The deploy root must already exist as a canonical directory.
+
+The deployment account needs Docker Engine, Docker Compose v2 with support for --wait and --pull never, and Python 3 for private configuration comparison. Set API_DEPLOY_COMPOSE_PROJECT to the current API service project so Compose replaces only that service. Keep the API port bound to 127.0.0.1 behind the HTTPS reverse proxy.
+
+Set API_STORAGE_CUTOVER_COMPLETE only after the storage deployment instructions above are complete, including database/upload backups, S3 migration, checksum verification, and a rollback procedure rehearsed in staging. The workflow does not deploy automatically on merge. In GitHub Actions, select Backend Production Deploy on main and check confirm_production_deploy.
+
+For an existing S3-ready API container that predates the workflow, the first deployment adopts its running image as the rollback baseline. The running container must be the sole api service in the configured Compose project, and its STORAGE_DRIVER, S3_REGION, S3_BUCKET, and S3_DELETION_LEDGER_BUCKET must match the host .env settings. The deploy directory is managed by the workflow under releases/<revision> with a current symlink. Do not set the cutover variable while the active API still uses local storage.
