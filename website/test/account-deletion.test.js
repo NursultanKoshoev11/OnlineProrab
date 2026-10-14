@@ -167,7 +167,10 @@ test("account deletion requests SMS, verifies the code, then deletes with the be
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     phone: "+996700000000",
   });
-  assert.equal(calls[1].url, "https://api.stroy.com.kg/api/v1/auth/sms/verify");
+  assert.equal(
+    calls[1].url,
+    "https://api.stroy.com.kg/api/v1/account/deletion/verify",
+  );
   assert.deepEqual(JSON.parse(calls[1].options.body), {
     phone: "+996700000000",
     code: "001234",

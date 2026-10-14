@@ -44,6 +44,9 @@ async function postJSON(path, body) {
 }
 
 function requestErrorMessage(error) {
+  if (error.status === 404) {
+    return "Аккаунт с этим номером не найден.";
+  }
   if (error.status === 429) {
     return "Слишком много запросов. Подождите и попробуйте снова.";
   }
@@ -101,7 +104,7 @@ codeForm.addEventListener("submit", async (event) => {
   verifyButton.disabled = true;
   setStatus("Проверяем код…");
   try {
-    const payload = await postJSON("/api/v1/auth/sms/verify", {
+    const payload = await postJSON("/api/v1/account/deletion/verify", {
       phone: normalizedPhone(),
       code: codeInput.value,
     });
