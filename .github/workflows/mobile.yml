@@ -162,6 +162,12 @@ jobs:
           curl --fail --silent --show-error --location --max-time 30 \
             https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
           grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
+          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
+            https://api.stroy.com.kg/api/v1/account/deletion/verify)"
+          if [[ "$api_status" != '405' ]]; then
+            echo "Account-deletion API route returned HTTP $api_status; expected 405 for GET." >&2
+            exit 1
+          fi
 
       - name: Prepare Android platform
         run: python3 tool/prepare_android.py
@@ -297,6 +303,12 @@ jobs:
           curl --fail --silent --show-error --location --max-time 30 \
             https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
           grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
+          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
+            https://api.stroy.com.kg/api/v1/account/deletion/verify)"
+          if [[ "$api_status" != '405' ]]; then
+            echo "Account-deletion API route returned HTTP $api_status; expected 405 for GET." >&2
+            exit 1
+          fi
 
       - name: Create temporary signing keychain
         env:
