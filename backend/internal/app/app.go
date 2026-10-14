@@ -65,6 +65,11 @@ func Run() {
 	migrationCancel()
 
 	httpapi.SetState(cfg, db, smsSender)
+	authPrunerDone := make(chan struct{})
+	go func() {
+		defer close(authPrunerDone)
+		httpapi.RunAuthHistoryPruner(rootCtx)
+	}()
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -103,5 +108,6 @@ func Run() {
 		log.Printf("graceful shutdown failed: %v", err)
 		_ = server.Close()
 	}
+	<-authPrunerDone
 	log.Printf("onlineprorab api stopped")
 }
