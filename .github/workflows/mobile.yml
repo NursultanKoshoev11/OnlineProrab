@@ -107,6 +107,7 @@ jobs:
   production-bundle:
     if: github.event_name == 'workflow_dispatch' && inputs.production_release == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production-mobile
     permissions:
       contents: read
     defaults:
@@ -229,6 +230,7 @@ jobs:
     name: Signed iOS IPA
     if: github.event_name == 'workflow_dispatch' && inputs.production_ios_release == 'true' && github.ref == 'refs/heads/main'
     runs-on: macos-15
+    environment: production-mobile
     permissions:
       contents: read
     defaults:
