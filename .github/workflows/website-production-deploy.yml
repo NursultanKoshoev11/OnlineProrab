@@ -142,6 +142,13 @@ jobs:
             --output "$deletion_page" https://stroy.com.kg/account-deletion/
           grep -Fq '<title>Удаление аккаунта — STROY</title>' "$deletion_page"
 
+          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
+            https://api.stroy.com.kg/api/v1/account/deletion/verify)"
+          if [[ "$api_status" != '405' ]]; then
+            echo "Account-deletion API route returned HTTP $api_status; expected 405 for GET." >&2
+            exit 1
+          fi
+
           curl --fail --silent --show-error --head --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
             https://stroy.com.kg/ --dump-header "$headers" --output /dev/null
           grep -Eiq '^Content-Security-Policy:' "$headers"
