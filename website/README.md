@@ -77,9 +77,12 @@ Tailwind. Финальный nginx-образ содержит только ст
 ## Production deploy через GitHub Actions и SSH
 
 `Website Production Deploy` запускается после успешного `CI`, запущенного
-push в `main` или вручную из `main`. Workflow собирает проверенный revision
-в образ, передаёт его и Compose-конфигурацию на Caddy-хост по SSH, ждёт
+push в `main` или вручную из `main`. CI собирает, проверяет и сохраняет образ
+с точным SHA исходного revision; deploy загружает именно этот артефакт,
+передаёт его и matching Compose-конфигурацию на Caddy-хост по SSH, ждёт
 healthcheck контейнера и проверяет публичные страницы и заголовки по HTTPS.
+Образ хранится как GitHub Actions artifact 30 дней; если approval не завершён
+за это время, повторно запустите CI на том же revision.
 Перед SSH-подключением workflow сверяет SHA с текущим `main` и пропускает
 запоздавший запуск CI. Workflow не меняет Caddy. Публичная проверка
 подтверждает, что proxy отдаёт страницы и security headers. Порт `8090`

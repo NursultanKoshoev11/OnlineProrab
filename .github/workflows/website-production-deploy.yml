@@ -7,6 +7,7 @@ on:
     branches: [main]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -25,6 +26,7 @@ jobs:
     environment: production-website
     env:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
       DEPLOY_HOST: ${{ vars.WEBSITE_DEPLOY_HOST }}
       DEPLOY_USER: ${{ vars.WEBSITE_DEPLOY_USER }}
       DEPLOY_PATH: ${{ vars.WEBSITE_DEPLOY_PATH }}
@@ -47,21 +49,6 @@ jobs:
           [[ "$DEPLOY_PATH" != *'//'* && "$DEPLOY_PATH" != *'/./'* && "$DEPLOY_PATH" != */. ]]
           [[ "$DEPLOY_PATH" != *'/../'* && "$DEPLOY_PATH" != */.. ]]
 
-      - name: Build the tested website image
-        working-directory: website
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker build --pull \
-            --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
-            --tag stroy-website:production .
-          test "$(docker image inspect --format '{{.Config.User}}' stroy-website:production)" = '101:101'
-          docker save stroy-website:production | gzip -1 > "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.image.tar.gz"
-
-      - name: Package the matching Compose configuration
-        shell: bash
-        run: tar -czf "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.source.tar.gz" website/docker-compose.yml
-
       - name: Confirm this is still the current main revision
         id: revision
         shell: bash
@@ -76,6 +63,30 @@ jobs:
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             echo "Skipped stale website revision $DEPLOY_SHA; current main is $current_main_sha." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Download and load the CI-tested website image
+        if: steps.revision.outputs.deploy == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/website-ci-artifact"
+          image_archive="$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.image.tar.gz"
+          mkdir -p "$artifact_dir"
+          gh run download "$CI_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "stroy-website-image-$DEPLOY_SHA" \
+            --dir "$artifact_dir"
+          mv "$artifact_dir/stroy-website-$DEPLOY_SHA.image.tar.gz" "$image_archive"
+          docker load --input "$image_archive"
+          test "$(docker image inspect --format '{{.Config.User}}' stroy-website:production)" = '101:101'
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' stroy-website:production)" = "$DEPLOY_SHA"
+
+      - name: Package the matching Compose configuration
+        if: steps.revision.outputs.deploy == 'true'
+        shell: bash
+        run: tar -czf "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.source.tar.gz" website/docker-compose.yml
 
       - name: Install SSH credentials
         if: steps.revision.outputs.deploy == 'true'

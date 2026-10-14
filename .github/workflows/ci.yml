@@ -199,8 +199,11 @@ jobs:
 
       - name: Build website container
         run: |
-          docker build -t stroy-website:ci .
-          test "$(docker image inspect --format '{{.Config.User}}' stroy-website:ci)" = '101:101'
+          docker build --pull \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag stroy-website:production .
+          test "$(docker image inspect --format '{{.Config.User}}' stroy-website:production)" = '101:101'
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' stroy-website:production)" = "$GITHUB_SHA"
 
       - name: Smoke-test website container
         shell: bash
@@ -223,7 +226,7 @@ jobs:
             --tmpfs /tmp:size=64m,mode=1777 \
             --cap-drop ALL \
             --security-opt no-new-privileges:true \
-            --publish "127.0.0.1:${host_port}:8080" stroy-website:ci >/dev/null
+            --publish "127.0.0.1:${host_port}:8080" stroy-website:production >/dev/null
 
           ready=0
           for attempt in {1..20}; do
@@ -236,6 +239,7 @@ jobs:
             fi
             sleep 0.25
           done
+
           if [[ "$ready" != 1 ]]; then
             echo "website container did not serve the account deletion page" >&2
             exit 1
@@ -276,3 +280,18 @@ jobs:
               missing = required - present
               assert not missing, f"{path} is missing headers: {sorted(missing)}"
           PY
+
+      - name: Save the CI-tested website image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: bash
+        run: docker save stroy-website:production | gzip -1 > "$RUNNER_TEMP/stroy-website-${GITHUB_SHA}.image.tar.gz"
+
+      - name: Upload the CI-tested website image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-website-image-${{ github.sha }}
+          path: ${{ runner.temp }}/stroy-website-${{ github.sha }}.image.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
