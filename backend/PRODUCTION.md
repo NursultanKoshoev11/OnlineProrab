@@ -21,6 +21,7 @@ The API refuses unsafe production configuration when `APP_ENV=production` and th
 - Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
 - Use a `DATABASE_URL` with `sslmode=verify-full` in staging and production; the API rejects connections that do not verify every database host's certificate and hostname.
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
+- In staging and production, `NIKITA_API_URL` is restricted to `https://smspro.nikita.kg/api/message`; the SMS client does not follow redirects, so provider credentials cannot be replayed to a redirect target.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
 - Set `TRUSTED_PROXY_CIDRS` to the exact IP addresses or narrow CIDRs of proxies that connect to the API container. The API trusts `X-Forwarded-For` only when `RemoteAddr` belongs to one of these networks; direct requests cannot spoof the limiter's client IP.
