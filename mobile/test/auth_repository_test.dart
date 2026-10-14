@@ -289,10 +289,7 @@ void main() {
     await repository.loadSession();
     final expired = repository.sessionExpired.first;
 
-    await expectLater(
-      apiClient.listProjects(),
-      throwsA(isA<ApiException>()),
-    );
+    await expectLater(apiClient.listProjects(), throwsA(isA<ApiException>()));
     await expired;
     expect(await store.load(), isNull);
     expect(apiClient.accessToken, isNull);
