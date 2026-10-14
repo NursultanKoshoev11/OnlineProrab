@@ -250,10 +250,8 @@ func (cfg Config) Validate() error {
 		if cfg.IsProduction() && !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
 			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in production unless REVIEW_ONLY_MODE is enabled")
 		}
-		if cfg.IsStaging() {
-			if err := validateVerifiedDatabaseTLS(cfg.DatabaseURL); err != nil {
-				problems = append(problems, err.Error())
-			}
+		if err := validateVerifiedDatabaseTLS(cfg.DatabaseURL); err != nil {
+			problems = append(problems, err.Error())
 		}
 	}
 
@@ -279,14 +277,14 @@ func parseTrustedProxyCIDR(value string) (netip.Prefix, error) {
 func validateVerifiedDatabaseTLS(databaseURL string) error {
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
-		return errors.New("DATABASE_URL must be a valid PostgreSQL URL with verified TLS in staging")
+		return errors.New("DATABASE_URL must be a valid PostgreSQL URL with verified TLS in staging and production")
 	}
 	if !usesVerifiedPostgresTLS(poolConfig.ConnConfig.TLSConfig) {
-		return errors.New("DATABASE_URL must use sslmode=verify-full in staging")
+		return errors.New("DATABASE_URL must use sslmode=verify-full in staging and production")
 	}
 	for _, fallback := range poolConfig.ConnConfig.Fallbacks {
 		if !usesVerifiedPostgresTLS(fallback.TLSConfig) {
-			return errors.New("DATABASE_URL must use sslmode=verify-full for every staging database host")
+			return errors.New("DATABASE_URL must use sslmode=verify-full for every staging and production database host")
 		}
 	}
 	return nil

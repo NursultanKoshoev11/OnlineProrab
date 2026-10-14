@@ -6,7 +6,7 @@ This checklist tracks the minimum work required before a real public release.
 
 - `APP_ENV=production`
 - `HTTP_ADDR=:8080`
-- `DATABASE_URL=postgres://...`
+- `DATABASE_URL=postgres://...?sslmode=verify-full`
 - `JWT_SECRET=<strong random secret>`
 - `ACCESS_TOKEN_TTL_MINUTES=60`
 - `CORS_ALLOWED_ORIGINS=https://stroy.com.kg`
@@ -19,7 +19,7 @@ The API refuses unsafe production configuration when `APP_ENV=production` and th
 ## Staging environment
 
 - Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
-- Use a `DATABASE_URL` with `sslmode=verify-full`; staging rejects PostgreSQL URLs that do not verify the server certificate and hostname.
+- Use a `DATABASE_URL` with `sslmode=verify-full` in staging and production; the API rejects connections that do not verify every database host's certificate and hostname.
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.

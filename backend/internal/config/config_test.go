@@ -201,7 +201,7 @@ func validProductionConfig() Config {
 	return Config{
 		Env:                ProductionEnv,
 		HTTPAddr:           ":8080",
-		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app",
+		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
 		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
 		AccessTokenTTL:     15 * time.Minute,
 		CORSAllowedOrigins: []string{"https://app.example.com"},
@@ -316,6 +316,27 @@ func TestValidateRequiresVerifiedDatabaseTLSInStaging(t *testing.T) {
 				t.Fatalf("expected staging sslmode=%s to be rejected, got %v", sslmode, err)
 			}
 		})
+	}
+}
+
+func TestValidateRequiresVerifiedDatabaseTLSInProduction(t *testing.T) {
+	for _, sslmode := range []string{"disable", "allow", "prefer", "require", "verify-ca"} {
+		t.Run(sslmode, func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=" + sslmode
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+				t.Fatalf("expected production sslmode=%s to be rejected, got %v", sslmode, err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsProductionDatabaseWithVerifiedTLS(t *testing.T) {
+	cfg := validProductionConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected production sslmode=verify-full to pass, got %v", err)
 	}
 }
 
