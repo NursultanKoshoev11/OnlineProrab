@@ -241,6 +241,21 @@ case "$STORAGE_DRIVER" in
     ;;
   s3)
     aws --region "$S3_REGION" s3 sync "$staging_dir" "s3://$S3_BUCKET" --delete --only-show-errors
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$DATABASE_URL" --file="$tombstone_stage/apply.sql"
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --tuples-only --no-align --dbname="$DATABASE_URL" \
+      --command="SELECT encode(convert_to(storage_path, 'UTF8'), 'hex') FROM file_storage_deletions ORDER BY storage_path" \
+      > "$tombstone_stage/pending-storage-deletions.hex"
+    python3 "$script_dir/apply-deletion-tombstones.py" --apply-outbox \
+      "$tombstone_stage/pending-storage-deletions.hex" \
+      "$tombstone_stage/recovery-tombstones" \
+      "$tombstone_stage/delete-objects" \
+      "$tombstone_stage/complete-outbox.sql"
+    if find "$tombstone_stage/recovery-tombstones/objects" -type f -print -quit | grep -q .; then
+      aws --region "$S3_REGION" s3 sync \
+        "$tombstone_stage/recovery-tombstones/objects" \
+        "s3://$S3_DELETION_LEDGER_BUCKET/tombstones/objects/" \
+        --only-show-errors
+    fi
     for delete_batch in "$tombstone_stage"/delete-objects/*.json; do
       if [ ! -f "$delete_batch" ]; then
         continue
@@ -260,7 +275,7 @@ if response.get("Errors"):
     raise SystemExit(f"S3 reported failed tombstone object deletions: {response['Errors']}")
 PY
     done
-    psql --set=ON_ERROR_STOP=1 --dbname="$DATABASE_URL" --file="$tombstone_stage/apply.sql"
+    psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$DATABASE_URL" --file="$tombstone_stage/complete-outbox.sql"
     ;;
 esac
 

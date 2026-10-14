@@ -19,7 +19,9 @@ object storage path and its deletion timestamp; it does not retain names, phone
 numbers, or other profile fields. Treat the UUID and storage path as retained
 personal data: the bucket is private and SSE-S3 encrypted, the API can write
 tombstones but cannot read them, and only recovery operators should have read
-access. The uploads bucket aborts incomplete multipart uploads after seven
+access. The recovery policy can write only object tombstones under
+`tombstones/objects/`; restore records queued file deletions there before it
+removes those S3 objects. The uploads bucket aborts incomplete multipart uploads after seven
 days. All three
 buckets are retained if the CloudFormation stack is deleted or a bucket is
 replaced.
@@ -48,7 +50,9 @@ AWS region and replace `us-east-1` if needed.
 Retrieve the stack outputs and attach `ApplicationStoragePolicyArn` to the API
 workload's IAM role. Attach `BackupWriterPolicyArn` to a scheduled backup
 runner and `BackupArchiveReadPolicyArn`, `StorageRecoveryPolicyArn`, and
-`DeletionJournalReadPolicyArn` to a separate recovery identity. If the API or
+`DeletionJournalReadPolicyArn` to a separate recovery identity. The recovery
+identity can read the journal, restore uploads, and append object tombstones;
+it cannot write account tombstones. If the API or
 backup runner uses a host without AWS workload identity, attach only the
 corresponding scoped policy to a dedicated IAM user and store its access key in
 the host's secret configuration. The template does not create credentials or
