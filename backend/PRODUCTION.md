@@ -15,6 +15,8 @@ This checklist tracks the minimum work required before a real public release.
 - `S3_REGION=<bucket-region>`
 - `S3_BUCKET=<private-bucket>`
 - `S3_DELETION_LEDGER_BUCKET=<separate-private-bucket>`
+- `BACKUP_AGE_RECIPIENTS_FILE=<public-age-recipient-list>` for encrypted S3 backups
+- `BACKUP_AGE_IDENTITY_FILE=<restore-only-private-age-identity>` for encrypted restore
 - AWS credentials from an IAM workload role, or `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (plus `AWS_SESSION_TOKEN` for temporary credentials)
 - `UPLOAD_DIR=/data/uploads` (legacy volume used by the migration tool)
 - `MAX_UPLOAD_MB=10`
@@ -54,28 +56,43 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## PostgreSQL and uploaded-file backups
 
-`scripts/backup.sh` backs up PostgreSQL and the upload files. Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET` to include S3 objects; the host must have the AWS CLI and AWS credentials from its standard credential chain. S3 backup needs `s3:ListBucket` and `s3:GetObject` on the uploads bucket. Local-storage backup continues to archive `UPLOAD_DIR`.
+`scripts/backup.sh` backs up PostgreSQL and the upload files. Set `APP_ENV=production`, `STORAGE_DRIVER=s3`, `S3_REGION`, `S3_BUCKET`, and `BACKUP_AGE_RECIPIENTS_FILE` to include S3 objects and encrypt the snapshot; the script rejects local-storage backups for staging/production. The host must have the AWS CLI, age, and AWS credentials from its standard credential chain. S3 backup needs `s3:ListBucket` and `s3:GetObject` on the uploads bucket. It writes `snapshot.tar.age`, which encrypts the database dump, file archive, and checksums to the public age recipients. Keep the matching private identity only in a separate restore secret store. The plaintext staging files exist temporarily while the snapshot is assembled, so put `BACKUP_DIR` on encrypted storage with operator-only access. Local-storage backup remains an unencrypted development path.
 
-Quiesce API writes and the storage-deletion worker for the duration of a backup so the database dump and object archive describe one point in time. Put `BACKUP_DIR` on encrypted storage with access restricted to operators, and copy completed archives to an independent protected location. Archives contain user files and database data; the script protects local file permissions and verifies SHA-256 checksums, but does not encrypt the archive itself.
+Quiesce API writes and the storage-deletion worker for the duration of a backup so the database dump and object archive describe one point in time. Copy completed encrypted snapshots to an independent protected location. The restore identity should not be available to the backup host; keep a recovery copy outside the deployment account and test it periodically.
+
+Generate the private identity on the recovery system, protect it as a secret, and copy only the public recipient file to the backup host:
+
+```bash
+age-keygen -o /secure/recovery/onlineprorab-backup.agekey
+age-keygen -y /secure/recovery/onlineprorab-backup.agekey \
+  > /etc/onlineprorab/backup-age-recipients.txt
+chmod 600 /secure/recovery/onlineprorab-backup.agekey
+```
+
+Keep old private identities until every backup encrypted to their recipients has expired. A recipient file can contain several public keys during key rotation so new snapshots remain decryptable by both recovery identities.
 
 ```bash
 STORAGE_DRIVER=s3 \
+APP_ENV=production \
 S3_REGION=us-east-1 \
 S3_BUCKET=onlineprorab-staging-uploads \
 S3_DELETION_LEDGER_BUCKET=onlineprorab-staging-deletions \
+BACKUP_AGE_RECIPIENTS_FILE=/etc/onlineprorab/backup-age-recipients.txt \
 BACKUP_DIR=/var/backups/onlineprorab \
 UPLOAD_DIR=/tmp/onlineprorab-unused-uploads \
 sh backend/scripts/backup.sh
 ```
 
-Replace both example bucket names with the CloudFormation stack outputs. Set deletion-ledger retention longer than the retention of every backup copy that may be restored. Restore with `CONFIRM_RESTORE=YES`, both bucket settings, and the snapshot directory. The restore host needs AWS CLI, Python 3, `psql`, and PostgreSQL client tools. It downloads and validates every tombstone from the separate ledger, restores the database and objects, deletes tombstoned S3 keys in batches, then replays account and file deletions before the API can serve traffic. Stop every API instance and storage worker first, and use a dedicated recovery uploads bucket/database when validating a restore. Attach `StorageRecoveryPolicyArn` to the restore identity for the target uploads bucket and `DeletionJournalReadPolicyArn` for reading the ledger. Keep the API stopped while validating, then point its `S3_BUCKET` setting at the restored bucket before starting it.
+Replace both example bucket names with the CloudFormation stack outputs. Set deletion-ledger retention longer than the retention of every backup copy that may be restored. Restore with `CONFIRM_RESTORE=YES`, both bucket settings, `BACKUP_AGE_IDENTITY_FILE`, and the snapshot directory. The restore host needs AWS CLI, age, Python 3, `psql`, and PostgreSQL client tools. It authenticates and decrypts the snapshot into a private staging directory, downloads and validates every tombstone from the separate ledger, restores the database and objects, deletes tombstoned S3 keys in batches, then replays account and file deletions before the API can serve traffic. Use encrypted scratch storage for temporary decrypted files. Stop every API instance and storage worker first, and use a dedicated recovery uploads bucket/database when validating a restore. Attach `StorageRecoveryPolicyArn` to the restore identity for the target uploads bucket and `DeletionJournalReadPolicyArn` for reading the ledger. Keep the API stopped while validating, then point its `S3_BUCKET` setting at the restored bucket before starting it. Existing unencrypted S3 backups require an explicit `ALLOW_UNENCRYPTED_RESTORE=YES` override and should be used only for an approved legacy recovery.
 
 ```bash
 CONFIRM_RESTORE=YES \
+APP_ENV=production \
 STORAGE_DRIVER=s3 \
 S3_REGION=us-east-1 \
 S3_BUCKET=onlineprorab-staging-recovery \
 S3_DELETION_LEDGER_BUCKET=onlineprorab-staging-deletions \
+BACKUP_AGE_IDENTITY_FILE=/run/secrets/onlineprorab-backup-age-identity \
 UPLOAD_DIR=/tmp/onlineprorab-restore-target \
 sh backend/scripts/restore.sh /var/backups/onlineprorab/20261014T120000Z
 ```

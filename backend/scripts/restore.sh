@@ -10,6 +10,15 @@ if [ "$CONFIRM_RESTORE" != "YES" ]; then
 fi
 
 STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
+APP_ENV="${APP_ENV:-development}"
+case "$APP_ENV" in
+  staging|production)
+    if [ "$STORAGE_DRIVER" != "s3" ]; then
+      echo "STORAGE_DRIVER=s3 is required for staging and production restores" >&2
+      exit 2
+    fi
+    ;;
+esac
 case "$STORAGE_DRIVER" in
   local) ;;
   s3)
@@ -42,33 +51,21 @@ command -v pg_restore >/dev/null 2>&1 || { echo "pg_restore is required" >&2; ex
 command -v tar >/dev/null 2>&1 || { echo "tar is required" >&2; exit 127; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 127; }
 
-for file in database.dump uploads.tar.gz SHA256SUMS MANIFEST; do
-  if [ ! -f "$backup_dir/$file" ]; then
-    echo "backup is incomplete: missing $file" >&2
-    exit 3
-  fi
-done
-
-(
-  cd "$backup_dir"
-  sha256sum -c SHA256SUMS
-)
-
-if tar -tzf "$backup_dir/uploads.tar.gz" | grep -E '(^/|(^|/)\.\.(/|$))' >/dev/null 2>&1; then
-  echo "uploads archive contains unsafe paths" >&2
-  exit 4
-fi
-if tar -tvzf "$backup_dir/uploads.tar.gz" | awk 'substr($0, 1, 1) != "-" && substr($0, 1, 1) != "d" { found = 1 } END { exit !found }'; then
-  echo "uploads archive may contain only regular files and directories" >&2
-  exit 4
+if [ ! -f "$backup_dir/MANIFEST" ]; then
+  echo "backup is incomplete: missing MANIFEST" >&2
+  exit 3
 fi
 
 staging_parent="$(dirname "$UPLOAD_DIR")"
 staging_dir="$staging_parent/.onlineprorab-restore.$$"
+restore_data_dir="$staging_parent/.onlineprorab-restore-data.$$"
 tombstone_stage="$staging_parent/.onlineprorab-tombstones.$$"
 cleanup() {
   if [ "${staging_created:-0}" -eq 1 ]; then
     rm -rf "$staging_dir"
+  fi
+  if [ "${restore_data_created:-0}" -eq 1 ]; then
+    rm -rf "$restore_data_dir"
   fi
   if [ "${tombstone_stage_created:-0}" -eq 1 ]; then
     rm -rf "$tombstone_stage"
@@ -77,9 +74,88 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 umask 077
+
+manifest_format="$(awk -F= '$1 == "format_version" { print $2 }' "$backup_dir/MANIFEST")"
+case "$manifest_format" in
+  1)
+    if [ "$STORAGE_DRIVER" = "s3" ] && [ "${ALLOW_UNENCRYPTED_RESTORE:-NO}" != "YES" ]; then
+      echo "unencrypted S3 backup rejected; set ALLOW_UNENCRYPTED_RESTORE=YES only for an approved legacy restore" >&2
+      exit 3
+    fi
+    for file in database.dump uploads.tar.gz SHA256SUMS; do
+      if [ ! -f "$backup_dir/$file" ]; then
+        echo "backup is incomplete: missing $file" >&2
+        exit 3
+      fi
+    done
+    restore_database_dump="$backup_dir/database.dump"
+    restore_uploads_archive="$backup_dir/uploads.tar.gz"
+    (
+      cd "$backup_dir"
+      sha256sum -c SHA256SUMS
+    )
+    ;;
+  2)
+    if ! grep -qx 'encryption=age' "$backup_dir/MANIFEST"; then
+      echo "unsupported encrypted backup format" >&2
+      exit 3
+    fi
+    if [ ! -f "$backup_dir/snapshot.tar.age" ] || [ -L "$backup_dir/snapshot.tar.age" ]; then
+      echo "backup is incomplete or unsafe: snapshot.tar.age is missing" >&2
+      exit 3
+    fi
+    : "${BACKUP_AGE_IDENTITY_FILE:?BACKUP_AGE_IDENTITY_FILE is required for encrypted backups}"
+    if [ ! -f "$BACKUP_AGE_IDENTITY_FILE" ] || [ -L "$BACKUP_AGE_IDENTITY_FILE" ]; then
+      echo "BACKUP_AGE_IDENTITY_FILE must be a regular, non-symlink file" >&2
+      exit 2
+    fi
+    command -v age >/dev/null 2>&1 || { echo "age is required to restore encrypted backups" >&2; exit 127; }
+    mkdir -m 700 "$restore_data_dir"
+    restore_data_created=1
+    age --decrypt --identity "$BACKUP_AGE_IDENTITY_FILE" \
+      --output "$restore_data_dir/snapshot.tar" "$backup_dir/snapshot.tar.age"
+    payload_files="$(tar -tf "$restore_data_dir/snapshot.tar" | LC_ALL=C sort)"
+    expected_payload_files="$(printf 'SHA256SUMS\ndatabase.dump\nuploads.tar.gz')"
+    if [ "$payload_files" != "$expected_payload_files" ]; then
+      echo "encrypted backup payload has an unexpected file list" >&2
+      exit 4
+    fi
+    if tar -tvf "$restore_data_dir/snapshot.tar" | awk 'substr($0, 1, 1) != "-" { found = 1 } END { exit !found }'; then
+      echo "encrypted backup payload may contain only regular files" >&2
+      exit 4
+    fi
+    tar -C "$restore_data_dir" --no-same-owner --no-same-permissions -xf "$restore_data_dir/snapshot.tar"
+    for file in database.dump uploads.tar.gz SHA256SUMS; do
+      if [ ! -f "$restore_data_dir/$file" ] || [ -L "$restore_data_dir/$file" ]; then
+        echo "encrypted backup payload is incomplete or unsafe: $file" >&2
+        exit 4
+      fi
+    done
+    (
+      cd "$restore_data_dir"
+      sha256sum -c SHA256SUMS
+    )
+    restore_database_dump="$restore_data_dir/database.dump"
+    restore_uploads_archive="$restore_data_dir/uploads.tar.gz"
+    ;;
+  *)
+    echo "unsupported backup format version" >&2
+    exit 3
+    ;;
+esac
+
+if tar -tzf "$restore_uploads_archive" | grep -E '(^/|(^|/)\.\.(/|$))' >/dev/null 2>&1; then
+  echo "uploads archive contains unsafe paths" >&2
+  exit 4
+fi
+if tar -tvzf "$restore_uploads_archive" | awk 'substr($0, 1, 1) != "-" && substr($0, 1, 1) != "d" { found = 1 } END { exit !found }'; then
+  echo "uploads archive may contain only regular files and directories" >&2
+  exit 4
+fi
+
 mkdir -m 700 "$staging_dir"
 staging_created=1
-tar -C "$staging_dir" --no-same-owner --no-same-permissions -xzf "$backup_dir/uploads.tar.gz"
+tar -C "$staging_dir" --no-same-owner --no-same-permissions -xzf "$restore_uploads_archive"
 
 if [ "$STORAGE_DRIVER" = "s3" ]; then
   mkdir -m 700 "$tombstone_stage"
@@ -106,7 +182,7 @@ pg_restore \
   --no-privileges \
   --exit-on-error \
   --dbname="$DATABASE_URL" \
-  "$backup_dir/database.dump"
+  "$restore_database_dump"
 
 case "$STORAGE_DRIVER" in
   local)
@@ -140,6 +216,13 @@ esac
 
 rm -rf "$staging_dir"
 staging_created=0
-tombstone_stage_created=0
+if [ "${restore_data_created:-0}" -eq 1 ]; then
+  rm -rf "$restore_data_dir"
+  restore_data_created=0
+fi
+if [ "${tombstone_stage_created:-0}" -eq 1 ]; then
+  rm -rf "$tombstone_stage"
+  tombstone_stage_created=0
+fi
 trap - EXIT HUP INT TERM
 echo "restore completed"

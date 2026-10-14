@@ -54,7 +54,15 @@ jobs:
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client age
+
+      - name: Create ephemeral age keypair for S3 backup verification
+        run: |
+          age-keygen -o "$RUNNER_TEMP/backup-age-identity.txt"
+          age-keygen -y "$RUNNER_TEMP/backup-age-identity.txt" > "$RUNNER_TEMP/backup-age-recipients.txt"
+          age-keygen -o "$RUNNER_TEMP/unrelated-age-identity.txt"
+          chmod 600 "$RUNNER_TEMP/backup-age-identity.txt"
+          chmod 600 "$RUNNER_TEMP/unrelated-age-identity.txt"
 
       - name: Validate deletion journal replay
         run: python3 -m unittest scripts/test_apply_deletion_tombstones.py
@@ -195,7 +203,8 @@ jobs:
           export PATH="$RUNNER_TEMP/fake-aws-bin:$PATH"
           export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
           export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
-          export STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger
+          export BACKUP_AGE_RECIPIENTS_FILE="$RUNNER_TEMP/backup-age-recipients.txt"
+          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           CREATE TABLE s3_backup_probe (id integer PRIMARY KEY, value text NOT NULL);
           INSERT INTO s3_backup_probe (id, value) VALUES (1, 's3-backup-ok');
@@ -209,6 +218,10 @@ jobs:
           RETENTION_DAYS=14 \
           sh scripts/backup.sh > "$RUNNER_TEMP/s3-backup-path.txt"
           test -s "$RUNNER_TEMP/s3-backup-path.txt"
+          backup_dir="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
+          test -s "$backup_dir/snapshot.tar.age"
+          test ! -e "$backup_dir/database.dump"
+          test ! -e "$backup_dir/uploads.tar.gz"
 
       - name: Destroy S3-backed source data
         run: |
@@ -231,8 +244,18 @@ jobs:
           export PATH="$RUNNER_TEMP/fake-aws-bin:$PATH"
           export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
           export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
-          export STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger CONFIRM_RESTORE=YES
+          export BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/backup-age-identity.txt"
+          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger CONFIRM_RESTORE=YES
           backup_dir="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
+          if BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/unrelated-age-identity.txt" UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_dir" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unrelated age identity" >&2
+            exit 1
+          fi
+          legacy_backup_dir="$(cat "$RUNNER_TEMP/backup-path.txt")"
+          if BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/backup-age-identity.txt" UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$legacy_backup_dir" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unencrypted S3 backup without explicit approval" >&2
+            exit 1
+          fi
           UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_dir"
 
       - name: Verify S3-backed restore
@@ -243,3 +266,7 @@ jobs:
           test "$(psql "$DATABASE_URL" -Atc 'SELECT COUNT(*) FROM users')" = '0'
           test "$(psql "$DATABASE_URL" -Atc 'SELECT COUNT(*) FROM files')" = '0'
           test ! -e "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-after-snapshot.bin"
+          if find "$RUNNER_TEMP" -maxdepth 1 -name '.onlineprorab-restore-data.*' -print -quit | grep -q .; then
+            echo "restore left decrypted data in its private staging directory" >&2
+            exit 1
+          fi

@@ -6,13 +6,30 @@ UPLOAD_DIR="${UPLOAD_DIR:-/data/uploads}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/onlineprorab}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
+APP_ENV="${APP_ENV:-development}"
+BACKUP_AGE_RECIPIENTS_FILE="${BACKUP_AGE_RECIPIENTS_FILE:-}"
+
+case "$APP_ENV" in
+  staging|production)
+    if [ "$STORAGE_DRIVER" != "s3" ]; then
+      echo "STORAGE_DRIVER=s3 is required for staging and production backups" >&2
+      exit 2
+    fi
+    ;;
+esac
 
 case "$STORAGE_DRIVER" in
   local) ;;
   s3)
     : "${S3_REGION:?S3_REGION is required when STORAGE_DRIVER=s3}"
     : "${S3_BUCKET:?S3_BUCKET is required when STORAGE_DRIVER=s3}"
+    : "${BACKUP_AGE_RECIPIENTS_FILE:?BACKUP_AGE_RECIPIENTS_FILE is required when STORAGE_DRIVER=s3}"
     command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required when STORAGE_DRIVER=s3" >&2; exit 127; }
+    command -v age >/dev/null 2>&1 || { echo "age is required for encrypted S3 backups" >&2; exit 127; }
+    if [ ! -f "$BACKUP_AGE_RECIPIENTS_FILE" ] || [ -L "$BACKUP_AGE_RECIPIENTS_FILE" ]; then
+      echo "BACKUP_AGE_RECIPIENTS_FILE must be a regular, non-symlink file" >&2
+      exit 2
+    fi
     ;;
   *) echo "STORAGE_DRIVER must be local or s3" >&2; exit 2 ;;
 esac
@@ -78,6 +95,16 @@ case "$STORAGE_DRIVER" in
       tar -C "$empty_dir" -czf "$tmp_dir/uploads.tar.gz" .
       rmdir "$empty_dir"
     fi
+    (
+      cd "$tmp_dir"
+      sha256sum database.dump uploads.tar.gz > SHA256SUMS
+    )
+    cat > "$tmp_dir/MANIFEST" <<EOF
+created_at_utc=$timestamp
+format_version=1
+postgres_format=custom
+uploads_format=tar.gz
+EOF
     ;;
   s3)
     s3_stage="$tmp_dir/s3-uploads"
@@ -89,20 +116,22 @@ case "$STORAGE_DRIVER" in
     fi
     tar -C "$s3_stage" -czf "$tmp_dir/uploads.tar.gz" .
     rm -rf "$s3_stage"
+    (
+      cd "$tmp_dir"
+      sha256sum database.dump uploads.tar.gz > SHA256SUMS
+      tar -cf snapshot.tar database.dump uploads.tar.gz SHA256SUMS
+    )
+    age --encrypt --recipients-file "$BACKUP_AGE_RECIPIENTS_FILE" \
+      --output "$tmp_dir/snapshot.tar.age" "$tmp_dir/snapshot.tar"
+    rm -f "$tmp_dir/database.dump" "$tmp_dir/uploads.tar.gz" "$tmp_dir/SHA256SUMS" "$tmp_dir/snapshot.tar"
+    cat > "$tmp_dir/MANIFEST" <<EOF
+created_at_utc=$timestamp
+format_version=2
+snapshot_format=tar
+encryption=age
+EOF
     ;;
 esac
-
-(
-  cd "$tmp_dir"
-  sha256sum database.dump uploads.tar.gz > SHA256SUMS
-)
-
-cat > "$tmp_dir/MANIFEST" <<EOF
-created_at_utc=$timestamp
-format_version=1
-postgres_format=custom
-uploads_format=tar.gz
-EOF
 
 chmod -R go-rwx "$tmp_dir"
 mv "$tmp_dir" "$final_dir"
