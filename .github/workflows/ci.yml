@@ -188,6 +188,9 @@ jobs:
       - name: Check deployment script syntax
         run: bash -n deploy-remote.sh
 
+      - name: Test deployment path, archive, and rollback guards
+        run: bash deploy-remote.test.sh
+
       - name: Verify Compose logging configuration
         run: |
           docker compose config --format json | python3 -c 'import json,sys; service=json.load(sys.stdin)["services"]["stroy-website"]; assert service["logging"] == {"driver":"json-file","options":{"max-size":"10m","max-file":"5"}}, service'
