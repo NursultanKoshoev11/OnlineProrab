@@ -46,8 +46,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
           _currentPlan = plan!;
           _selectedPlan = plan;
           _currentStatus = status ?? 'trialing';
-          _currentBillingPeriod =
-              period == 'year' ? 'year' : 'month';
+          _currentBillingPeriod = period == 'year' ? 'year' : 'month';
           _selectedBillingPeriod = _currentBillingPeriod;
           _subscriptionEndsAt = endsAt;
         });
@@ -121,8 +120,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
     if (endsAt == null) return null;
     final seconds = endsAt.difference(DateTime.now()).inSeconds;
     if (seconds <= 0) return 0;
-    return (seconds + Duration.secondsPerDay - 1) ~/
-        Duration.secondsPerDay;
+    return (seconds + Duration.secondsPerDay - 1) ~/ Duration.secondsPerDay;
   }
 
   @override
@@ -313,14 +311,8 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         const SizedBox(height: 8),
         SegmentedButton<String>(
           segments: const [
-            ButtonSegment(
-              value: 'month',
-              label: Text('Ежемесячно'),
-            ),
-            ButtonSegment(
-              value: 'year',
-              label: Text('За год'),
-            ),
+            ButtonSegment(value: 'month', label: Text('Ежемесячно')),
+            ButtonSegment(value: 'year', label: Text('За год')),
           ],
           selected: {_selectedBillingPeriod},
           onSelectionChanged: (selection) {
