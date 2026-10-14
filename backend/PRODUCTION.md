@@ -10,6 +10,7 @@ This checklist tracks the minimum work required before a real public release.
 - `JWT_SECRET=<strong random secret>`
 - `ACCESS_TOKEN_TTL_MINUTES=60`
 - `CORS_ALLOWED_ORIGINS=https://stroy.com.kg`
+- `TRUSTED_PROXY_CIDRS=<reverse proxy source IP or narrow CIDR>`
 - `UPLOAD_DIR=/app/uploads`
 - `MAX_UPLOAD_MB=10`
 
@@ -22,6 +23,8 @@ The API refuses unsafe production configuration when `APP_ENV=production` and th
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
+- Set `TRUSTED_PROXY_CIDRS` to the exact IP addresses or narrow CIDRs of proxies that connect to the API container. The API trusts `X-Forwarded-For` only when `RemoteAddr` belongs to one of these networks; direct requests cannot spoof the limiter's client IP.
+- SMS request quotas are 6 attempts per phone per hour, plus 30 per client IP per hour. Code verification is limited to 10 attempts per phone and 30 per client IP per 15 minutes. These counters include failed delivery/verification attempts and reserve each request before it reaches the SMS provider or code handler.
 
 For local development, the fixed `dev_code` response is disabled by default. To opt in, set `DEV_SMS_CODE_ENABLED=true` and bind `HTTP_ADDR` to `127.0.0.1` or `localhost`.
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -40,6 +41,7 @@ type Config struct {
 	AccessTokenTTL            time.Duration
 	DevSMSCodeEnabled         bool
 	CORSAllowedOrigins        []string
+	TrustedProxyCIDRs         []string
 	UploadDir                 string
 	MaxUploadBytes            int64
 	SMSProvider               string
@@ -87,6 +89,7 @@ func Load() Config {
 	cfg.AccessTokenTTL = time.Duration(getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 15)) * time.Minute
 	cfg.DevSMSCodeEnabled = getEnvBool("DEV_SMS_CODE_ENABLED", false)
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
+	cfg.TrustedProxyCIDRs = splitCSV(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
 	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
@@ -230,6 +233,17 @@ func (cfg Config) Validate() error {
 				break
 			}
 		}
+		if len(cfg.TrustedProxyCIDRs) == 0 {
+			problems = append(problems, "TRUSTED_PROXY_CIDRS must identify the reverse proxies that reach the API")
+		} else {
+			for _, value := range cfg.TrustedProxyCIDRs {
+				prefix, err := parseTrustedProxyCIDR(value)
+				if err != nil || prefix.Bits() == 0 || prefix.Addr().IsUnspecified() {
+					problems = append(problems, "TRUSTED_PROXY_CIDRS must contain explicit proxy IP addresses or CIDRs, not an unrestricted range")
+					break
+				}
+			}
+		}
 		if cfg.IsStaging() && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
 			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in staging")
 		}
@@ -247,6 +261,19 @@ func (cfg Config) Validate() error {
 		return errors.New(strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+func parseTrustedProxyCIDR(value string) (netip.Prefix, error) {
+	value = strings.TrimSpace(value)
+	if addr, err := netip.ParseAddr(value); err == nil {
+		addr = addr.Unmap()
+		return netip.PrefixFrom(addr, addr.BitLen()), nil
+	}
+	prefix, err := netip.ParsePrefix(value)
+	if err != nil || prefix.Addr().Is4In6() {
+		return netip.Prefix{}, errors.New("invalid trusted proxy address or CIDR")
+	}
+	return prefix.Masked(), nil
 }
 
 func validateVerifiedDatabaseTLS(databaseURL string) error {

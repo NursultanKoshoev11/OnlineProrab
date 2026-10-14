@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	smsRequestCooldown = 45 * time.Second
-	smsHourlyLimit     = 6
+	smsRequestCooldown          = 45 * time.Second
+	smsHourlyLimit              = 6
+	smsRequestRemoteHourlyLimit = 30
 )
 
 func withSMSRequestRateLimit(next http.HandlerFunc) http.HandlerFunc {
@@ -45,33 +47,43 @@ func withSMSRequestRateLimit(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
+		phone = smsRateLimitPhone(phone)
+
+		remoteKey, err := requestRemoteKey(r)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "invalid client address")
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-		defer cancel()
-
-		var latestCreatedAt time.Time
-		var hourlyCount int
-		err = appState.DB.Pool.QueryRow(ctx, `
-			SELECT COALESCE(MAX(created_at), to_timestamp(0)),
-			       COUNT(*) FILTER (WHERE created_at > now() - interval '1 hour')
-			FROM sms_login_codes
-			WHERE phone = $1
-		`, phone).Scan(&latestCreatedAt, &hourlyCount)
+		attemptID, retryAfter, err := reserveAuthAttempt(
+			ctx,
+			"sms_request",
+			phone,
+			remoteKey,
+			time.Hour,
+			smsHourlyLimit,
+			smsRequestRemoteHourlyLimit,
+			smsRequestCooldown,
+		)
+		cancel()
 		if err != nil {
 			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
 			return
 		}
-		if latestCreatedAt.Unix() > 0 && time.Since(latestCreatedAt) < smsRequestCooldown {
-			w.Header().Set("Retry-After", "45")
-			Error(w, http.StatusTooManyRequests, "please wait before requesting another code")
-			return
-		}
-		if hourlyCount >= smsHourlyLimit {
-			w.Header().Set("Retry-After", "3600")
+		if retryAfter > 0 {
+			retrySeconds := int(retryAfter.Seconds())
+			if retrySeconds < 1 {
+				retrySeconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
 			Error(w, http.StatusTooManyRequests, "too many code requests")
 			return
 		}
+		pruneAuthHistoryIfDue()
 
-		next(w, r.WithContext(ctx))
+		recorder := &authStatusRecorder{ResponseWriter: w}
+		next(recorder, r)
+		completeAuthAttempt(attemptID, recorder.status >= 200 && recorder.status < 300)
 	}
 }

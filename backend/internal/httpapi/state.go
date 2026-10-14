@@ -26,6 +26,7 @@ type State struct {
 	IsProduction            bool
 	IsProductionLike        bool
 	IsDevelopment           bool
+	TrustedProxyCIDRs       []string
 	DevSMSCodeEnabled       bool
 	ReviewOnlyMode          bool
 	ReviewSMSPhone          string
@@ -58,6 +59,7 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		IsProduction:            cfg.IsProduction(),
 		IsProductionLike:        cfg.IsProductionLike(),
 		IsDevelopment:           cfg.IsDevelopment(),
+		TrustedProxyCIDRs:       append([]string(nil), cfg.TrustedProxyCIDRs...),
 		DevSMSCodeEnabled:       cfg.DevSMSCodeEnabled,
 		ReviewOnlyMode:          cfg.ReviewOnlyMode,
 		ReviewSMSPhone:          cfg.ReviewSMSPhone,

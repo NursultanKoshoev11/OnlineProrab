@@ -205,6 +205,7 @@ func validProductionConfig() Config {
 		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
 		AccessTokenTTL:     15 * time.Minute,
 		CORSAllowedOrigins: []string{"https://app.example.com"},
+		TrustedProxyCIDRs:  []string{"10.20.0.4"},
 		UploadDir:          "/var/lib/onlineprorab/uploads",
 		MaxUploadBytes:     10 * 1024 * 1024,
 		SMSProvider:        SMSProviderTwilio,
@@ -212,6 +213,36 @@ func validProductionConfig() Config {
 		TwilioAPIKeySID:    "SK0000000000",
 		TwilioAPIKeySecret: "unit-test-credential-value",
 		TwilioFrom:         "+15550000000",
+	}
+}
+
+func TestValidateRequiresExplicitTrustedProxyCIDRsInProductionLikeEnvironments(t *testing.T) {
+	tests := []struct {
+		name  string
+		cidrs []string
+	}{
+		{name: "missing"},
+		{name: "all IPv4", cidrs: []string{"0.0.0.0/0"}},
+		{name: "all IPv6", cidrs: []string{"::/0"}},
+		{name: "malformed", cidrs: []string{"proxy.internal"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := validStagingConfig()
+			cfg.TrustedProxyCIDRs = test.cidrs
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "TRUSTED_PROXY_CIDRS") {
+				t.Fatalf("expected TRUSTED_PROXY_CIDRS validation error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsTrustedProxyAddressAndCIDR(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.TrustedProxyCIDRs = []string{"10.20.0.4", "fd00:abcd::/64"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected explicit trusted proxy addresses to be valid, got %v", err)
 	}
 }
 
