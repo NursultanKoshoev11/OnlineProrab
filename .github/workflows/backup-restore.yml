@@ -7,12 +7,16 @@ on:
     paths:
       - 'backend/scripts/backup.sh'
       - 'backend/scripts/restore.sh'
+      - 'backend/scripts/apply-deletion-tombstones.py'
+      - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
       - '.github/workflows/backup-restore.yml'
   pull_request:
     paths:
       - 'backend/scripts/backup.sh'
       - 'backend/scripts/restore.sh'
+      - 'backend/scripts/apply-deletion-tombstones.py'
+      - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
       - '.github/workflows/backup-restore.yml'
 
@@ -51,6 +55,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
+
+      - name: Validate deletion journal replay
+        run: python3 -m unittest scripts/test_apply_deletion_tombstones.py
 
       - name: Reject unsafe backup and restore paths
         run: |
@@ -127,10 +134,32 @@ jobs:
 
       - name: Prepare isolated S3 test bucket and CLI stub
         run: |
-          mkdir -p "$RUNNER_TEMP/fake-aws-bin" "$RUNNER_TEMP/fake-s3-bucket/project/nested"
+          mkdir -p "$RUNNER_TEMP/fake-aws-bin" "$RUNNER_TEMP/fake-s3-bucket/project/nested" "$RUNNER_TEMP/fake-s3-ledger/tombstones/accounts" "$RUNNER_TEMP/fake-s3-ledger/tombstones/objects"
           cat > "$RUNNER_TEMP/fake-aws-bin/aws" <<'SH'
           #!/bin/sh
           set -eu
+          if [ "$#" -eq 10 ] && [ "$1" = "--region" ] && [ "$3" = "s3api" ] && [ "$4" = "delete-objects" ]; then
+            if [ "$5" != "--bucket" ] || [ "$6" != "$S3_BUCKET" ] || [ "$7" != "--delete" ] || [ "$9" != "--output" ] || [ "${10}" != "json" ]; then
+              echo "restore must delete tombstoned keys from the exact target bucket" >&2
+              exit 2
+            fi
+            python3 - "${8#file://}" "$FAKE_S3_BUCKET_DIR" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          with open(sys.argv[1], encoding="utf-8") as manifest_file:
+              manifest = json.load(manifest_file)
+          root = Path(sys.argv[2]).resolve()
+          for item in manifest["Objects"]:
+              target = (root / item["Key"]).resolve()
+              if not target.is_relative_to(root):
+                  raise SystemExit("unsafe deletion key")
+              target.unlink(missing_ok=True)
+          PY
+            printf '%s' '{"Deleted":[]}'
+            exit 0
+          fi
           if [ "$#" -lt 7 ] || [ "$1" != "--region" ] || [ "$3" != "s3" ] || [ "$4" != "sync" ]; then
             echo "unexpected AWS CLI arguments" >&2
             exit 2
@@ -141,6 +170,10 @@ jobs:
             "s3://$S3_BUCKET")
               mkdir -p "$destination"
               cp -a "$FAKE_S3_BUCKET_DIR"/. "$destination"/
+              ;;
+            "s3://$S3_DELETION_LEDGER_BUCKET/tombstones/")
+              mkdir -p "$destination"
+              cp -a "$FAKE_S3_LEDGER_DIR"/. "$destination"/
               ;;
             *)
               if [ "$destination" != "s3://$S3_BUCKET" ] || [ "$7" != "--delete" ]; then
@@ -155,15 +188,21 @@ jobs:
           SH
           chmod +x "$RUNNER_TEMP/fake-aws-bin/aws"
           printf '%s' 's3-object-before-backup' > "$RUNNER_TEMP/fake-s3-bucket/project/nested/object.bin"
+          printf '%s' 'deleted-object-after-snapshot' > "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-after-snapshot.bin"
 
       - name: Create S3-backed database and object backup
         run: |
           export PATH="$RUNNER_TEMP/fake-aws-bin:$PATH"
           export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
-          export STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test
+          export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
+          export STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           CREATE TABLE s3_backup_probe (id integer PRIMARY KEY, value text NOT NULL);
           INSERT INTO s3_backup_probe (id, value) VALUES (1, 's3-backup-ok');
+          CREATE TABLE users (id uuid PRIMARY KEY);
+          CREATE TABLE files (storage_path text PRIMARY KEY);
+          INSERT INTO users (id) VALUES ('7cbcf034-8122-4d2d-92fd-f704dcdf8752');
+          INSERT INTO files (storage_path) VALUES ('project/nested/deleted-after-snapshot.bin');
           SQL
           BACKUP_DIR="$RUNNER_TEMP/onlineprorab-s3-backups" \
           UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" \
@@ -173,7 +212,16 @@ jobs:
 
       - name: Destroy S3-backed source data
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'DROP TABLE s3_backup_probe;'
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DROP TABLE s3_backup_probe;
+          DELETE FROM users;
+          DELETE FROM files;
+          SQL
+          user_id=7cbcf034-8122-4d2d-92fd-f704dcdf8752
+          storage_path=project/nested/deleted-after-snapshot.bin
+          object_digest="$(printf '%s' "$storage_path" | sha256sum | cut -d ' ' -f 1)"
+          printf '{"version":1,"kind":"account","user_id":"%s","created_at_utc":"2026-10-14T00:00:00Z"}\n' "$user_id" > "$RUNNER_TEMP/fake-s3-ledger/tombstones/accounts/$user_id.json"
+          printf '{"version":1,"kind":"object","storage_path":"%s","created_at_utc":"2026-10-14T00:00:00Z"}\n' "$storage_path" > "$RUNNER_TEMP/fake-s3-ledger/tombstones/objects/$object_digest.json"
           rm -rf "$RUNNER_TEMP/fake-s3-bucket"
           mkdir -p "$RUNNER_TEMP/fake-s3-bucket/extra"
           printf '%s' 'object-that-must-be-removed' > "$RUNNER_TEMP/fake-s3-bucket/extra/stale.bin"
@@ -182,7 +230,8 @@ jobs:
         run: |
           export PATH="$RUNNER_TEMP/fake-aws-bin:$PATH"
           export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
-          export STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test CONFIRM_RESTORE=YES
+          export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
+          export STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger CONFIRM_RESTORE=YES
           backup_dir="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
           UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_dir"
 
@@ -191,3 +240,6 @@ jobs:
           test "$(psql "$DATABASE_URL" -Atc 'SELECT value FROM s3_backup_probe WHERE id = 1')" = 's3-backup-ok'
           test "$(cat "$RUNNER_TEMP/fake-s3-bucket/project/nested/object.bin")" = 's3-object-before-backup'
           test ! -e "$RUNNER_TEMP/fake-s3-bucket/extra/stale.bin"
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT COUNT(*) FROM users')" = '0'
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT COUNT(*) FROM files')" = '0'
+          test ! -e "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-after-snapshot.bin"

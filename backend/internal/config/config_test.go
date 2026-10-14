@@ -179,6 +179,8 @@ func TestValidateRequiresS3BucketAndRegion(t *testing.T) {
 	}{
 		{name: "missing bucket", change: func(cfg *Config) { cfg.S3Bucket = "" }, want: "S3_BUCKET"},
 		{name: "missing region", change: func(cfg *Config) { cfg.S3Region = "" }, want: "S3_REGION"},
+		{name: "missing deletion ledger bucket", change: func(cfg *Config) { cfg.S3DeletionLedgerBucket = "" }, want: "S3_DELETION_LEDGER_BUCKET"},
+		{name: "same storage and ledger bucket", change: func(cfg *Config) { cfg.S3DeletionLedgerBucket = cfg.S3Bucket }, want: "must be different"},
 		{name: "partial AWS credentials", change: func(cfg *Config) { cfg.AWSAccessKeyID = "key" }, want: "AWS_SECRET_ACCESS_KEY"},
 		{name: "session token without credentials", change: func(cfg *Config) { cfg.AWSSessionToken = "token" }, want: "AWS_SESSION_TOKEN"},
 	}
@@ -245,23 +247,24 @@ func TestSplitCSVTrimsEmptyValues(t *testing.T) {
 
 func validProductionConfig() Config {
 	return Config{
-		Env:                ProductionEnv,
-		HTTPAddr:           ":8080",
-		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
-		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
-		AccessTokenTTL:     15 * time.Minute,
-		CORSAllowedOrigins: []string{"https://app.example.com"},
-		StorageDriver:      "s3",
-		S3Region:           "us-east-1",
-		S3Bucket:           "onlineprorab-test",
-		TrustedProxyCIDRs:  []string{"10.20.0.4"},
-		UploadDir:          "/var/lib/onlineprorab/uploads",
-		MaxUploadBytes:     10 * 1024 * 1024,
-		SMSProvider:        SMSProviderTwilio,
-		TwilioAccountSID:   "AC0000000000",
-		TwilioAPIKeySID:    "SK0000000000",
-		TwilioAPIKeySecret: "unit-test-credential-value",
-		TwilioFrom:         "+15550000000",
+		Env:                    ProductionEnv,
+		HTTPAddr:               ":8080",
+		DatabaseURL:            "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
+		JWTSecret:              "abcdefghijklmnopqrstuvwxyz1234567890",
+		AccessTokenTTL:         15 * time.Minute,
+		CORSAllowedOrigins:     []string{"https://app.example.com"},
+		StorageDriver:          "s3",
+		S3Region:               "us-east-1",
+		S3Bucket:               "onlineprorab-test",
+		S3DeletionLedgerBucket: "onlineprorab-deletion-ledger-test",
+		TrustedProxyCIDRs:      []string{"10.20.0.4"},
+		UploadDir:              "/var/lib/onlineprorab/uploads",
+		MaxUploadBytes:         10 * 1024 * 1024,
+		SMSProvider:            SMSProviderTwilio,
+		TwilioAccountSID:       "AC0000000000",
+		TwilioAPIKeySID:        "SK0000000000",
+		TwilioAPIKeySecret:     "unit-test-credential-value",
+		TwilioFrom:             "+15550000000",
 	}
 }
 

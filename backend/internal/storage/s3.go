@@ -2,11 +2,15 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,20 +23,26 @@ import (
 )
 
 type S3Options struct {
-	Region string
-	Bucket string
+	Region               string
+	Bucket               string
+	DeletionLedgerBucket string
 }
 
 type S3Store struct {
-	client *s3.Client
-	bucket string
+	client               *s3.Client
+	bucket               string
+	deletionLedgerBucket string
 }
 
 func NewS3(ctx context.Context, options S3Options) (*S3Store, error) {
 	options.Region = strings.TrimSpace(options.Region)
 	options.Bucket = strings.TrimSpace(options.Bucket)
-	if options.Region == "" || options.Bucket == "" {
-		return nil, fmt.Errorf("S3 region and bucket are required")
+	options.DeletionLedgerBucket = strings.TrimSpace(options.DeletionLedgerBucket)
+	if options.Region == "" || options.Bucket == "" || options.DeletionLedgerBucket == "" {
+		return nil, fmt.Errorf("S3 region, bucket, and deletion ledger bucket are required")
+	}
+	if options.Bucket == options.DeletionLedgerBucket {
+		return nil, fmt.Errorf("S3 object and deletion ledger buckets must be different")
 	}
 
 	awsConfig, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(options.Region))
@@ -46,7 +56,11 @@ func NewS3(ctx context.Context, options S3Options) (*S3Store, error) {
 	}
 
 	client := s3.NewFromConfig(awsConfig)
-	return &S3Store{client: client, bucket: options.Bucket}, nil
+	return &S3Store{
+		client:               client,
+		bucket:               options.Bucket,
+		deletionLedgerBucket: options.DeletionLedgerBucket,
+	}, nil
 }
 
 func (s *S3Store) Put(ctx context.Context, key string, source io.ReadSeeker, size int64, contentType string) error {
@@ -109,6 +123,9 @@ func (s *S3Store) Delete(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.RecordObjectDeletion(ctx, key); err != nil {
+		return fmt.Errorf("record S3 object deletion: %w", err)
+	}
 	_, err = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -123,6 +140,60 @@ func (s *S3Store) Check(ctx context.Context) error {
 	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)})
 	if err != nil {
 		return fmt.Errorf("check S3 bucket availability: %w", err)
+	}
+	_, err = s.client.GetBucketLocation(ctx, &s3.GetBucketLocationInput{Bucket: aws.String(s.deletionLedgerBucket)})
+	if err != nil {
+		return fmt.Errorf("check S3 deletion ledger availability: %w", err)
+	}
+	return nil
+}
+
+type deletionTombstone struct {
+	Version     int       `json:"version"`
+	Kind        string    `json:"kind"`
+	UserID      string    `json:"user_id,omitempty"`
+	StoragePath string    `json:"storage_path,omitempty"`
+	CreatedAt   time.Time `json:"created_at_utc"`
+}
+
+var canonicalUUID = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+func (s *S3Store) RecordAccountDeletion(ctx context.Context, userID string) error {
+	if !canonicalUUID.MatchString(userID) {
+		return fmt.Errorf("record account deletion: invalid user identifier")
+	}
+	userID = strings.ToLower(userID)
+	event := deletionTombstone{Version: 1, Kind: "account", UserID: userID, CreatedAt: time.Now().UTC()}
+	return s.putDeletionTombstone(ctx, "tombstones/accounts/"+userID+".json", event)
+}
+
+func (s *S3Store) RecordObjectDeletion(ctx context.Context, key string) error {
+	key, err := cleanKey(key)
+	if err != nil {
+		return fmt.Errorf("record object deletion: %w", err)
+	}
+	digest := sha256.Sum256([]byte(key))
+	event := deletionTombstone{Version: 1, Kind: "object", StoragePath: key, CreatedAt: time.Now().UTC()}
+	return s.putDeletionTombstone(ctx, "tombstones/objects/"+hex.EncodeToString(digest[:])+".json", event)
+}
+
+func (s *S3Store) putDeletionTombstone(ctx context.Context, key string, event deletionTombstone) error {
+	if s.deletionLedgerBucket == "" {
+		return fmt.Errorf("account and object deletion journal is not configured")
+	}
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("encode deletion tombstone: %w", err)
+	}
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.deletionLedgerBucket),
+		Key:           aws.String(key),
+		Body:          strings.NewReader(string(body)),
+		ContentLength: aws.Int64(int64(len(body))),
+		ContentType:   aws.String("application/json"),
+	})
+	if err != nil {
+		return fmt.Errorf("write deletion tombstone: %w", err)
 	}
 	return nil
 }

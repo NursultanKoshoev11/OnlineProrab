@@ -47,6 +47,7 @@ type Config struct {
 	MaxUploadBytes            int64
 	S3Region                  string
 	S3Bucket                  string
+	S3DeletionLedgerBucket    string
 	AWSAccessKeyID            string
 	AWSSecretAccessKey        string
 	AWSSessionToken           string
@@ -101,6 +102,7 @@ func Load() Config {
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
 	cfg.S3Region = strings.TrimSpace(os.Getenv("S3_REGION"))
 	cfg.S3Bucket = strings.TrimSpace(os.Getenv("S3_BUCKET"))
+	cfg.S3DeletionLedgerBucket = strings.TrimSpace(os.Getenv("S3_DELETION_LEDGER_BUCKET"))
 	cfg.AWSAccessKeyID = strings.TrimSpace(os.Getenv("AWS_ACCESS_KEY_ID"))
 	cfg.AWSSecretAccessKey = strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	cfg.AWSSessionToken = strings.TrimSpace(os.Getenv("AWS_SESSION_TOKEN"))
@@ -188,6 +190,12 @@ func (cfg Config) Validate() error {
 		}
 		if cfg.S3Bucket == "" {
 			problems = append(problems, "S3_BUCKET is required when STORAGE_DRIVER=s3")
+		}
+		if cfg.S3DeletionLedgerBucket == "" {
+			problems = append(problems, "S3_DELETION_LEDGER_BUCKET is required when STORAGE_DRIVER=s3")
+		}
+		if cfg.S3Bucket != "" && cfg.S3Bucket == cfg.S3DeletionLedgerBucket {
+			problems = append(problems, "S3_BUCKET and S3_DELETION_LEDGER_BUCKET must be different")
 		}
 		if (cfg.AWSAccessKeyID == "") != (cfg.AWSSecretAccessKey == "") {
 			problems = append(problems, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be configured together")

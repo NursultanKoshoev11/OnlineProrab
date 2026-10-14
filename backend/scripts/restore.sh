@@ -15,7 +15,14 @@ case "$STORAGE_DRIVER" in
   s3)
     : "${S3_REGION:?S3_REGION is required when STORAGE_DRIVER=s3}"
     : "${S3_BUCKET:?S3_BUCKET is required when STORAGE_DRIVER=s3}"
+    : "${S3_DELETION_LEDGER_BUCKET:?S3_DELETION_LEDGER_BUCKET is required when STORAGE_DRIVER=s3}"
+    if [ "$S3_BUCKET" = "$S3_DELETION_LEDGER_BUCKET" ]; then
+      echo "S3_BUCKET and S3_DELETION_LEDGER_BUCKET must be different" >&2
+      exit 2
+    fi
     command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required when STORAGE_DRIVER=s3" >&2; exit 127; }
+    command -v python3 >/dev/null 2>&1 || { echo "Python 3 is required when STORAGE_DRIVER=s3" >&2; exit 127; }
+    command -v psql >/dev/null 2>&1 || { echo "psql is required when STORAGE_DRIVER=s3" >&2; exit 127; }
     ;;
   *) echo "STORAGE_DRIVER must be local or s3" >&2; exit 2 ;;
 esac
@@ -58,9 +65,13 @@ fi
 
 staging_parent="$(dirname "$UPLOAD_DIR")"
 staging_dir="$staging_parent/.onlineprorab-restore.$$"
+tombstone_stage="$staging_parent/.onlineprorab-tombstones.$$"
 cleanup() {
   if [ "${staging_created:-0}" -eq 1 ]; then
     rm -rf "$staging_dir"
+  fi
+  if [ "${tombstone_stage_created:-0}" -eq 1 ]; then
+    rm -rf "$tombstone_stage"
   fi
 }
 trap cleanup EXIT
@@ -69,6 +80,14 @@ umask 077
 mkdir -m 700 "$staging_dir"
 staging_created=1
 tar -C "$staging_dir" --no-same-owner --no-same-permissions -xzf "$backup_dir/uploads.tar.gz"
+
+if [ "$STORAGE_DRIVER" = "s3" ]; then
+  mkdir -m 700 "$tombstone_stage"
+  tombstone_stage_created=1
+  aws --region "$S3_REGION" s3 sync "s3://$S3_DELETION_LEDGER_BUCKET/tombstones/" "$tombstone_stage" --only-show-errors
+  python3 "$script_dir/apply-deletion-tombstones.py" \
+    "$tombstone_stage" "$tombstone_stage/apply.sql" "$tombstone_stage/delete-objects"
+fi
 
 if [ -L "$UPLOAD_DIR" ]; then
   echo "UPLOAD_DIR must not be a symbolic link" >&2
@@ -96,10 +115,31 @@ case "$STORAGE_DRIVER" in
     ;;
   s3)
     aws --region "$S3_REGION" s3 sync "$staging_dir" "s3://$S3_BUCKET" --delete --only-show-errors
+    for delete_batch in "$tombstone_stage"/delete-objects/*.json; do
+      if [ ! -f "$delete_batch" ]; then
+        continue
+      fi
+      response_file="${delete_batch%.json}.response.json"
+      aws --region "$S3_REGION" s3api delete-objects \
+        --bucket "$S3_BUCKET" \
+        --delete "file://$delete_batch" \
+        --output json > "$response_file"
+      python3 - "$response_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as response_file:
+    response = json.load(response_file)
+if response.get("Errors"):
+    raise SystemExit(f"S3 reported failed tombstone object deletions: {response['Errors']}")
+PY
+    done
+    psql --set=ON_ERROR_STOP=1 --dbname="$DATABASE_URL" --file="$tombstone_stage/apply.sql"
     ;;
 esac
 
 rm -rf "$staging_dir"
 staging_created=0
+tombstone_stage_created=0
 trap - EXIT HUP INT TERM
 echo "restore completed"

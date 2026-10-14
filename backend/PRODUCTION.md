@@ -14,6 +14,7 @@ This checklist tracks the minimum work required before a real public release.
 - `STORAGE_DRIVER=s3`
 - `S3_REGION=<bucket-region>`
 - `S3_BUCKET=<private-bucket>`
+- `S3_DELETION_LEDGER_BUCKET=<separate-private-bucket>`
 - AWS credentials from an IAM workload role, or `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (plus `AWS_SESSION_TOKEN` for temporary credentials)
 - `UPLOAD_DIR=/data/uploads` (legacy volume used by the migration tool)
 - `MAX_UPLOAD_MB=10`
@@ -24,8 +25,8 @@ The API refuses unsafe configuration in staging and production when the JWT secr
 
 - Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
 - Use a `DATABASE_URL` with `sslmode=verify-full` in staging and production; the API rejects connections that do not verify every database host's certificate and hostname.
-- Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET` for Amazon S3. The application uses AWS SDK region-based endpoints and the standard AWS credential chain; custom S3 endpoints are not supported. Prefer an IAM role for the workload. For a host without AWS workload identity, use a dedicated, least-privilege IAM access key injected through `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; never put credentials in the image or source control. Readiness checks database and bucket availability.
-- Provision one bucket per environment with [`onlineprorab-storage.yaml`](../deploy/aws/onlineprorab-storage.yaml), following [`deploy/aws/README.md`](../deploy/aws/README.md). The template enables all S3 Block Public Access settings, Bucket owner enforced object ownership, SSE-S3 encryption, and HTTPS-only bucket access; it also outputs a managed policy limited to bucket health checks and object get, put, and delete. Attach that policy to the API workload role or a dedicated IAM user.
+- Set `STORAGE_DRIVER=s3`, `S3_REGION`, `S3_BUCKET`, and `S3_DELETION_LEDGER_BUCKET` for Amazon S3. The uploads and deletion ledger buckets must be separate. The application uses AWS SDK region-based endpoints and the standard AWS credential chain; custom S3 endpoints are not supported. Prefer an IAM role for the workload. For a host without AWS workload identity, use a dedicated, least-privilege IAM access key injected through `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; never put credentials in the image or source control. Readiness checks the database and both buckets.
+- Provision one private uploads bucket and one private deletion-ledger bucket per environment with [`onlineprorab-storage.yaml`](../deploy/aws/onlineprorab-storage.yaml), following [`deploy/aws/README.md`](../deploy/aws/README.md). The template enables all S3 Block Public Access settings, Bucket owner enforced object ownership, SSE-S3 encryption, and HTTPS-only bucket access. Attach `ApplicationStoragePolicyArn` to the API role; it permits app object access and tombstone writes only.
 - The API serves objects only after its existing project authorization check and never publishes object URLs or public ACLs. If using SSE-KMS instead of the template's SSE-S3 default, the KMS key policy must also allow the workload principal to use the key.
 - Leave S3 versioning disabled until account deletion permanently removes every noncurrent version within the applicable deletion window. S3 delete markers alone do not erase old versions. If versioning is enabled later, configure and verify a lifecycle rule that permanently expires noncurrent versions.
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
@@ -43,7 +44,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 3. Run a real PostgreSQL + S3 backup/restore drill in staging with a dedicated recovery bucket and database; store backup archives on encrypted, independently protected storage.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
-6. Define a durable account-deletion tombstone/replay process: restoring an older database and S3 snapshot can otherwise bring back accounts or files deleted after that snapshot.
+6. Set deletion-ledger retention longer than every restorable database or object backup, then run the S3 restore drill below to verify tombstones remove accounts and file metadata before traffic resumes.
 
 ## Application logs
 
@@ -53,7 +54,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## PostgreSQL and uploaded-file backups
 
-`scripts/backup.sh` backs up PostgreSQL and the upload files. Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET` to include S3 objects; the host must have the AWS CLI and AWS credentials from its standard credential chain. S3 backup needs `s3:ListBucket` and `s3:GetObject`. Local-storage backup continues to archive `UPLOAD_DIR`.
+`scripts/backup.sh` backs up PostgreSQL and the upload files. Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET` to include S3 objects; the host must have the AWS CLI and AWS credentials from its standard credential chain. S3 backup needs `s3:ListBucket` and `s3:GetObject` on the uploads bucket. Local-storage backup continues to archive `UPLOAD_DIR`.
 
 Quiesce API writes and the storage-deletion worker for the duration of a backup so the database dump and object archive describe one point in time. Put `BACKUP_DIR` on encrypted storage with access restricted to operators, and copy completed archives to an independent protected location. Archives contain user files and database data; the script protects local file permissions and verifies SHA-256 checksums, but does not encrypt the archive itself.
 
@@ -61,18 +62,20 @@ Quiesce API writes and the storage-deletion worker for the duration of a backup 
 STORAGE_DRIVER=s3 \
 S3_REGION=us-east-1 \
 S3_BUCKET=onlineprorab-staging-uploads \
+S3_DELETION_LEDGER_BUCKET=onlineprorab-staging-deletions \
 BACKUP_DIR=/var/backups/onlineprorab \
 UPLOAD_DIR=/tmp/onlineprorab-unused-uploads \
 sh backend/scripts/backup.sh
 ```
 
-Replace the example bucket names with the CloudFormation stack outputs. Restore with `CONFIRM_RESTORE=YES`, the same storage settings, and the snapshot directory. For S3, restore synchronizes the archived objects to `S3_BUCKET` with `aws s3 sync --delete`; it removes objects absent from the snapshot. Stop every API instance and storage worker first, and use a dedicated recovery bucket/database when validating a restore. The restore identity needs `s3:ListBucket`, `s3:PutObject`, and `s3:DeleteObject` on the destination bucket. Keep the API stopped while validating, then point its `S3_BUCKET` setting at the restored bucket before starting it.
+Replace both example bucket names with the CloudFormation stack outputs. Set deletion-ledger retention longer than the retention of every backup copy that may be restored. Restore with `CONFIRM_RESTORE=YES`, both bucket settings, and the snapshot directory. The restore host needs AWS CLI, Python 3, `psql`, and PostgreSQL client tools. It downloads and validates every tombstone from the separate ledger, restores the database and objects, deletes tombstoned S3 keys in batches, then replays account and file deletions before the API can serve traffic. Stop every API instance and storage worker first, and use a dedicated recovery uploads bucket/database when validating a restore. Attach `StorageRecoveryPolicyArn` to the restore identity for the target uploads bucket and `DeletionJournalReadPolicyArn` for reading the ledger. Keep the API stopped while validating, then point its `S3_BUCKET` setting at the restored bucket before starting it.
 
 ```bash
 CONFIRM_RESTORE=YES \
 STORAGE_DRIVER=s3 \
 S3_REGION=us-east-1 \
 S3_BUCKET=onlineprorab-staging-recovery \
+S3_DELETION_LEDGER_BUCKET=onlineprorab-staging-deletions \
 UPLOAD_DIR=/tmp/onlineprorab-restore-target \
 sh backend/scripts/restore.sh /var/backups/onlineprorab/20261014T120000Z
 ```
@@ -109,7 +112,7 @@ window have passed.
 
 - Authenticated app deletion: `DELETE /api/v1/account` with a Bearer token.
 - Public deletion flow: `/account-deletion` requests an SMS challenge and verifies it through `POST /api/v1/account/deletion/verify`. That endpoint does not create or update a user and does not accept project invitations; it issues a ten-minute `account:delete` token that is accepted only by the account deletion endpoint. The public flow then calls `DELETE /api/v1/account`.
-- The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. It records storage removals in the same database transaction; a background worker deletes queued objects and retries failures with bounded exponential backoff. Backup archives can retain deleted records and objects until their configured retention expires (14 days by default). Restoring a snapshot from before a deletion can reintroduce that data; reconcile post-snapshot deletion requests before reopening traffic.
+- The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. It writes an account tombstone to the separate S3 deletion ledger before committing, and S3 object deletion records a tombstone before removing the object. A background worker processes queued object deletions and retries failures with bounded exponential backoff. Restore replays ledger tombstones after snapshot data is restored and before traffic resumes, so older snapshots do not reintroduce deleted users or file metadata. Keep ledger retention longer than all database/object backup copies that may be restored.
 
 ## Local smoke test
 

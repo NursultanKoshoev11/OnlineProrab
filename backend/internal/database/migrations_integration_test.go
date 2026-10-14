@@ -175,17 +175,33 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 	if queuedDeletions != 1 {
 		t.Fatalf("expected account file removal to be queued by database trigger, got %d rows", queuedDeletions)
 	}
-	store := &migrationTestObjectStore{deleted: make(chan string, 1)}
+	store := &migrationTestObjectStore{deleted: make(chan string, 1), events: make(chan string, 2)}
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	go storage.RunDeletionWorker(workerCtx, db.Pool, store)
+	select {
+	case event := <-store.events:
+		if event != "journal:account/delete-me.pdf" {
+			t.Fatalf("expected the deletion journal before the object delete, got %q", event)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("storage deletion worker did not record its durable tombstone")
+	}
+	select {
+	case event := <-store.events:
+		if event != "delete:account/delete-me.pdf" {
+			t.Fatalf("expected object deletion after its tombstone, got %q", event)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("storage deletion worker did not delete the queued object")
+	}
 	select {
 	case key := <-store.deleted:
 		if key != "account/delete-me.pdf" {
 			t.Fatalf("worker deleted unexpected object %q", key)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("storage deletion worker did not process the queued object")
+		t.Fatal("storage deletion worker did not report the deleted object")
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for {
@@ -205,6 +221,7 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 
 type migrationTestObjectStore struct {
 	deleted chan string
+	events  chan string
 }
 
 func (s *migrationTestObjectStore) Put(context.Context, string, io.ReadSeeker, int64, string) error {
@@ -215,7 +232,28 @@ func (s *migrationTestObjectStore) Get(context.Context, string) (storage.Object,
 	return storage.Object{}, nil
 }
 
+func (s *migrationTestObjectStore) RecordAccountDeletion(context.Context, string) error {
+	return nil
+}
+
+func (s *migrationTestObjectStore) RecordObjectDeletion(ctx context.Context, key string) error {
+	select {
+	case s.events <- "journal:" + key:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (s *migrationTestObjectStore) Delete(ctx context.Context, key string) error {
+	if err := s.RecordObjectDeletion(ctx, key); err != nil {
+		return err
+	}
+	select {
+	case s.events <- "delete:" + key:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	select {
 	case s.deleted <- key:
 		return nil

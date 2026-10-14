@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Private, encrypted Amazon S3 uploads storage and least-privilege application policy for OnlineProrab.
+Description: Private Amazon S3 uploads and deletion ledger for OnlineProrab.
 
 Parameters:
   Environment:
@@ -14,7 +14,26 @@ Parameters:
     MaxLength: 63
     AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
     ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
-    Description: Globally unique S3 bucket name; dots are excluded for TLS-compatible virtual-hosted access.
+    Description: Globally unique S3 uploads bucket name; dots are excluded for TLS-compatible virtual-hosted access.
+  DeletionLedgerBucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 deletion ledger bucket name; it must differ from the uploads bucket.
+  DeletionLedgerRetentionDays:
+    Type: Number
+    Default: 365
+    MinValue: 14
+    MaxValue: 3650
+    Description: Must exceed the maximum retention of every database or object backup that may be restored.
+
+Rules:
+  UploadsAndLedgerMustBeSeparate:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BucketName, !Ref DeletionLedgerBucketName]]
+        AssertDescription: The uploads and deletion ledger buckets must be different.
 
 Resources:
   UploadsBucket:
@@ -41,6 +60,38 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  DeletionLedgerBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref DeletionLedgerBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireDeletionTombstones
+            Status: Enabled
+            Prefix: tombstones/
+            ExpirationInDays: !Ref DeletionLedgerRetentionDays
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: DeletionLedger
+
   UploadsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     DeletionPolicy: Retain
@@ -61,10 +112,30 @@ Resources:
               Bool:
                 aws:SecureTransport: "false"
 
+  DeletionLedgerBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref DeletionLedgerBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt DeletionLedgerBucket.Arn
+              - !Sub "${DeletionLedgerBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
   ApplicationStoragePolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: Least-privilege S3 access for one OnlineProrab environment.
+      Description: Least-privilege S3 access for the OnlineProrab API.
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -72,7 +143,55 @@ Resources:
             Effect: Allow
             Action: s3:ListBucket
             Resource: !GetAtt UploadsBucket.Arn
+          - Sid: CheckDeletionLedgerAvailability
+            Effect: Allow
+            Action: s3:GetBucketLocation
+            Resource: !GetAtt DeletionLedgerBucket.Arn
           - Sid: ReadWriteApplicationObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteDeletionTombstones
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
+
+  DeletionJournalReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read-only account and object deletion journal access for a recovery operator.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListDeletionJournal
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt DeletionLedgerBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - tombstones/
+                  - tombstones/*
+          - Sid: ReadDeletionTombstones
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
+
+  StorageRecoveryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read and restore uploads in this environment's private bucket.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListUploadsBucket
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: RestoreUploadObjects
             Effect: Allow
             Action:
               - s3:GetObject
@@ -87,9 +206,21 @@ Outputs:
   UploadsBucketRegion:
     Description: Set this value as S3_REGION.
     Value: !Ref AWS::Region
+  S3DeletionLedgerBucketName:
+    Description: Set this value as S3_DELETION_LEDGER_BUCKET.
+    Value: !Ref DeletionLedgerBucket
+  S3DeletionLedgerRetentionDays:
+    Description: Configure backup retention to remain shorter than this value.
+    Value: !Ref DeletionLedgerRetentionDays
   UploadsBucketArn:
-    Description: S3 bucket ARN for operational verification.
+    Description: S3 uploads bucket ARN for operational verification.
     Value: !GetAtt UploadsBucket.Arn
   ApplicationStoragePolicyArn:
-    Description: Attach this policy to the API workload role or dedicated IAM user.
+    Description: Attach to the API workload role or a dedicated IAM user.
     Value: !Ref ApplicationStoragePolicy
+  DeletionJournalReadPolicyArn:
+    Description: Attach to a recovery operator that must replay deletion events.
+    Value: !Ref DeletionJournalReadPolicy
+  StorageRecoveryPolicyArn:
+    Description: Attach to a recovery operator that must read or restore uploads.
+    Value: !Ref StorageRecoveryPolicy

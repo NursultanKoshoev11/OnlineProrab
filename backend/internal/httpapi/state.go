@@ -21,6 +21,7 @@ type SMSSender interface {
 type State struct {
 	DB                      *database.DB
 	FileStore               storage.ObjectStore
+	DeletionJournal         storage.DeletionJournal
 	JWTSecret               string
 	AccessTokenTTL          time.Duration
 	UploadDir               string
@@ -52,9 +53,11 @@ type State struct {
 }
 
 func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore storage.ObjectStore) {
+	deletionJournal, _ := fileStore.(storage.DeletionJournal)
 	appState = State{
 		DB:                      db,
 		FileStore:               fileStore,
+		DeletionJournal:         deletionJournal,
 		JWTSecret:               cfg.JWTSecret,
 		AccessTokenTTL:          cfg.AccessTokenTTL,
 		UploadDir:               cfg.UploadDir,

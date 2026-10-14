@@ -3,6 +3,9 @@ package storage
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -29,7 +32,7 @@ func newTestS3Store(t *testing.T, server *httptest.Server) *S3Store {
 		options.BaseEndpoint = aws.String(server.URL)
 		options.UsePathStyle = true
 	})
-	return &S3Store{client: client, bucket: "stroy-test"}
+	return &S3Store{client: client, bucket: "stroy-test", deletionLedgerBucket: "stroy-deletion-ledger-test"}
 }
 
 func TestLocalStoreRoundTripAndTraversalRejection(t *testing.T) {
@@ -92,10 +95,23 @@ func TestLocalStoreRequiresExactObjectSize(t *testing.T) {
 
 func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 	var storedBody []byte
+	tombstoneRecorded := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
-			if !strings.HasPrefix(r.URL.Path, "/stroy-test") {
+			if r.URL.Path != "/stroy-test" && r.URL.Path != "/stroy-deletion-ledger-test" {
 				t.Errorf("unexpected S3 health-check path %q", r.URL.Path)
+			}
+		} else if r.Method == http.MethodGet && r.URL.Query().Has("location") {
+			if strings.TrimSuffix(r.URL.Path, "/") != "/stroy-deletion-ledger-test" {
+				t.Errorf("unexpected S3 deletion-ledger health-check path %q", r.URL.Path)
+			}
+		} else if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/stroy-deletion-ledger-test/tombstones/") {
+			tombstoneRecorded = true
+			if got := r.Header.Get("Content-Type"); got != "application/json" {
+				t.Errorf("unexpected deletion tombstone content type %q", got)
+			}
+			if _, err := io.Copy(io.Discard, r.Body); err != nil {
+				t.Errorf("read deletion tombstone: %v", err)
 			}
 		} else if r.URL.Path != "/stroy-test/project/2026/receipt.pdf" {
 			t.Errorf("unexpected S3 request path %q", r.URL.Path)
@@ -105,21 +121,30 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 		}
 		switch r.Method {
 		case http.MethodPut:
-			if got := r.Header.Get("Content-Type"); got != "application/pdf" {
-				t.Errorf("unexpected upload content type %q", got)
-			}
-			var err error
-			storedBody, err = io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("read upload body: %v", err)
+			if strings.HasPrefix(r.URL.Path, "/stroy-test/") {
+				if got := r.Header.Get("Content-Type"); got != "application/pdf" {
+					t.Errorf("unexpected upload content type %q", got)
+				}
+				var err error
+				storedBody, err = io.ReadAll(r.Body)
+				if err != nil {
+					t.Errorf("read upload body: %v", err)
+				}
 			}
 			w.Header().Set("ETag", `"etag"`)
 			w.WriteHeader(http.StatusOK)
 		case http.MethodGet:
+			if r.URL.Query().Has("location") {
+				_, _ = w.Write([]byte(`<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">us-east-1</LocationConstraint>`))
+				return
+			}
 			w.Header().Set("Content-Length", strconv.Itoa(len(storedBody)))
 			w.Header().Set("Content-Type", "application/pdf")
 			_, _ = w.Write(storedBody)
 		case http.MethodDelete:
+			if !tombstoneRecorded {
+				t.Error("S3 object deletion happened before its tombstone was recorded")
+			}
 			w.WriteHeader(http.StatusNoContent)
 		case http.MethodHead:
 			w.WriteHeader(http.StatusOK)
@@ -167,5 +192,68 @@ func TestS3StoreMapsNotFoundToFilesystemNotExist(t *testing.T) {
 	store := newTestS3Store(t, server)
 	if _, err := store.Get(context.Background(), "project/missing.pdf"); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("expected missing object to map to fs.ErrNotExist, got %v", err)
+	}
+}
+
+func TestS3DeletionJournalRecordsAccountAndObjectTombstones(t *testing.T) {
+	objects := map[string][]byte{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("unexpected S3 tombstone method %q", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Header.Get("Authorization") == "" {
+			t.Error("S3 tombstone request is not signed")
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("unexpected tombstone content type %q", got)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read tombstone: %v", err)
+		}
+		objects[r.URL.Path] = body
+		w.Header().Set("ETag", `"etag"`)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	store := newTestS3Store(t, server)
+	userID := "7cbcf034-8122-4d2d-92fd-f704dcdf8752"
+	if err := store.RecordAccountDeletion(context.Background(), userID); err != nil {
+		t.Fatalf("record account deletion tombstone: %v", err)
+	}
+	storagePath := "project/2026/receipt.pdf"
+	if err := store.RecordObjectDeletion(context.Background(), storagePath); err != nil {
+		t.Fatalf("record object deletion tombstone: %v", err)
+	}
+
+	var account deletionTombstone
+	if err := json.Unmarshal(objects["/stroy-deletion-ledger-test/tombstones/accounts/"+userID+".json"], &account); err != nil {
+		t.Fatalf("decode account tombstone: %v", err)
+	}
+	if account.Version != 1 || account.Kind != "account" || account.UserID != userID || account.CreatedAt.IsZero() {
+		t.Fatalf("unexpected account tombstone: %+v", account)
+	}
+
+	digest := sha256.Sum256([]byte(storagePath))
+	objectKey := "/stroy-deletion-ledger-test/tombstones/objects/" + hex.EncodeToString(digest[:]) + ".json"
+	var object deletionTombstone
+	if err := json.Unmarshal(objects[objectKey], &object); err != nil {
+		t.Fatalf("decode object tombstone: %v", err)
+	}
+	if object.Version != 1 || object.Kind != "object" || object.StoragePath != storagePath || object.CreatedAt.IsZero() {
+		t.Fatalf("unexpected object tombstone: %+v", object)
+	}
+}
+
+func TestS3DeletionJournalRejectsInvalidIdentifiersAndKeys(t *testing.T) {
+	store := &S3Store{deletionLedgerBucket: "stroy-deletion-ledger-test"}
+	if err := store.RecordAccountDeletion(context.Background(), "../../other-account"); err == nil {
+		t.Fatal("expected invalid account identifier to be rejected")
+	}
+	if err := store.RecordObjectDeletion(context.Background(), "../other-user/file.pdf"); err == nil {
+		t.Fatal("expected unsafe storage key to be rejected")
 	}
 }
