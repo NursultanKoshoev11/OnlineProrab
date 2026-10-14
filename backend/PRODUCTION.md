@@ -25,7 +25,7 @@ This checklist tracks the minimum work required before a real public release.
 - For Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, and exactly one of `TWILIO_FROM` or `TWILIO_MESSAGING_SERVICE_SID`.
 - For Nikita: `NIKITA_LOGIN`, `NIKITA_PASSWORD`, and `NIKITA_SENDER`; `NIKITA_API_URL` must be `https://smspro.nikita.kg/api/message` in staging/production.
 
-The API refuses unsafe configuration in staging and production when the JWT secret is missing or still uses the default placeholder.
+Generate `JWT_SECRET` with `openssl rand -hex 32` and store it directly in the host's secret configuration. The API refuses missing secrets, known placeholders, short values, low observed byte entropy, repeated patterns, and long sequential character runs in staging and production.
 Malformed boolean/integer settings and values that overflow duration or upload-size conversions stop startup with a sanitized configuration error; the process does not panic or echo the rejected value into logs.
 
 ## Staging environment

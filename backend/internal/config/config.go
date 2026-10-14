@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/netip"
 	"net/url"
@@ -28,9 +29,10 @@ const (
 )
 
 const (
-	minProductionSigningKeyLength = 32
-	minProductionAccessTokenTTL   = 5 * time.Minute
-	maxProductionAccessTokenTTL   = 60 * time.Minute
+	minProductionSigningKeyLength      = 32
+	minProductionSigningKeyEntropyBits = 128.0
+	minProductionAccessTokenTTL        = 5 * time.Minute
+	maxProductionAccessTokenTTL        = 60 * time.Minute
 )
 
 type Config struct {
@@ -282,7 +284,7 @@ func (cfg Config) Validate() error {
 			problems = append(problems, "JWT_SECRET is required in staging and production")
 		}
 		if isUnsafeSigningKey(cfg.JWTSecret) {
-			problems = append(problems, "JWT_SECRET must be replaced before staging or production")
+			problems = append(problems, "JWT_SECRET must be a high-entropy random value in staging and production")
 		}
 		if cfg.AccessTokenTTL < minProductionAccessTokenTTL || cfg.AccessTokenTTL > maxProductionAccessTokenTTL {
 			problems = append(problems, "ACCESS_TOKEN_TTL_MINUTES must be between 5 and 60 in staging and production")
@@ -443,7 +445,96 @@ func isUnsafeSigningKey(value string) bool {
 		return true
 	}
 	lower := strings.ToLower(trimmed)
-	return strings.Contains(lower, "change-this") || strings.Contains(lower, "dev-only") || strings.Contains(lower, "secret")
+	return strings.Contains(lower, "change-this") ||
+		strings.Contains(lower, "dev-only") ||
+		strings.Contains(lower, "secret") ||
+		hasRepeatedSigningKeyPattern(trimmed) ||
+		hasLongSequentialSigningKeyRun(trimmed) ||
+		estimatedSigningKeyEntropyBits(trimmed) < minProductionSigningKeyEntropyBits
+}
+
+// estimatedSigningKeyEntropyBits screens out low-diversity values; it cannot prove how a key was generated.
+func estimatedSigningKeyEntropyBits(value string) float64 {
+	var counts [256]int
+	for i := 0; i < len(value); i++ {
+		counts[value[i]]++
+	}
+
+	entropyPerByte := 0.0
+	for _, count := range counts {
+		if count == 0 {
+			continue
+		}
+		probability := float64(count) / float64(len(value))
+		entropyPerByte -= probability * math.Log2(probability)
+	}
+	return entropyPerByte * float64(len(value))
+}
+
+func hasRepeatedSigningKeyPattern(value string) bool {
+	for period := 1; period <= 16 && period*2 <= len(value); period++ {
+		repeated := true
+		for i := period; i < len(value); i++ {
+			if value[i] != value[i%period] {
+				repeated = false
+				break
+			}
+		}
+		if repeated {
+			return true
+		}
+	}
+	return false
+}
+
+func hasLongSequentialSigningKeyRun(value string) bool {
+	const minimumSequentialRun = 12
+	previousRank, previousIsSequenceCharacter := signingKeyCharacterRank(value[0])
+	direction := 0
+	runLength := 1
+
+	for i := 1; i < len(value); i++ {
+		rank, isSequenceCharacter := signingKeyCharacterRank(value[i])
+		if !previousIsSequenceCharacter || !isSequenceCharacter {
+			previousRank = rank
+			previousIsSequenceCharacter = isSequenceCharacter
+			direction = 0
+			runLength = 1
+			continue
+		}
+
+		delta := rank - previousRank
+		if delta == 1 || delta == -1 {
+			if direction == delta {
+				runLength++
+			} else {
+				direction = delta
+				runLength = 2
+			}
+			if runLength >= minimumSequentialRun {
+				return true
+			}
+		} else {
+			direction = 0
+			runLength = 1
+		}
+		previousRank = rank
+		previousIsSequenceCharacter = isSequenceCharacter
+	}
+	return false
+}
+
+func signingKeyCharacterRank(value byte) (int, bool) {
+	switch {
+	case value >= '0' && value <= '9':
+		return int(value - '0'), true
+	case value >= 'a' && value <= 'z':
+		return int(value-'a') + 10, true
+	case value >= 'A' && value <= 'Z':
+		return int(value-'A') + 10, true
+	default:
+		return 0, false
+	}
 }
 
 func isUnsafeProductionOrigin(origin string) bool {
