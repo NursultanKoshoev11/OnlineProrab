@@ -25,7 +25,8 @@ The API refuses unsafe configuration in staging and production when the JWT secr
 - Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
 - Use a `DATABASE_URL` with `sslmode=verify-full` in staging and production; the API rejects connections that do not verify every database host's certificate and hostname.
 - Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET` for Amazon S3. The application uses AWS SDK region-based endpoints and the standard AWS credential chain; custom S3 endpoints are not supported. Prefer an IAM role for the workload. For a host without AWS workload identity, use a dedicated, least-privilege IAM access key injected through `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; never put credentials in the image or source control. Readiness checks database and bucket availability.
-- Keep the bucket private, enable all S3 Block Public Access settings, and use Bucket owner enforced object ownership. Configure default encryption (SSE-S3 or SSE-KMS); an SSE-KMS key policy must also allow the workload role to use the key. Grant only bucket health-check (`s3:ListBucket`) and object get, put, and delete permissions for this application's bucket. The API serves objects only after its existing project authorization check and never publishes object URLs or public ACLs.
+- Provision one bucket per environment with [`onlineprorab-storage.yaml`](../deploy/aws/onlineprorab-storage.yaml), following [`deploy/aws/README.md`](../deploy/aws/README.md). The template enables all S3 Block Public Access settings, Bucket owner enforced object ownership, SSE-S3 encryption, and HTTPS-only bucket access; it also outputs a managed policy limited to bucket health checks and object get, put, and delete. Attach that policy to the API workload role or a dedicated IAM user.
+- The API serves objects only after its existing project authorization check and never publishes object URLs or public ACLs. If using SSE-KMS instead of the template's SSE-S3 default, the KMS key policy must also allow the workload principal to use the key.
 - Leave S3 versioning disabled until account deletion permanently removes every noncurrent version within the applicable deletion window. S3 delete markers alone do not erase old versions. If versioning is enabled later, configure and verify a lifecycle rule that permanently expires noncurrent versions.
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
@@ -37,7 +38,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## Current production blockers
 
-1. Provision a private AWS S3 bucket and least-privilege IAM role or credentials for each environment. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
+1. Deploy one private AWS S3 stack per environment with [`deploy/aws/README.md`](../deploy/aws/README.md), attach its least-privilege policy, and configure the API credentials. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
 2. Ship JSON logs to a secure external collector, configure alerts, and monitor `/health` and `/ready` externally.
 3. Test PostgreSQL and object-storage backup/restore in staging, including account-deletion and object-version retention behavior.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.

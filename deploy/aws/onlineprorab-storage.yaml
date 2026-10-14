@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private, encrypted Amazon S3 uploads storage and least-privilege application policy for OnlineProrab.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - staging
+      - production
+    Description: Deployment environment represented by this storage stack.
+  BucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 bucket name; dots are excluded for TLS-compatible virtual-hosted access.
+
+Resources:
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub "${UploadsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ApplicationStoragePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Least-privilege S3 access for one OnlineProrab environment.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CheckBucketAvailability
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: ReadWriteApplicationObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+
+Outputs:
+  UploadsBucketName:
+    Description: Set this value as S3_BUCKET.
+    Value: !Ref UploadsBucket
+  UploadsBucketRegion:
+    Description: Set this value as S3_REGION.
+    Value: !Ref AWS::Region
+  UploadsBucketArn:
+    Description: S3 bucket ARN for operational verification.
+    Value: !GetAtt UploadsBucket.Arn
+  ApplicationStoragePolicyArn:
+    Description: Attach this policy to the API workload role or dedicated IAM user.
+    Value: !Ref ApplicationStoragePolicy
