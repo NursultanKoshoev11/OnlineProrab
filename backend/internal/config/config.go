@@ -341,7 +341,7 @@ func isUnsafeProductionOrigin(origin string) bool {
 		return true
 	}
 
-	host := strings.ToLower(parsed.Hostname())
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return true
 	}

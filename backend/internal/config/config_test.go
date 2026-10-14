@@ -57,7 +57,10 @@ func TestValidateRejectsUnsafeCORSOriginsInStaging(t *testing.T) {
 		"https://app.example.com#fragment",
 		"https://*.example.com",
 		"https://localhost:8443",
+		"https://localhost.:8443",
+		"https://staging.localhost.:8443",
 		"https://127.0.0.1:8443",
+		"https://127.0.0.1.:8443",
 		"https://[::1]:8443",
 		"https://0.0.0.0:8443",
 	}
