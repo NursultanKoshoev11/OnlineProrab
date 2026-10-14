@@ -36,9 +36,8 @@ type authResponse struct {
 
 var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}$`)
 
-// developmentSMSCode is intentionally available only when the backend runs
-// outside production without a configured SMS sender. It keeps local/staging
-// smoke tests usable without weakening production authentication.
+// developmentSMSCode is available only when local development explicitly
+// enables it, binds the server to loopback, and has no configured SMS sender.
 const developmentSMSCode = "111111"
 
 func isReviewPhone(phone string) bool {
@@ -106,7 +105,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusBadGateway, "failed to deliver login code")
 			return
 		}
-	} else if appState.IsProduction && !reviewPhone {
+	} else if !reviewPhone && !developmentSMSFallbackEnabled() {
 		cleanupSMSCode(codeID)
 		Error(w, http.StatusServiceUnavailable, "SMS service is unavailable")
 		return
@@ -115,14 +114,18 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 	invalidateOlderSMSCodes(req.Phone, codeID)
 
 	response := map[string]any{"status": "code_requested", "expires_in": 300}
-	if !appState.IsProduction && appState.SMSSender == nil {
+	if developmentSMSFallbackEnabled() {
 		response["dev_code"] = code
 	}
 	JSON(w, http.StatusAccepted, response)
 }
 
+func developmentSMSFallbackEnabled() bool {
+	return appState.IsDevelopment && appState.DevSMSCodeEnabled && appState.SMSSender == nil
+}
+
 func issueSMSCode() (string, error) {
-	if !appState.IsProduction && appState.SMSSender == nil {
+	if developmentSMSFallbackEnabled() {
 		return developmentSMSCode, nil
 	}
 	return generateSMSCode()

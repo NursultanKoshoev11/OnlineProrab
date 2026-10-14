@@ -47,8 +47,8 @@ func Run() {
 		}
 		smsSender = sender
 	}
-	if cfg.IsProduction() && smsSender == nil && !cfg.ReviewOnlyMode {
-		log.Fatal("SMS provider is required in production unless review-only mode is enabled")
+	if cfg.IsProductionLike() && smsSender == nil && !cfg.ReviewOnlyMode {
+		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
 	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

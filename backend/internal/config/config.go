@@ -1,18 +1,22 @@
 package config
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 const (
 	DevelopmentEnv = "development"
+	StagingEnv     = "staging"
 	ProductionEnv  = "production"
 )
 
@@ -33,6 +37,7 @@ type Config struct {
 	DatabaseURL               string
 	JWTSecret                 string
 	AccessTokenTTL            time.Duration
+	DevSMSCodeEnabled         bool
 	CORSAllowedOrigins        []string
 	UploadDir                 string
 	MaxUploadBytes            int64
@@ -68,14 +73,18 @@ type Config struct {
 }
 
 func Load() Config {
-	_ = godotenv.Load()
+	processEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
+	if processEnv == "" || strings.EqualFold(processEnv, DevelopmentEnv) {
+		_ = godotenv.Load()
+	}
 
 	cfg := Config{}
-	cfg.Env = getEnv("APP_ENV", DevelopmentEnv)
+	cfg.Env = getEnv("APP_ENV", "")
 	cfg.HTTPAddr = getEnv("HTTP_ADDR", ":8080")
 	cfg.DatabaseURL = os.Getenv("DATABASE_URL")
 	cfg.JWTSecret = os.Getenv("JWT_SECRET")
 	cfg.AccessTokenTTL = time.Duration(getEnvInt("ACCESS_TOKEN_TTL_MINUTES", 15)) * time.Minute
+	cfg.DevSMSCodeEnabled = getEnvBool("DEV_SMS_CODE_ENABLED", false)
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
@@ -115,11 +124,23 @@ func (cfg Config) IsProduction() bool {
 	return strings.EqualFold(cfg.Env, ProductionEnv)
 }
 
+func (cfg Config) IsDevelopment() bool {
+	return strings.EqualFold(cfg.Env, DevelopmentEnv)
+}
+
+func (cfg Config) IsStaging() bool {
+	return strings.EqualFold(cfg.Env, StagingEnv)
+}
+
+func (cfg Config) IsProductionLike() bool {
+	return cfg.IsProduction() || cfg.IsStaging()
+}
+
 func (cfg Config) Validate() error {
 	var problems []string
 
-	if !strings.EqualFold(cfg.Env, DevelopmentEnv) && !strings.EqualFold(cfg.Env, ProductionEnv) {
-		problems = append(problems, "APP_ENV must be development or production")
+	if !cfg.IsDevelopment() && !cfg.IsStaging() && !cfg.IsProduction() {
+		problems = append(problems, "APP_ENV must be explicitly set to development, staging, or production")
 	}
 	if strings.TrimSpace(cfg.HTTPAddr) == "" {
 		problems = append(problems, "HTTP_ADDR is required")
@@ -145,6 +166,18 @@ func (cfg Config) Validate() error {
 	if cfg.SMSProvider == SMSProviderNikita {
 		problems = append(problems, validateNikitaConfig(cfg)...)
 	}
+	if cfg.DevSMSCodeEnabled && !cfg.IsDevelopment() {
+		problems = append(problems, "DEV_SMS_CODE_ENABLED is allowed only when APP_ENV=development")
+	}
+	if cfg.DevSMSCodeEnabled && !isLoopbackHTTPAddr(cfg.HTTPAddr) {
+		problems = append(problems, "DEV_SMS_CODE_ENABLED requires HTTP_ADDR to use a loopback address")
+	}
+	if cfg.NikitaTestMode && !cfg.IsDevelopment() {
+		problems = append(problems, "NIKITA_TEST_MODE is allowed only when APP_ENV=development")
+	}
+	if cfg.NikitaTestMode && !isLoopbackHTTPAddr(cfg.HTTPAddr) {
+		problems = append(problems, "NIKITA_TEST_MODE requires HTTP_ADDR to use a loopback address")
+	}
 
 	reviewPhoneSet := cfg.ReviewSMSPhone != ""
 	reviewCodeSet := cfg.ReviewSMSCode != ""
@@ -161,27 +194,42 @@ func (cfg Config) Validate() error {
 		problems = append(problems, "REVIEW_SMS_CODE must be exactly 6 digits")
 	}
 
-	if cfg.IsProduction() {
+	if cfg.ReviewOnlyMode && !cfg.IsProduction() {
+		problems = append(problems, "REVIEW_ONLY_MODE is allowed only when APP_ENV=production")
+	}
+
+	if cfg.IsProductionLike() {
+		if cfg.IsStaging() && cfg.ReviewOnlyMode {
+			problems = append(problems, "REVIEW_ONLY_MODE is not allowed in staging")
+		}
 		if strings.TrimSpace(cfg.JWTSecret) == "" {
-			problems = append(problems, "JWT_SECRET is required in production")
+			problems = append(problems, "JWT_SECRET is required in staging and production")
 		}
 		if isUnsafeSigningKey(cfg.JWTSecret) {
-			problems = append(problems, "JWT_SECRET must be replaced before production")
+			problems = append(problems, "JWT_SECRET must be replaced before staging or production")
 		}
 		if cfg.AccessTokenTTL < minProductionAccessTokenTTL || cfg.AccessTokenTTL > maxProductionAccessTokenTTL {
-			problems = append(problems, "ACCESS_TOKEN_TTL_MINUTES must be between 5 and 60 in production")
+			problems = append(problems, "ACCESS_TOKEN_TTL_MINUTES must be between 5 and 60 in staging and production")
 		}
 		if len(cfg.CORSAllowedOrigins) == 0 {
-			problems = append(problems, "CORS_ALLOWED_ORIGINS is required in production")
+			problems = append(problems, "CORS_ALLOWED_ORIGINS is required in staging and production")
 		}
 		for _, origin := range cfg.CORSAllowedOrigins {
 			if isUnsafeProductionOrigin(origin) {
-				problems = append(problems, "CORS_ALLOWED_ORIGINS contains a non-production origin")
+				problems = append(problems, "CORS_ALLOWED_ORIGINS contains an insecure origin")
 				break
 			}
 		}
-		if !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
+		if cfg.IsStaging() && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
+			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in staging")
+		}
+		if cfg.IsProduction() && !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
 			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in production unless REVIEW_ONLY_MODE is enabled")
+		}
+		if cfg.IsStaging() {
+			if err := validateVerifiedDatabaseTLS(cfg.DatabaseURL); err != nil {
+				problems = append(problems, err.Error())
+			}
 		}
 	}
 
@@ -189,6 +237,38 @@ func (cfg Config) Validate() error {
 		return errors.New(strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+func validateVerifiedDatabaseTLS(databaseURL string) error {
+	poolConfig, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return errors.New("DATABASE_URL must be a valid PostgreSQL URL with verified TLS in staging")
+	}
+	if !usesVerifiedPostgresTLS(poolConfig.ConnConfig.TLSConfig) {
+		return errors.New("DATABASE_URL must use sslmode=verify-full in staging")
+	}
+	for _, fallback := range poolConfig.ConnConfig.Fallbacks {
+		if !usesVerifiedPostgresTLS(fallback.TLSConfig) {
+			return errors.New("DATABASE_URL must use sslmode=verify-full for every staging database host")
+		}
+	}
+	return nil
+}
+
+func usesVerifiedPostgresTLS(tlsConfig *tls.Config) bool {
+	return tlsConfig != nil && !tlsConfig.InsecureSkipVerify && strings.TrimSpace(tlsConfig.ServerName) != ""
+}
+
+func isLoopbackHTTPAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func validateTwilioConfig(cfg Config) []string {

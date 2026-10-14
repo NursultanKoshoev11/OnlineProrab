@@ -34,6 +34,9 @@ func TestIssueSMSCodeUsesFixedDevelopmentCodeOnlyWithoutSMSProvider(t *testing.T
 	defer func() { appState = oldState }()
 
 	appState.IsProduction = false
+	appState.IsProductionLike = false
+	appState.IsDevelopment = true
+	appState.DevSMSCodeEnabled = true
 	appState.SMSSender = nil
 	code, err := issueSMSCode()
 	if err != nil {
@@ -49,6 +52,9 @@ func TestIssueSMSCodeDoesNotUseFixedCodeInProduction(t *testing.T) {
 	defer func() { appState = oldState }()
 
 	appState.IsProduction = true
+	appState.IsProductionLike = true
+	appState.IsDevelopment = false
+	appState.DevSMSCodeEnabled = false
 	appState.SMSSender = nil
 	code, err := issueSMSCode()
 	if err != nil {
@@ -56,6 +62,25 @@ func TestIssueSMSCodeDoesNotUseFixedCodeInProduction(t *testing.T) {
 	}
 	if code == developmentSMSCode {
 		t.Fatalf("production code must not be the fixed development code %q", developmentSMSCode)
+	}
+}
+
+func TestIssueSMSCodeDoesNotUseFixedCodeInStaging(t *testing.T) {
+	oldState := appState
+	defer func() { appState = oldState }()
+
+	appState.IsProduction = false
+	appState.IsProductionLike = true
+	appState.IsDevelopment = false
+	appState.DevSMSCodeEnabled = true // Simulate a hostile environment override.
+	appState.SMSSender = nil
+
+	code, err := issueSMSCode()
+	if err != nil {
+		t.Fatalf("issueSMSCode returned error: %v", err)
+	}
+	if code == developmentSMSCode {
+		t.Fatalf("staging code must not be the fixed development code %q", developmentSMSCode)
 	}
 }
 
@@ -151,7 +176,6 @@ func TestHashLoginCodeDependsOnPhoneAndCode(t *testing.T) {
 		t.Fatal("expected hash to change when code changes")
 	}
 }
-
 
 func TestIssueSMSCodeForPhoneUsesConfiguredReviewCodeOnlyForReviewPhone(t *testing.T) {
 	oldState := appState

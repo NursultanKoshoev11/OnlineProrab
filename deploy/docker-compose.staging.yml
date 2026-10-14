@@ -8,27 +8,29 @@ services:
     networks:
       - stroy_default
     environment:
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: staging
       HTTP_ADDR: :8080
-      DATABASE_URL: postgres://${STROY_DB_USER:-stroy}:${STROY_DB_PASSWORD}@postgres:5432/${STROY_DB_NAME:-stroy}?sslmode=disable
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-60}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://stroy.com.kg}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
       UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
       SUPPORT_TELEGRAM_BOT_TOKEN: ${SUPPORT_TELEGRAM_BOT_TOKEN:-}
       SUPPORT_TELEGRAM_CHAT_ID: ${SUPPORT_TELEGRAM_CHAT_ID:-}
-      SMS_PROVIDER: ${SMS_PROVIDER:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
+      DEV_SMS_CODE_ENABLED: "false"
+      REVIEW_ONLY_MODE: "false"
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_API_KEY_SID: ${TWILIO_API_KEY_SID:-}
       TWILIO_API_KEY_SECRET: ${TWILIO_API_KEY_SECRET:-}
       TWILIO_FROM: ${TWILIO_FROM:-}
       TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
-      NIKITA_API_URL: ${NIKITA_API_URL:-https://smspro.nikita.kg/api/message}
+      NIKITA_API_URL: https://smspro.nikita.kg/api/message
       NIKITA_LOGIN: ${NIKITA_LOGIN:-}
       NIKITA_PASSWORD: ${NIKITA_PASSWORD:-}
       NIKITA_SENDER: ${NIKITA_SENDER:-}
-      NIKITA_TEST_MODE: ${NIKITA_TEST_MODE:-false}
+      NIKITA_TEST_MODE: "false"
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
       AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-gemini,groq,openrouter,openrouter-fallback}

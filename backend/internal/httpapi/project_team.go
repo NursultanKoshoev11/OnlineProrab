@@ -257,7 +257,7 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 		"status":     "invited",
 		"expires_in": int64(projectInviteTTL.Seconds()),
 	}
-	if !appState.IsProduction {
+	if !appState.IsProductionLike {
 		response["invite_token"] = token
 	}
 	publishProjectEvent(req.ProjectID, "project_member", "", "invited")

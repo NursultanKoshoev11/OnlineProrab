@@ -15,6 +15,16 @@ This checklist tracks the minimum work required before a real public release.
 
 The API refuses unsafe production configuration when `APP_ENV=production` and the JWT secret is missing or still uses the default placeholder.
 
+## Staging environment
+
+- Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
+- Use a `DATABASE_URL` with `sslmode=verify-full`; staging rejects PostgreSQL URLs that do not verify the server certificate and hostname.
+- Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
+- Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
+- Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
+
+For local development, the fixed `dev_code` response is disabled by default. To opt in, set `DEV_SMS_CODE_ENABLED=true` and bind `HTTP_ADDR` to `127.0.0.1` or `localhost`.
+
 ## Current production blockers
 
 1. Configure durable object storage for uploaded photos, receipts and documents.

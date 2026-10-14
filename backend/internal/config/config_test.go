@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -208,5 +210,126 @@ func TestValidateRejectsInvalidReviewCode(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected invalid review code to be rejected")
+	}
+}
+
+func TestValidateAcceptsStagingWithVerifiedTLSAndSMSProvider(t *testing.T) {
+	cfg := validStagingConfig()
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid staging config, got %v", err)
+	}
+}
+
+func TestValidateRequiresSMSProviderInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.SMSProvider = ""
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "SMS_PROVIDER") {
+		t.Fatalf("expected missing staging SMS provider to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRequiresVerifiedDatabaseTLSInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=disable"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+		t.Fatalf("expected staging database without verified TLS to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRejectsReviewOnlyModeInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.ReviewOnlyMode = true
+	cfg.ReviewSMSPhone = "+996700000001"
+	cfg.ReviewSMSCode = "111111"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "REVIEW_ONLY_MODE") {
+		t.Fatalf("expected staging review-only mode to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRejectsDevelopmentSMSCodeOutsideLoopbackDevelopment(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.DevSMSCodeEnabled = true
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "DEV_SMS_CODE_ENABLED") {
+		t.Fatalf("expected staging development SMS fallback to be rejected, got %v", err)
+	}
+}
+
+func TestValidateAllowsDevelopmentSMSCodeOnlyOnLoopback(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = DevelopmentEnv
+	cfg.DevSMSCodeEnabled = true
+	cfg.HTTPAddr = ":8080"
+
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "DEV_SMS_CODE_ENABLED") {
+		t.Fatalf("expected development SMS fallback on a non-loopback address to be rejected, got %v", err)
+	}
+
+	cfg.HTTPAddr = "127.0.0.1:8080"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected loopback-only development fallback to be valid, got %v", err)
+	}
+}
+
+func validStagingConfig() Config {
+	cfg := validProductionConfig()
+	cfg.Env = StagingEnv
+	cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full"
+	return cfg
+}
+
+func TestLoadDoesNotReadDotEnvForStaging(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("APP_ENV=development\nDEV_SMS_CODE_ENABLED=true\nOPENROUTER_API_KEY=dotenv-secret\n"), 0600); err != nil {
+		t.Fatalf("write staging test dotenv: %v", err)
+	}
+	previousDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("change to staging test directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	t.Setenv("APP_ENV", StagingEnv)
+	t.Setenv("DEV_SMS_CODE_ENABLED", "false")
+
+	previousAPIKey, hadAPIKey := os.LookupEnv("OPENROUTER_API_KEY")
+	if err := os.Unsetenv("OPENROUTER_API_KEY"); err != nil {
+		t.Fatalf("unset API key for dotenv test: %v", err)
+	}
+	t.Cleanup(func() {
+		if hadAPIKey {
+			_ = os.Setenv("OPENROUTER_API_KEY", previousAPIKey)
+		} else {
+			_ = os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	})
+
+	cfg := Load()
+	if cfg.Env != StagingEnv {
+		t.Fatalf("expected staging environment to remain fixed, got %q", cfg.Env)
+	}
+	if cfg.DevSMSCodeEnabled {
+		t.Fatal("staging must not enable the development SMS fallback from .env")
+	}
+	if cfg.OpenRouterAPIKey != "" {
+		t.Fatal("staging must not load provider credentials from .env")
 	}
 }
