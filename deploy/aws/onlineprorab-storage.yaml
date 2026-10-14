@@ -293,7 +293,7 @@ Resources:
   StorageRecoveryPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: Read and restore uploads in this environment's private bucket.
+      Description: Restore uploads and write the object tombstones required for safe recovery.
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -309,6 +309,10 @@ Resources:
               - s3:DeleteObject
               - s3:AbortMultipartUpload
             Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteRecoveryObjectTombstones
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/objects/*"
 
 Outputs:
   UploadsBucketName:
@@ -336,7 +340,7 @@ Outputs:
     Description: Attach to a recovery operator that must replay deletion events.
     Value: !Ref DeletionJournalReadPolicy
   StorageRecoveryPolicyArn:
-    Description: Attach to a recovery operator that must read or restore uploads.
+    Description: Attach to a recovery identity that restores uploads and writes object tombstones.
     Value: !Ref StorageRecoveryPolicy
   BackupWriterPolicyArn:
     Description: Attach to a backup runner that reads uploads and writes encrypted snapshots.
