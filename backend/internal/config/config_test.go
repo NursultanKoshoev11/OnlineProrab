@@ -221,6 +221,38 @@ func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUntrustedNikitaProductionEndpoints(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		endpoint string
+	}{
+		{name: "http transport", endpoint: "http://smspro.nikita.kg/api/message"},
+		{name: "lookalike host", endpoint: "https://smspro.nikita.kg.evil.example/api/message"},
+		{name: "untrusted host", endpoint: "https://evil.example/api/message"},
+		{name: "userinfo", endpoint: "https://user:password@smspro.nikita.kg/api/message"},
+		{name: "unexpected path", endpoint: "https://smspro.nikita.kg/api/other"},
+		{name: "query string", endpoint: "https://smspro.nikita.kg/api/message?redirect=https://evil.example"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.SMSProvider = SMSProviderNikita
+			cfg.TwilioAccountSID = ""
+			cfg.TwilioAPIKeySID = ""
+			cfg.TwilioAPIKeySecret = ""
+			cfg.TwilioFrom = ""
+			cfg.NikitaAPIURL = test.endpoint
+			cfg.NikitaLogin = "test-login"
+			cfg.NikitaPassword = "test-password"
+			cfg.NikitaSender = "SMSPRO.KG"
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "official HTTPS endpoint") {
+				t.Fatalf("expected untrusted endpoint %q to be rejected, got %v", test.endpoint, err)
+			}
+		})
+	}
+}
+
 func TestValidateRejectsIncompleteNikitaConfig(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.SMSProvider = SMSProviderNikita

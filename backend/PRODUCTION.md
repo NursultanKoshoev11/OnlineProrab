@@ -21,6 +21,9 @@ This checklist tracks the minimum work required before a real public release.
 - AWS credentials from an IAM workload role, or `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (plus `AWS_SESSION_TOKEN` for temporary credentials)
 - `UPLOAD_DIR=/data/uploads` (legacy volume used by the migration tool)
 - `MAX_UPLOAD_MB=10`
+- `SMS_PROVIDER=twilio` or `nikita`; supply that provider's credentials below.
+- For Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, and exactly one of `TWILIO_FROM` or `TWILIO_MESSAGING_SERVICE_SID`.
+- For Nikita: `NIKITA_LOGIN`, `NIKITA_PASSWORD`, and `NIKITA_SENDER`; `NIKITA_API_URL` must be `https://smspro.nikita.kg/api/message` in staging/production.
 
 The API refuses unsafe configuration in staging and production when the JWT secret is missing or still uses the default placeholder.
 
@@ -32,7 +35,7 @@ The API refuses unsafe configuration in staging and production when the JWT secr
 - Provision separate private uploads, deletion-ledger, and backup-archive buckets per environment with [`onlineprorab-storage.yaml`](../deploy/aws/onlineprorab-storage.yaml), following [`deploy/aws/README.md`](../deploy/aws/README.md). The template enables all S3 Block Public Access settings, Bucket owner enforced object ownership, SSE-S3 encryption, and HTTPS-only bucket access. Attach `ApplicationStoragePolicyArn` to the API role; it permits app object access and tombstone writes only. Attach `BackupWriterPolicyArn` to the scheduled backup runner, and `BackupArchiveReadPolicyArn`, `StorageRecoveryPolicyArn`, and `DeletionJournalReadPolicyArn` to a separate recovery identity.
 - The API serves objects only after its existing project authorization check and never publishes object URLs or public ACLs. If using SSE-KMS instead of the template's SSE-S3 default, the KMS key policy must also allow the workload principal to use the key.
 - Leave S3 versioning disabled until account deletion permanently removes every noncurrent version within the applicable deletion window. S3 delete markers alone do not erase old versions. If versioning is enabled later, configure and verify a lifecycle rule that permanently expires noncurrent versions.
-- Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
+- Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable. Nikita credentials are sent only to its official HTTPS endpoint; staging/production reject custom URLs, and redirect responses are not followed.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
 - Set `TRUSTED_PROXY_CIDRS` to the exact IP addresses or narrow CIDRs of proxies that connect to the API container. The API trusts `X-Forwarded-For` only when `RemoteAddr` belongs to one of these networks; direct requests cannot spoof the limiter's client IP.

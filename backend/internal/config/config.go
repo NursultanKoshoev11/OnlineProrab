@@ -372,6 +372,8 @@ func validateNikitaConfig(cfg Config) []string {
 	var problems []string
 	if strings.TrimSpace(cfg.NikitaAPIURL) == "" {
 		problems = append(problems, "NIKITA_API_URL is required")
+	} else if cfg.IsProductionLike() && !isOfficialNikitaAPIURL(cfg.NikitaAPIURL) {
+		problems = append(problems, "NIKITA_API_URL must be the official HTTPS endpoint https://smspro.nikita.kg/api/message in staging and production")
 	}
 	if strings.TrimSpace(cfg.NikitaLogin) == "" {
 		problems = append(problems, "NIKITA_LOGIN is required")
@@ -383,6 +385,21 @@ func validateNikitaConfig(cfg Config) []string {
 		problems = append(problems, "NIKITA_SENDER is required")
 	}
 	return problems
+}
+
+func isOfficialNikitaAPIURL(value string) bool {
+	endpoint, err := url.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(endpoint.Scheme, "https") &&
+		strings.EqualFold(endpoint.Host, "smspro.nikita.kg") &&
+		endpoint.Path == "/api/message" &&
+		endpoint.RawQuery == "" &&
+		!endpoint.ForceQuery &&
+		endpoint.Fragment == "" &&
+		endpoint.User == nil &&
+		endpoint.Opaque == ""
 }
 
 func isUnsafeSigningKey(value string) bool {
