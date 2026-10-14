@@ -114,7 +114,7 @@ jobs:
         working-directory: mobile
     env:
       STROY_APPLICATION_ID: ${{ vars.STROY_APPLICATION_ID }}
-      STROY_KEYSTORE_PATH: ${{ runner.temp }}/stroy-upload.jks
+      STROY_KEYSTORE_PATH: ${{ github.workspace }}/mobile/stroy-upload.jks
       STROY_KEYSTORE_PASSWORD: ${{ secrets.STROY_KEYSTORE_PASSWORD }}
       STROY_KEY_ALIAS: ${{ secrets.STROY_KEY_ALIAS }}
       STROY_KEY_PASSWORD: ${{ secrets.STROY_KEY_PASSWORD }}
@@ -237,7 +237,7 @@ jobs:
     env:
       STROY_IOS_BUNDLE_ID: ${{ vars.STROY_IOS_BUNDLE_ID }}
       STROY_IOS_TEAM_ID: ${{ vars.STROY_IOS_TEAM_ID }}
-      STROY_KEYCHAIN_PATH: ${{ runner.temp }}/stroy-ios-signing.keychain-db
+      STROY_KEYCHAIN_PATH: ${{ github.workspace }}/stroy-ios-signing.keychain-db
 
     steps:
       - name: Checkout
