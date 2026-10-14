@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
+	"net/netip"
+	"sort"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,7 +23,13 @@ const (
 	maxVerifyAttemptsRemote = 30
 	authAttemptRetention    = 7 * 24 * time.Hour
 	smsCodeRetention        = 24 * time.Hour
+	authAttemptPruneEvery   = 6 * time.Hour
+	authAttemptPruneBatch   = 5000
 )
+
+var lastAuthAttemptPrune atomic.Int64
+
+var errInvalidClientAddress = errors.New("cannot determine client IP from the configured trusted proxy")
 
 func withSMSVerifyRateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -43,57 +55,165 @@ func withSMSVerifyRateLimit(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		phone := normalizePhone(payload.Phone)
-		remoteKey := requestRemoteKey(r)
+		if !phoneRe.MatchString(phone) {
+			phone = ""
+		} else {
+			phone = smsRateLimitPhone(phone)
+		}
+
+		remoteKey, err := requestRemoteKey(r)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "invalid client address")
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-		defer cancel()
-
-		_, _ = appState.DB.Pool.Exec(ctx, `
-			DELETE FROM auth_attempts
-			WHERE created_at < now() - make_interval(secs => $1)
-		`, int(authAttemptRetention.Seconds()))
-		_, _ = appState.DB.Pool.Exec(ctx, `
-			DELETE FROM sms_login_codes
-			WHERE created_at < now() - make_interval(secs => $1)
-		`, int(smsCodeRetention.Seconds()))
-
-		var phoneFailures int
-		var remoteFailures int
-		err = appState.DB.Pool.QueryRow(ctx, `
-			SELECT
-				COUNT(*) FILTER (
-					WHERE phone = $1
-					  AND action = 'sms_verify'
-					  AND succeeded = FALSE
-					  AND created_at > now() - make_interval(secs => $3)
-				),
-				COUNT(*) FILTER (
-					WHERE remote_key = $2
-					  AND action = 'sms_verify'
-					  AND succeeded = FALSE
-					  AND created_at > now() - make_interval(secs => $3)
-				)
-			FROM auth_attempts
-		`, phone, remoteKey, int(verifyAttemptWindow.Seconds())).Scan(&phoneFailures, &remoteFailures)
+		attemptID, retryAfter, err := reserveAuthAttempt(
+			ctx,
+			"sms_verify",
+			phone,
+			remoteKey,
+			verifyAttemptWindow,
+			maxVerifyAttemptsPhone,
+			maxVerifyAttemptsRemote,
+			0,
+		)
+		cancel()
 		if err != nil {
 			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
 			return
 		}
-		if phoneFailures >= maxVerifyAttemptsPhone || remoteFailures >= maxVerifyAttemptsRemote {
-			w.Header().Set("Retry-After", "900")
+		if retryAfter > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
 			Error(w, http.StatusTooManyRequests, "too many verification attempts")
 			return
 		}
 
+		pruneAuthHistoryIfDue()
+
 		recorder := &authStatusRecorder{ResponseWriter: w}
 		next(recorder, r)
-		succeeded := recorder.status >= 200 && recorder.status < 300
-		writeCtx, writeCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer writeCancel()
-		_, _ = appState.DB.Pool.Exec(writeCtx, `
-			INSERT INTO auth_attempts (phone, remote_key, action, succeeded)
-			VALUES (NULLIF($1, ''), $2, 'sms_verify', $3)
-		`, phone, remoteKey, succeeded)
+		completeAuthAttempt(attemptID, recorder.status >= 200 && recorder.status < 300)
+	}
+}
+
+func reserveAuthAttempt(
+	ctx context.Context,
+	action string,
+	phone string,
+	remoteKey string,
+	window time.Duration,
+	phoneLimit int,
+	remoteLimit int,
+	phoneCooldown time.Duration,
+) (int64, time.Duration, error) {
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	lockKeys := []string{"auth-attempt:" + action + ":remote:" + remoteKey}
+	if phone != "" {
+		lockKeys = append(lockKeys, "auth-attempt:"+action+":phone:"+phone)
+	}
+	sort.Strings(lockKeys)
+	for _, key := range lockKeys {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, key); err != nil {
+			return 0, 0, err
+		}
+	}
+
+	var phoneCount int
+	var remoteCount int
+	var latestPhoneAttempt time.Time
+	err = tx.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE remote_key = $1),
+			COUNT(*) FILTER (WHERE phone IN (NULLIF($2, ''), '+' || NULLIF($2, ''))),
+			COALESCE(MAX(created_at) FILTER (WHERE phone IN (NULLIF($2, ''), '+' || NULLIF($2, ''))), to_timestamp(0))
+		FROM auth_attempts
+		WHERE action = $3
+		  AND created_at > now() - make_interval(secs => $4)
+		  AND (remote_key = $1 OR phone IN (NULLIF($2, ''), '+' || NULLIF($2, '')))
+	`, remoteKey, phone, action, int(window.Seconds())).Scan(&remoteCount, &phoneCount, &latestPhoneAttempt)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if phoneCooldown > 0 && phone != "" && latestPhoneAttempt.Unix() > 0 {
+		remaining := time.Until(latestPhoneAttempt.Add(phoneCooldown))
+		if remaining > 0 {
+			return 0, remaining, nil
+		}
+	}
+	if remoteLimit > 0 && remoteCount >= remoteLimit {
+		return 0, window, nil
+	}
+	if phoneLimit > 0 && phone != "" && phoneCount >= phoneLimit {
+		return 0, window, nil
+	}
+
+	var attemptID int64
+	err = tx.QueryRow(ctx, `
+		INSERT INTO auth_attempts (phone, remote_key, action, succeeded)
+		VALUES (NULLIF($1, ''), $2, $3, FALSE)
+		RETURNING id
+	`, phone, remoteKey, action).Scan(&attemptID)
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, err
+	}
+	return attemptID, 0, nil
+}
+
+func completeAuthAttempt(attemptID int64, succeeded bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := appState.DB.Pool.Exec(ctx, `UPDATE auth_attempts SET succeeded = $2 WHERE id = $1`, attemptID, succeeded); err != nil {
+		log.Printf("auth abuse: failed to record SMS attempt result: %v", err)
+	}
+}
+
+func smsRateLimitPhone(phone string) string {
+	return strings.TrimPrefix(normalizePhone(phone), "+")
+}
+
+func pruneAuthHistoryIfDue() {
+	now := time.Now().Unix()
+	last := lastAuthAttemptPrune.Load()
+	if now-last < int64(authAttemptPruneEvery.Seconds()) || !lastAuthAttemptPrune.CompareAndSwap(last, now) {
+		return
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := appState.DB.Pool.Exec(ctx, `
+		DELETE FROM auth_attempts
+		WHERE id IN (
+			SELECT id FROM auth_attempts
+			WHERE created_at < now() - make_interval(secs => $1)
+			ORDER BY id
+			LIMIT $2
+		)
+	`, int(authAttemptRetention.Seconds()), authAttemptPruneBatch); err != nil {
+		log.Printf("auth abuse: failed to prune old attempts: %v", err)
+	}
+	if _, err := appState.DB.Pool.Exec(ctx, `
+		DELETE FROM sms_login_codes
+		WHERE id IN (
+			SELECT id FROM sms_login_codes
+			WHERE expires_at < now() - make_interval(secs => $1)
+			ORDER BY expires_at
+			LIMIT $2
+		)
+	`, int(smsCodeRetention.Seconds()), authAttemptPruneBatch); err != nil {
+		log.Printf("auth abuse: failed to prune old SMS codes: %v", err)
 	}
 }
 
@@ -117,13 +237,62 @@ func (w *authStatusRecorder) Write(body []byte) (int, error) {
 	return w.ResponseWriter.Write(body)
 }
 
-func requestRemoteKey(r *http.Request) string {
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil && host != "" {
-		return host
+func requestRemoteKey(r *http.Request) (string, error) {
+	remoteAddr, err := parseRemoteAddress(r.RemoteAddr)
+	if err != nil {
+		return "", err
 	}
-	if value := strings.TrimSpace(r.RemoteAddr); value != "" {
-		return value
+	if !isTrustedProxy(remoteAddr) {
+		return remoteAddr.String(), nil
 	}
-	return "unknown"
+
+	var forwarded []netip.Addr
+	for _, header := range r.Header.Values("X-Forwarded-For") {
+		for _, value := range strings.Split(header, ",") {
+			addr, err := netip.ParseAddr(strings.TrimSpace(value))
+			if err != nil || addr.Zone() != "" {
+				return "", errInvalidClientAddress
+			}
+			forwarded = append(forwarded, addr.Unmap())
+		}
+	}
+	if len(forwarded) == 0 {
+		return "", errInvalidClientAddress
+	}
+
+	forwarded = append(forwarded, remoteAddr)
+	for i := len(forwarded) - 1; i >= 0; i-- {
+		if !isTrustedProxy(forwarded[i]) {
+			return forwarded[i].String(), nil
+		}
+	}
+	return "", errInvalidClientAddress
+}
+
+func parseRemoteAddress(remoteAddr string) (netip.Addr, error) {
+	value := strings.TrimSpace(remoteAddr)
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		value = host
+	}
+	addr, err := netip.ParseAddr(value)
+	if err != nil {
+		return netip.Addr{}, errInvalidClientAddress
+	}
+	return addr.WithZone("").Unmap(), nil
+}
+
+func isTrustedProxy(addr netip.Addr) bool {
+	for _, value := range appState.TrustedProxyCIDRs {
+		value = strings.TrimSpace(value)
+		if prefix, err := netip.ParsePrefix(value); err == nil {
+			if prefix.Masked().Contains(addr) {
+				return true
+			}
+			continue
+		}
+		if proxyAddr, err := netip.ParseAddr(value); err == nil && proxyAddr.Unmap() == addr {
+			return true
+		}
+	}
+	return false
 }

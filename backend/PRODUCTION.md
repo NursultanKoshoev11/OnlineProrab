@@ -6,10 +6,11 @@ This checklist tracks the minimum work required before a real public release.
 
 - `APP_ENV=production`
 - `HTTP_ADDR=:8080`
-- `DATABASE_URL=postgres://...`
+- `DATABASE_URL=postgres://...?sslmode=verify-full`
 - `JWT_SECRET=<strong random secret>`
 - `ACCESS_TOKEN_TTL_MINUTES=60`
 - `CORS_ALLOWED_ORIGINS=https://stroy.com.kg`
+- `TRUSTED_PROXY_CIDRS=<reverse proxy source IP or narrow CIDR>`
 - `STORAGE_DRIVER=s3`
 - `S3_REGION=<bucket-region>`
 - `S3_BUCKET=<private-bucket>`
@@ -23,13 +24,15 @@ The API refuses unsafe production configuration when `APP_ENV=production` and th
 ## Staging environment
 
 - Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
-- Use a `DATABASE_URL` with `sslmode=verify-full`; staging rejects PostgreSQL URLs that do not verify the server certificate and hostname.
+- Use a `DATABASE_URL` with `sslmode=verify-full` in staging and production; the API rejects connections that do not verify every database host's certificate and hostname.
 - Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET`. The bucket must stay private; the API serves objects only after its existing project authorization check.
 - Leave `S3_ENDPOINT` empty for AWS S3. For another S3-compatible provider, set its HTTPS endpoint, access key pair, and `S3_FORCE_PATH_STYLE` as required by that provider. The storage policy needs bucket health-check permission plus object get, put, and delete permissions. Readiness checks database and bucket availability.
 - Configure bucket-side encryption and backups in the storage provider. Keep versioning disabled unless a lifecycle policy permanently removes noncurrent object versions within the account-deletion retention window; S3 delete markers alone do not erase old versions. The application never publishes object URLs or public ACLs.
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
+- Set `TRUSTED_PROXY_CIDRS` to the exact IP addresses or narrow CIDRs of proxies that connect to the API container. The API trusts `X-Forwarded-For` only when `RemoteAddr` belongs to one of these networks; direct requests cannot spoof the limiter's client IP.
+- SMS request quotas are 6 attempts per phone per hour, plus 30 per client IP per hour. Code verification is limited to 10 attempts per phone and 30 per client IP per 15 minutes. These counters include failed delivery/verification attempts and reserve each request before it reaches the SMS provider or code handler.
 
 For local development, the fixed `dev_code` response is disabled by default. To opt in, set `DEV_SMS_CODE_ENABLED=true` and bind `HTTP_ADDR` to `127.0.0.1` or `localhost`.
 

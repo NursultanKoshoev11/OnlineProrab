@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -41,6 +42,7 @@ type Config struct {
 	DevSMSCodeEnabled         bool
 	CORSAllowedOrigins        []string
 	StorageDriver             string
+	TrustedProxyCIDRs         []string
 	UploadDir                 string
 	MaxUploadBytes            int64
 	S3Region                  string
@@ -83,7 +85,7 @@ type Config struct {
 
 func Load() Config {
 	processEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
-	if processEnv == "" || strings.EqualFold(processEnv, DevelopmentEnv) {
+	if shouldLoadDotEnv(processEnv) {
 		_ = godotenv.Load()
 	}
 
@@ -96,6 +98,7 @@ func Load() Config {
 	cfg.DevSMSCodeEnabled = getEnvBool("DEV_SMS_CODE_ENABLED", false)
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	cfg.StorageDriver = strings.ToLower(getEnv("STORAGE_DRIVER", "local"))
+	cfg.TrustedProxyCIDRs = splitCSV(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
 	cfg.S3Region = strings.TrimSpace(os.Getenv("S3_REGION"))
@@ -135,6 +138,15 @@ func Load() Config {
 	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
 	return cfg
+}
+
+func shouldLoadDotEnv(processEnv string) bool {
+	if processEnv != "" {
+		return strings.EqualFold(processEnv, DevelopmentEnv)
+	}
+
+	dotEnv, err := godotenv.Read()
+	return err == nil && strings.EqualFold(strings.TrimSpace(dotEnv["APP_ENV"]), DevelopmentEnv)
 }
 
 func (cfg Config) IsProduction() bool {
@@ -265,16 +277,25 @@ func (cfg Config) Validate() error {
 				break
 			}
 		}
+		if len(cfg.TrustedProxyCIDRs) == 0 {
+			problems = append(problems, "TRUSTED_PROXY_CIDRS must identify the reverse proxies that reach the API")
+		} else {
+			for _, value := range cfg.TrustedProxyCIDRs {
+				prefix, err := parseTrustedProxyCIDR(value)
+				if err != nil || prefix.Bits() == 0 || prefix.Addr().IsUnspecified() {
+					problems = append(problems, "TRUSTED_PROXY_CIDRS must contain explicit proxy IP addresses or CIDRs, not an unrestricted range")
+					break
+				}
+			}
+		}
 		if cfg.IsStaging() && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
 			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in staging")
 		}
 		if cfg.IsProduction() && !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
 			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in production unless REVIEW_ONLY_MODE is enabled")
 		}
-		if cfg.IsStaging() {
-			if err := validateVerifiedDatabaseTLS(cfg.DatabaseURL); err != nil {
-				problems = append(problems, err.Error())
-			}
+		if err := validateVerifiedDatabaseTLS(cfg.DatabaseURL); err != nil {
+			problems = append(problems, err.Error())
 		}
 	}
 
@@ -284,17 +305,30 @@ func (cfg Config) Validate() error {
 	return nil
 }
 
+func parseTrustedProxyCIDR(value string) (netip.Prefix, error) {
+	value = strings.TrimSpace(value)
+	if addr, err := netip.ParseAddr(value); err == nil {
+		addr = addr.Unmap()
+		return netip.PrefixFrom(addr, addr.BitLen()), nil
+	}
+	prefix, err := netip.ParsePrefix(value)
+	if err != nil || prefix.Addr().Is4In6() {
+		return netip.Prefix{}, errors.New("invalid trusted proxy address or CIDR")
+	}
+	return prefix.Masked(), nil
+}
+
 func validateVerifiedDatabaseTLS(databaseURL string) error {
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
-		return errors.New("DATABASE_URL must be a valid PostgreSQL URL with verified TLS in staging")
+		return errors.New("DATABASE_URL must be a valid PostgreSQL URL with verified TLS in staging and production")
 	}
 	if !usesVerifiedPostgresTLS(poolConfig.ConnConfig.TLSConfig) {
-		return errors.New("DATABASE_URL must use sslmode=verify-full in staging")
+		return errors.New("DATABASE_URL must use sslmode=verify-full in staging and production")
 	}
 	for _, fallback := range poolConfig.ConnConfig.Fallbacks {
 		if !usesVerifiedPostgresTLS(fallback.TLSConfig) {
-			return errors.New("DATABASE_URL must use sslmode=verify-full for every staging database host")
+			return errors.New("DATABASE_URL must use sslmode=verify-full for every staging and production database host")
 		}
 	}
 	return nil
@@ -390,7 +424,7 @@ func isUnsafeProductionOrigin(origin string) bool {
 		return true
 	}
 
-	host := strings.ToLower(parsed.Hostname())
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return true
 	}

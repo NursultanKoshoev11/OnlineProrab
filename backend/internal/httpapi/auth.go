@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type requestSMSCodeRequest struct {
@@ -173,19 +176,31 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+		return
+	}
+	defer tx.Rollback(ctx)
 
 	var codeID string
 	var codeHash string
 	var attempts int
-	err := appState.DB.Pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT id::text, code_hash, attempts
 		FROM sms_login_codes
 		WHERE phone = $1 AND consumed_at IS NULL AND expires_at > now()
 		ORDER BY created_at DESC
 		LIMIT 1
+		FOR UPDATE
 	`, req.Phone).Scan(&codeID, &codeHash, &attempts)
 	if err != nil {
-		Error(w, http.StatusUnauthorized, "invalid or expired code")
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(w, http.StatusUnauthorized, "invalid or expired code")
+		} else {
+			log.Printf("verify sms: failed to lock login code: %v", err)
+			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+		}
 		return
 	}
 	if attempts >= 5 {
@@ -193,18 +208,20 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if hashLoginCode(req.Phone, req.Code) != codeHash {
-		_, _ = appState.DB.Pool.Exec(ctx, `UPDATE sms_login_codes SET attempts = attempts + 1 WHERE id = $1`, codeID)
+	if subtle.ConstantTimeCompare([]byte(hashLoginCode(req.Phone, req.Code)), []byte(codeHash)) != 1 {
+		if _, err := tx.Exec(ctx, `UPDATE sms_login_codes SET attempts = attempts + 1 WHERE id = $1`, codeID); err != nil {
+			log.Printf("verify sms: failed to record invalid code attempt: %v", err)
+			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("verify sms: failed to commit invalid code attempt: %v", err)
+			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+			return
+		}
 		Error(w, http.StatusUnauthorized, "invalid or expired code")
 		return
 	}
-
-	tx, err := appState.DB.Pool.Begin(ctx)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to start login transaction")
-		return
-	}
-	defer tx.Rollback(ctx)
 
 	var userID string
 	err = tx.QueryRow(ctx, `

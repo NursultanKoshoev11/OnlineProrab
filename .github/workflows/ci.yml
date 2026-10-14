@@ -51,6 +51,7 @@ jobs:
           DATABASE_URL: postgres://staging:staging@db.example.com:5432/staging?sslmode=verify-full
           JWT_SECRET: ci-only-secret
           CORS_ALLOWED_ORIGINS: https://staging.example.com
+          TRUSTED_PROXY_CIDRS: 10.20.0.4/32
           SMS_PROVIDER: nikita
           DEV_SMS_CODE_ENABLED: "true"
           REVIEW_ONLY_MODE: "true"
@@ -73,6 +74,7 @@ jobs:
           environment = service["environment"]
           assert environment["APP_ENV"] == "staging"
           assert "sslmode=verify-full" in environment["DATABASE_URL"]
+          assert environment["TRUSTED_PROXY_CIDRS"] == "10.20.0.4/32"
           assert environment["SMS_PROVIDER"] == "nikita"
           assert environment["DEV_SMS_CODE_ENABLED"] == "false"
           assert environment["REVIEW_ONLY_MODE"] == "false"
@@ -86,7 +88,7 @@ jobs:
           assert not environment.get("REVIEW_SMS_CODE")
           PY
 
-          for required in DATABASE_URL CORS_ALLOWED_ORIGINS SMS_PROVIDER S3_REGION S3_BUCKET; do
+          for required in DATABASE_URL CORS_ALLOWED_ORIGINS TRUSTED_PROXY_CIDRS SMS_PROVIDER S3_REGION S3_BUCKET; do
             if env -u "$required" docker compose -f deploy/docker-compose.staging.yml config >/dev/null 2>&1; then
               echo "staging Compose unexpectedly rendered without $required" >&2
               exit 1

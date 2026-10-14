@@ -57,7 +57,10 @@ func TestValidateRejectsUnsafeCORSOriginsInStaging(t *testing.T) {
 		"https://app.example.com#fragment",
 		"https://*.example.com",
 		"https://localhost:8443",
+		"https://localhost.:8443",
+		"https://staging.localhost.:8443",
 		"https://127.0.0.1:8443",
+		"https://127.0.0.1.:8443",
 		"https://[::1]:8443",
 		"https://0.0.0.0:8443",
 	}
@@ -267,13 +270,14 @@ func validProductionConfig() Config {
 	return Config{
 		Env:                ProductionEnv,
 		HTTPAddr:           ":8080",
-		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app",
+		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
 		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
 		AccessTokenTTL:     15 * time.Minute,
 		CORSAllowedOrigins: []string{"https://app.example.com"},
 		StorageDriver:      "s3",
 		S3Region:           "us-east-1",
 		S3Bucket:           "onlineprorab-test",
+		TrustedProxyCIDRs:  []string{"10.20.0.4"},
 		UploadDir:          "/var/lib/onlineprorab/uploads",
 		MaxUploadBytes:     10 * 1024 * 1024,
 		SMSProvider:        SMSProviderTwilio,
@@ -281,6 +285,36 @@ func validProductionConfig() Config {
 		TwilioAPIKeySID:    "SK0000000000",
 		TwilioAPIKeySecret: "unit-test-credential-value",
 		TwilioFrom:         "+15550000000",
+	}
+}
+
+func TestValidateRequiresExplicitTrustedProxyCIDRsInProductionLikeEnvironments(t *testing.T) {
+	tests := []struct {
+		name  string
+		cidrs []string
+	}{
+		{name: "missing"},
+		{name: "all IPv4", cidrs: []string{"0.0.0.0/0"}},
+		{name: "all IPv6", cidrs: []string{"::/0"}},
+		{name: "malformed", cidrs: []string{"proxy.internal"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := validStagingConfig()
+			cfg.TrustedProxyCIDRs = test.cidrs
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "TRUSTED_PROXY_CIDRS") {
+				t.Fatalf("expected TRUSTED_PROXY_CIDRS validation error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsTrustedProxyAddressAndCIDR(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.TrustedProxyCIDRs = []string{"10.20.0.4", "fd00:abcd::/64"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected explicit trusted proxy addresses to be valid, got %v", err)
 	}
 }
 
@@ -344,12 +378,37 @@ func TestValidateRequiresSMSProviderInStaging(t *testing.T) {
 }
 
 func TestValidateRequiresVerifiedDatabaseTLSInStaging(t *testing.T) {
-	cfg := validStagingConfig()
-	cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=disable"
+	for _, sslmode := range []string{"disable", "allow", "prefer", "require", "verify-ca"} {
+		t.Run(sslmode, func(t *testing.T) {
+			cfg := validStagingConfig()
+			cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=" + sslmode
 
-	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
-		t.Fatalf("expected staging database without verified TLS to be rejected, got %v", err)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+				t.Fatalf("expected staging sslmode=%s to be rejected, got %v", sslmode, err)
+			}
+		})
+	}
+}
+
+func TestValidateRequiresVerifiedDatabaseTLSInProduction(t *testing.T) {
+	for _, sslmode := range []string{"disable", "allow", "prefer", "require", "verify-ca"} {
+		t.Run(sslmode, func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=" + sslmode
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+				t.Fatalf("expected production sslmode=%s to be rejected, got %v", sslmode, err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsProductionDatabaseWithVerifiedTLS(t *testing.T) {
+	cfg := validProductionConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected production sslmode=verify-full to pass, got %v", err)
 	}
 }
 
@@ -439,5 +498,54 @@ func TestLoadDoesNotReadDotEnvForStaging(t *testing.T) {
 	}
 	if cfg.OpenRouterAPIKey != "" {
 		t.Fatal("staging must not load provider credentials from .env")
+	}
+}
+
+func TestLoadDoesNotInferStagingFromDotEnvWhenProcessEnvironmentIsUnset(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("APP_ENV=staging\nDEV_SMS_CODE_ENABLED=true\nOPENROUTER_API_KEY=dotenv-secret\n"), 0600); err != nil {
+		t.Fatalf("write staging test dotenv: %v", err)
+	}
+	previousDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("change to staging test directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	keys := []string{"APP_ENV", "DEV_SMS_CODE_ENABLED", "OPENROUTER_API_KEY"}
+	previousValues := make(map[string]string, len(keys))
+	wasSet := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		previousValues[key], wasSet[key] = os.LookupEnv(key)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("unset %s for dotenv test: %v", key, err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, key := range keys {
+			if wasSet[key] {
+				_ = os.Setenv(key, previousValues[key])
+			} else {
+				_ = os.Unsetenv(key)
+			}
+		}
+	})
+
+	cfg := Load()
+	if cfg.Env != "" {
+		t.Fatalf("expected APP_ENV to remain unset so validation fails closed, got %q", cfg.Env)
+	}
+	if cfg.DevSMSCodeEnabled || cfg.OpenRouterAPIKey != "" {
+		t.Fatal("a non-development .env file must not load flags or credentials")
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "APP_ENV") {
+		t.Fatalf("expected missing process APP_ENV to fail validation, got %v", err)
 	}
 }
