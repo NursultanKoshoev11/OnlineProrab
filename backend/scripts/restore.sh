@@ -262,6 +262,10 @@ esac
 
 rm -rf "$staging_dir"
 staging_created=0
+if [ "${backup_download_created:-0}" -eq 1 ]; then
+  rm -rf "$backup_download_dir"
+  backup_download_created=0
+fi
 if [ "${restore_data_created:-0}" -eq 1 ]; then
   rm -rf "$restore_data_dir"
   restore_data_created=0
