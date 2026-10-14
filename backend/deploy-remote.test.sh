@@ -28,7 +28,7 @@ expect_rejection() {
   case_number=$((case_number + 1))
   local output="$temporary_dir/case-$case_number.log"
   local status=0
-  if "$deploy_script" "$@" >"$output" 2>&1; then
+  if bash "$deploy_script" "$@" >"$output" 2>&1; then
     echo "expected deployment script to reject case $case_number" >&2
     exit 1
   else
