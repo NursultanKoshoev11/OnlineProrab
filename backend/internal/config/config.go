@@ -75,7 +75,7 @@ type Config struct {
 
 func Load() Config {
 	processEnv := strings.TrimSpace(os.Getenv("APP_ENV"))
-	if processEnv == "" || strings.EqualFold(processEnv, DevelopmentEnv) {
+	if shouldLoadDotEnv(processEnv) {
 		_ = godotenv.Load()
 	}
 
@@ -119,6 +119,15 @@ func Load() Config {
 	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
 	return cfg
+}
+
+func shouldLoadDotEnv(processEnv string) bool {
+	if processEnv != "" {
+		return strings.EqualFold(processEnv, DevelopmentEnv)
+	}
+
+	dotEnv, err := godotenv.Read()
+	return err == nil && strings.EqualFold(strings.TrimSpace(dotEnv["APP_ENV"]), DevelopmentEnv)
 }
 
 func (cfg Config) IsProduction() bool {
