@@ -15,7 +15,8 @@ noncurrent versions expire after a further 30 days. Deletion tombstones have no
 expiration rule. Keeping them indefinitely ensures that restoring any retained
 backup cannot resurrect an account or file deleted after that snapshot. The
 ledger contains account UUIDs and opaque object keys, so keep its read access
-restricted to recovery operators. All three
+restricted to recovery operators. The uploads bucket aborts incomplete multipart
+uploads after seven days. All three
 buckets are retained if the CloudFormation stack is deleted or a bucket is
 replaced.
 

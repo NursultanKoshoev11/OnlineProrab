@@ -35,6 +35,101 @@ func newTestS3Store(t *testing.T, server *httptest.Server) *S3Store {
 	return &S3Store{client: client, bucket: "stroy-test", deletionLedgerBucket: "stroy-deletion-ledger-test"}
 }
 
+func TestMultipartUploadPlanCoversAWSSizeLimit(t *testing.T) {
+	partSize, partCount, err := multipartUploadPlan(s3SinglePutMaximumBytes + 1)
+	if err != nil {
+		t.Fatalf("plan multipart upload: %v", err)
+	}
+	if partSize < s3MultipartMinimumPartBytes || partCount < 2 || partCount > int32(s3MultipartMaximumParts) {
+		t.Fatalf("invalid multipart plan: part_size=%d part_count=%d", partSize, partCount)
+	}
+
+	partSize, partCount, err = multipartUploadPlan(s3MultipartMaximumObjectBytes)
+	if err != nil {
+		t.Fatalf("plan maximum S3 object: %v", err)
+	}
+	if partSize > s3MultipartMaximumPartBytes || partCount != int32(s3MultipartMaximumParts) {
+		t.Fatalf("maximum-object plan exceeds S3 limits: part_size=%d part_count=%d", partSize, partCount)
+	}
+
+	if _, _, err := multipartUploadPlan(s3MultipartMaximumObjectBytes + 1); err == nil {
+		t.Fatal("expected objects beyond the S3 multipart limit to be rejected")
+	}
+}
+
+func TestS3StoreMultipartUploadCompletesKnownSizeStream(t *testing.T) {
+	var partBody []byte
+	var completed bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Query().Has("uploads"):
+			_, _ = io.WriteString(w, "<InitiateMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Bucket>stroy-test</Bucket><Key>project/large.bin</Key><UploadId>upload-123</UploadId></InitiateMultipartUploadResult>")
+		case r.Method == http.MethodPut && r.URL.Query().Get("uploadId") == "upload-123":
+			if got := r.URL.Query().Get("partNumber"); got != "1" {
+				t.Errorf("unexpected multipart part number %q", got)
+			}
+			if got := r.Header.Get("X-Amz-Content-Sha256"); got != "UNSIGNED-PAYLOAD" {
+				t.Errorf("unseekable multipart body should use the TLS-protected unsigned payload signature, got %q", got)
+			}
+			partBody, _ = io.ReadAll(r.Body)
+			w.Header().Set("ETag", "\"part-etag\"")
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Query().Get("uploadId") == "upload-123":
+			payload, _ := io.ReadAll(r.Body)
+			if !bytes.Contains(payload, []byte("<PartNumber>1</PartNumber>")) || !bytes.Contains(payload, []byte("part-etag")) {
+				t.Errorf("multipart completion omitted uploaded part metadata: %s", payload)
+			}
+			completed = true
+			_, _ = io.WriteString(w, "<CompleteMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Bucket>stroy-test</Bucket><Key>project/large.bin</Key><ETag>\"object-etag\"</ETag></CompleteMultipartUploadResult>")
+		default:
+			t.Errorf("unexpected multipart request %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	store := newTestS3Store(t, server)
+	const content = "streamed large object"
+	if err := store.putStream(context.Background(), "project/large.bin", strings.NewReader(content), int64(len(content)), "application/octet-stream", 1); err != nil {
+		t.Fatalf("multipart upload failed: %v", err)
+	}
+	if string(partBody) != content {
+		t.Fatalf("multipart body = %q, want %q", partBody, content)
+	}
+	if !completed {
+		t.Fatal("multipart upload did not complete")
+	}
+}
+
+func TestS3StoreMultipartUploadAbortsAfterPartFailure(t *testing.T) {
+	var aborted bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Query().Has("uploads"):
+			_, _ = io.WriteString(w, "<InitiateMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Bucket>stroy-test</Bucket><Key>project/large.bin</Key><UploadId>upload-123</UploadId></InitiateMultipartUploadResult>")
+		case r.Method == http.MethodPut && r.URL.Query().Get("uploadId") == "upload-123":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, "<Error><Code>InternalError</Code><Message>temporary failure</Message></Error>")
+		case r.Method == http.MethodDelete && r.URL.Query().Get("uploadId") == "upload-123":
+			aborted = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected multipart request %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	store := newTestS3Store(t, server)
+	err := store.putStream(context.Background(), "project/large.bin", strings.NewReader("large"), 5, "application/octet-stream", 1)
+	if err == nil {
+		t.Fatal("expected multipart part failure")
+	}
+	if !aborted {
+		t.Fatal("failed multipart upload was not aborted")
+	}
+}
+
 func TestLocalStoreRoundTripAndTraversalRejection(t *testing.T) {
 	store, err := NewLocal(t.TempDir())
 	if err != nil {
