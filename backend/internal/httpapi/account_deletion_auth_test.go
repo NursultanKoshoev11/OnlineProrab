@@ -86,10 +86,18 @@ func TestVerifyAccountDeletionSMSCodeDoesNotMutateAccountOrAcceptInvites(t *test
 }
 
 func TestScopedDeletionTokenIsAcceptedOnlyByAccountDeletionAuth(t *testing.T) {
+	db := openSMSAuthTestDB(t)
 	oldState := appState
-	appState.JWTSecret = "account-deletion-test-signing-key-1234567890"
+	appState = State{DB: db, JWTSecret: "account-deletion-test-signing-key-1234567890"}
 	defer func() { appState = oldState }()
-	token, err := signAccountDeletionToken("user-1")
+	var deletionUserID, appUserID string
+	if err := db.Pool.QueryRow(context.Background(), `INSERT INTO users (phone) VALUES ('+996700000203') RETURNING id::text`).Scan(&deletionUserID); err != nil {
+		t.Fatalf("create account for deletion token: %v", err)
+	}
+	if err := db.Pool.QueryRow(context.Background(), `INSERT INTO users (phone) VALUES ('+996700000204') RETURNING id::text`).Scan(&appUserID); err != nil {
+		t.Fatalf("create account for app access token: %v", err)
+	}
+	token, err := signAccountDeletionToken(deletionUserID)
 	if err != nil {
 		t.Fatalf("sign deletion token: %v", err)
 	}
@@ -106,8 +114,8 @@ func TestScopedDeletionTokenIsAcceptedOnlyByAccountDeletionAuth(t *testing.T) {
 	}
 
 	deletionHandler := requireAccountDeletionAuth(func(w http.ResponseWriter, r *http.Request) {
-		if got := userIDFromContext(r.Context()); got != "user-1" {
-			t.Errorf("expected deletion-authenticated user user-1, got %q", got)
+		if got := userIDFromContext(r.Context()); got != deletionUserID {
+			t.Errorf("expected deletion-authenticated user %q, got %q", deletionUserID, got)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -119,13 +127,13 @@ func TestScopedDeletionTokenIsAcceptedOnlyByAccountDeletionAuth(t *testing.T) {
 		t.Fatalf("expected account deletion auth to accept scoped token, got %d", deletionRec.Code)
 	}
 
-	accessToken, err := signAccessToken("user-2")
+	accessToken, err := signAccessToken(appUserID)
 	if err != nil {
 		t.Fatalf("sign normal access token: %v", err)
 	}
 	appDeletionHandler := requireAccountDeletionAuth(func(w http.ResponseWriter, r *http.Request) {
-		if got := userIDFromContext(r.Context()); got != "user-2" {
-			t.Errorf("expected app-authenticated user user-2, got %q", got)
+		if got := userIDFromContext(r.Context()); got != appUserID {
+			t.Errorf("expected app-authenticated user %q, got %q", appUserID, got)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})

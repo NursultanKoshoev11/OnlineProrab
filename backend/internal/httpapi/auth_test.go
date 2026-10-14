@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -100,6 +102,37 @@ func TestAccessTokenRoundTrip(t *testing.T) {
 	}
 	if userID != "user-1" {
 		t.Fatalf("expected user-1, got %q", userID)
+	}
+}
+
+func TestRequireAuthFailsClosedWhenDatabaseIsUnavailable(t *testing.T) {
+	oldState := appState
+	appState = State{
+		JWTSecret:      "unit-test-signing-key-1234567890",
+		AccessTokenTTL: time.Hour,
+	}
+	defer func() { appState = oldState }()
+
+	token, err := signAccessToken("7cbcf034-8122-4d2d-92fd-f704dcdf8752")
+	if err != nil {
+		t.Fatalf("sign access token: %v", err)
+	}
+
+	handlerReached := false
+	protectedHandler := requireAuth(func(w http.ResponseWriter, _ *http.Request) {
+		handlerReached = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	protectedHandler(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected unavailable database to fail authentication closed, got %d", response.Code)
+	}
+	if handlerReached {
+		t.Fatal("protected handler ran while account status could not be verified")
 	}
 }
 

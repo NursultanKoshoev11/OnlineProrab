@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/database"
 )
@@ -47,6 +48,50 @@ func TestDeleteAccountWritesExternalTombstoneBeforeCommit(t *testing.T) {
 		t.Fatalf("expected one external tombstone for %s, got %v", userID, journal.accountIDs)
 	}
 	assertAccountDeletionRows(t, db, userID, 0, 0)
+}
+
+func TestDeleteAccountImmediatelyRevokesAccessToken(t *testing.T) {
+	db := openSMSAuthTestDB(t)
+	createAccountDeletionFilesTable(t, db)
+	oldState := appState
+	defer func() { appState = oldState }()
+	appState = State{
+		DB:               db,
+		JWTSecret:        "account-deletion-test-signing-key-1234567890",
+		AccessTokenTTL:   time.Hour,
+		IsProductionLike: true,
+		DeletionJournal:  &testDeletionJournal{},
+	}
+
+	userID := seedAccountDeletionUser(t, db)
+	token, err := signAccessToken(userID)
+	if err != nil {
+		t.Fatalf("sign access token: %v", err)
+	}
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/account", nil)
+	deleteRequest = deleteRequest.WithContext(withUserID(deleteRequest.Context(), userID))
+	deleteResponse := httptest.NewRecorder()
+	DeleteAccount(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusOK {
+		t.Fatalf("expected account deletion to succeed, got %d: %s", deleteResponse.Code, deleteResponse.Body.String())
+	}
+
+	handlerReached := false
+	protectedHandler := requireAuth(func(w http.ResponseWriter, _ *http.Request) {
+		handlerReached = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	protectedHandler(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected a deleted account's token to be rejected, got %d: %s", response.Code, response.Body.String())
+	}
+	if handlerReached {
+		t.Fatal("protected handler ran with a token for a deleted account")
+	}
 }
 
 func TestDeleteAccountRollsBackWhenExternalTombstoneCannotBeWritten(t *testing.T) {
