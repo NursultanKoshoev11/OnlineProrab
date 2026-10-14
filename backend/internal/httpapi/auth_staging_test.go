@@ -47,6 +47,55 @@ func TestRequestSMSCodeFailsClosedWhenStagingSMSDeliveryIsUnavailable(t *testing
 	}
 }
 
+func TestPruneAuthHistoryDeletesExpiredRowsAcrossBatches(t *testing.T) {
+	db := openSMSAuthTestDB(t)
+	oldState := appState
+	defer func() { appState = oldState }()
+	appState = State{DB: db}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO auth_attempts (phone, remote_key, action, succeeded, created_at)
+		SELECT '+996700000001', '198.51.100.8', 'sms_request', TRUE, now() - interval '8 days'
+		FROM generate_series(1, $1)
+	`, authAttemptPruneBatch+1); err != nil {
+		t.Fatalf("seed expired SMS attempts: %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO auth_attempts (phone, remote_key, action, succeeded, created_at)
+		VALUES ('+996700000002', '198.51.100.9', 'sms_request', TRUE, now() - interval '6 days')
+	`); err != nil {
+		t.Fatalf("seed recent SMS attempt: %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO sms_login_codes (phone, code_hash, expires_at)
+		VALUES
+			('+996700000001', 'expired-hash-1', now() - interval '25 hours'),
+			('+996700000002', 'expired-hash-2', now() - interval '23 hours')
+	`); err != nil {
+		t.Fatalf("seed expired SMS codes: %v", err)
+	}
+
+	if err := pruneAuthHistory(ctx); err != nil {
+		t.Fatalf("prune expired login records: %v", err)
+	}
+
+	var attempts, codes int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM auth_attempts`).Scan(&attempts); err != nil {
+		t.Fatalf("count SMS attempts after pruning: %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected only the recent SMS attempt to remain, got %d", attempts)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM sms_login_codes`).Scan(&codes); err != nil {
+		t.Fatalf("count SMS codes after pruning: %v", err)
+	}
+	if codes != 1 {
+		t.Fatalf("expected the code less than 24 hours past expiry to remain, got %d", codes)
+	}
+}
+
 func openSMSAuthTestDB(t *testing.T) *database.DB {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
