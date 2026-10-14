@@ -19,7 +19,7 @@ This checklist tracks the minimum work required before a real public release.
 - `UPLOAD_DIR=/data/uploads` (legacy volume used by the migration tool)
 - `MAX_UPLOAD_MB=10`
 
-The API refuses unsafe production configuration when `APP_ENV=production` and the JWT secret is missing or still uses the default placeholder.
+The API refuses unsafe configuration in staging and production when the JWT secret is missing or still uses the default placeholder.
 
 ## Staging environment
 
@@ -38,9 +38,9 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## Current production blockers
 
-1. Configure the private S3-compatible bucket, copy existing active files with the migration command below, and verify bucket backup/restore.
+1. Provision a private S3-compatible bucket and least-privilege credentials for each environment. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
 2. Add structured logs, alerting and external uptime monitoring.
-3. Test PostgreSQL and upload-storage backup/restore in staging.
+3. Test PostgreSQL and object-storage backup/restore in staging, including account-deletion and object-version retention behavior.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
 
