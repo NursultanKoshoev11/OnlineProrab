@@ -25,6 +25,10 @@ test("public pages and resources comply with the production CSP", () => {
     .join("\n");
   const nginx = readFileSync(path.join(websiteRoot, "nginx.conf"), "utf8");
   const css = readFileSync(path.join(websiteRoot, "styles.css"), "utf8");
+  const privacy = readFileSync(
+    path.join(websiteRoot, "privacy/index.html"),
+    "utf8",
+  );
   const policy = nginx.match(
     /add_header Content-Security-Policy "([^"]+)" always;/,
   )?.[1];
@@ -69,6 +73,14 @@ test("public pages and resources comply with the production CSP", () => {
   assert.match(
     nginx,
     /add_header Strict-Transport-Security "max-age=31536000" always;/,
+  );
+  assert.match(privacy, /аудио.*серверы Apple для распознавания/s);
+  assert.match(privacy, /Google Gemini, Groq или\s+OpenRouter/);
+  assert.match(privacy, /суммы, валюты,\s+поставщиков и даты/);
+  assert.match(privacy, /бессрочно храним в закрытом журнале/);
+  assert.match(
+    privacy,
+    /идентификатор удалённого\s+аккаунта либо путь удалённого файла/,
   );
 });
 
