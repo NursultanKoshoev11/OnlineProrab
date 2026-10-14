@@ -53,7 +53,7 @@ func newTwilioSender(cfg TwilioConfig, client *http.Client, baseURL string) (*Tw
 	if strings.TrimSpace(baseURL) == "" {
 		return nil, errors.New("twilio base URL is required")
 	}
-	return &TwilioSender{config: cfg, client: client, baseURL: strings.TrimRight(baseURL, "/")}, nil
+	return &TwilioSender{config: cfg, client: clientWithoutRedirects(client), baseURL: strings.TrimRight(baseURL, "/")}, nil
 }
 
 func (s *TwilioSender) SendLoginCode(ctx context.Context, phone, code string) error {

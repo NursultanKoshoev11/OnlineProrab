@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -113,5 +114,34 @@ func TestTwilioSenderDoesNotExposeProviderBodyInError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "provider-internal-detail") {
 		t.Fatalf("provider response body leaked in error: %v", err)
+	}
+}
+
+func TestTwilioSenderDoesNotForwardCodeAcrossRedirects(t *testing.T) {
+	var redirectedRequestReceived atomic.Bool
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirectedRequestReceived.Store(true)
+	}))
+	defer redirectTarget.Close()
+
+	redirectSource := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, redirectTarget.URL, http.StatusTemporaryRedirect)
+	}))
+	defer redirectSource.Close()
+
+	sender, err := newTwilioSender(TwilioConfig{
+		AccountSID:   testAccountSID,
+		APIKeySID:    testAPIKeySID,
+		APIKeySecret: testCredential,
+		From:         "+15550000000",
+	}, redirectSource.Client(), redirectSource.URL)
+	if err != nil {
+		t.Fatalf("newTwilioSender: %v", err)
+	}
+	if err := sender.SendLoginCode(context.Background(), "+996700000001", "123456"); err == nil {
+		t.Fatal("expected redirect response to be rejected")
+	}
+	if redirectedRequestReceived.Load() {
+		t.Fatal("SMS code was forwarded to the redirect target")
 	}
 }
