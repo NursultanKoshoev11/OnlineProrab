@@ -51,6 +51,8 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Download dependencies
         run: go mod download
+      - name: Scan for Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: Verify module metadata
         run: |
           go mod tidy
