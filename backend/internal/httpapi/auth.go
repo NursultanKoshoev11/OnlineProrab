@@ -374,6 +374,9 @@ func parseAccessToken(rawToken string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid claims")
 	}
+	if _, scoped := claims["scope"]; scoped {
+		return "", fmt.Errorf("scoped token is not an access token")
+	}
 	sub, ok := claims["sub"].(string)
 	if !ok || sub == "" {
 		return "", fmt.Errorf("missing subject")
