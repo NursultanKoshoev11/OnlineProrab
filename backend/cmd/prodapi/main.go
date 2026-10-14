@@ -9,7 +9,10 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("load configuration: %v", err)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", httpapi.Health)
 	mux.HandleFunc("/ready", httpapi.Ready)
