@@ -14,8 +14,7 @@ This checklist tracks the minimum work required before a real public release.
 - `STORAGE_DRIVER=s3`
 - `S3_REGION=<bucket-region>`
 - `S3_BUCKET=<private-bucket>`
-- `S3_ENDPOINT=<optional-https-endpoint-for-S3-compatible-storage>`
-- `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` (or an AWS workload identity)
+- AWS credentials from an IAM workload role, or `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (plus `AWS_SESSION_TOKEN` for temporary credentials)
 - `UPLOAD_DIR=/data/uploads` (legacy volume used by the migration tool)
 - `MAX_UPLOAD_MB=10`
 
@@ -25,9 +24,9 @@ The API refuses unsafe configuration in staging and production when the JWT secr
 
 - Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
 - Use a `DATABASE_URL` with `sslmode=verify-full` in staging and production; the API rejects connections that do not verify every database host's certificate and hostname.
-- Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET`. The bucket must stay private; the API serves objects only after its existing project authorization check.
-- Leave `S3_ENDPOINT` empty for AWS S3. For another S3-compatible provider, set its HTTPS endpoint, access key pair, and `S3_FORCE_PATH_STYLE` as required by that provider. The storage policy needs bucket health-check permission plus object get, put, and delete permissions. Readiness checks database and bucket availability.
-- Configure bucket-side encryption and backups in the storage provider. Keep versioning disabled unless a lifecycle policy permanently removes noncurrent object versions within the account-deletion retention window; S3 delete markers alone do not erase old versions. The application never publishes object URLs or public ACLs.
+- Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET` for Amazon S3. The application uses AWS SDK region-based endpoints and the standard AWS credential chain; custom S3 endpoints are not supported. Prefer an IAM role for the workload. For a host without AWS workload identity, use a dedicated, least-privilege IAM access key injected through `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; never put credentials in the image or source control. Readiness checks database and bucket availability.
+- Keep the bucket private, enable all S3 Block Public Access settings, and use Bucket owner enforced object ownership. Configure default encryption (SSE-S3 or SSE-KMS); an SSE-KMS key policy must also allow the workload role to use the key. Grant only bucket health-check (`s3:ListBucket`) and object get, put, and delete permissions for this application's bucket. The API serves objects only after its existing project authorization check and never publishes object URLs or public ACLs.
+- Leave S3 versioning disabled until account deletion permanently removes every noncurrent version within the applicable deletion window. S3 delete markers alone do not erase old versions. If versioning is enabled later, configure and verify a lifecycle rule that permanently expires noncurrent versions.
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
@@ -38,7 +37,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## Current production blockers
 
-1. Provision a private S3-compatible bucket and least-privilege credentials for each environment. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
+1. Provision a private AWS S3 bucket and least-privilege IAM role or credentials for each environment. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
 2. Ship JSON logs to a secure external collector, configure alerts, and monitor `/health` and `/ready` externally.
 3. Test PostgreSQL and object-storage backup/restore in staging, including account-deletion and object-version retention behavior.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.

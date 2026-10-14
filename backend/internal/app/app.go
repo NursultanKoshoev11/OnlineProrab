@@ -59,13 +59,8 @@ func Run() {
 	var storageErr error
 	if cfg.StorageDriver == "s3" {
 		fileStore, storageErr = storage.NewS3(context.Background(), storage.S3Options{
-			Region:          cfg.S3Region,
-			Bucket:          cfg.S3Bucket,
-			Endpoint:        cfg.S3Endpoint,
-			AccessKeyID:     cfg.S3AccessKeyID,
-			SecretAccessKey: cfg.S3SecretAccessKey,
-			SessionToken:    cfg.S3SessionToken,
-			ForcePathStyle:  cfg.S3ForcePathStyle,
+			Region: cfg.S3Region,
+			Bucket: cfg.S3Bucket,
 		})
 	} else {
 		fileStore, storageErr = storage.NewLocal(cfg.UploadDir)

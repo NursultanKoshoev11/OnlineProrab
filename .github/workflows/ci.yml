@@ -62,9 +62,11 @@ jobs:
           STORAGE_DRIVER: local
           S3_REGION: us-east-1
           S3_BUCKET: staging-ci
+          AWS_ACCESS_KEY_ID: ci-access-key
+          AWS_SECRET_ACCESS_KEY: ci-secret-key
+          AWS_SESSION_TOKEN: ci-session-token
           S3_ENDPOINT: http://attacker.invalid
-          S3_ACCESS_KEY_ID: ci-access-key
-          S3_SECRET_ACCESS_KEY: ci-secret-key
+          S3_FORCE_PATH_STYLE: "true"
         run: |
           docker compose -f deploy/docker-compose.staging.yml config --format json > "$RUNNER_TEMP/staging-compose.json"
           python3 - "$RUNNER_TEMP/staging-compose.json" <<'PY'
@@ -85,7 +87,11 @@ jobs:
           assert environment["STORAGE_DRIVER"] == "s3"
           assert environment["S3_REGION"] == "us-east-1"
           assert environment["S3_BUCKET"] == "staging-ci"
-          assert environment["S3_ENDPOINT"] == "http://attacker.invalid"
+          assert environment["AWS_ACCESS_KEY_ID"] == "ci-access-key"
+          assert environment["AWS_SECRET_ACCESS_KEY"] == "ci-secret-key"
+          assert environment["AWS_SESSION_TOKEN"] == "ci-session-token"
+          assert "S3_ENDPOINT" not in environment
+          assert "S3_FORCE_PATH_STYLE" not in environment
           assert not environment.get("REVIEW_SMS_PHONE")
           assert not environment.get("REVIEW_SMS_CODE")
           PY

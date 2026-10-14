@@ -179,8 +179,8 @@ func TestValidateRequiresS3BucketAndRegion(t *testing.T) {
 	}{
 		{name: "missing bucket", change: func(cfg *Config) { cfg.S3Bucket = "" }, want: "S3_BUCKET"},
 		{name: "missing region", change: func(cfg *Config) { cfg.S3Region = "" }, want: "S3_REGION"},
-		{name: "partial credentials", change: func(cfg *Config) { cfg.S3AccessKeyID = "key" }, want: "S3_SECRET_ACCESS_KEY"},
-		{name: "session token without credentials", change: func(cfg *Config) { cfg.S3SessionToken = "token" }, want: "S3_SESSION_TOKEN"},
+		{name: "partial AWS credentials", change: func(cfg *Config) { cfg.AWSAccessKeyID = "key" }, want: "AWS_SECRET_ACCESS_KEY"},
+		{name: "session token without credentials", change: func(cfg *Config) { cfg.AWSSessionToken = "token" }, want: "AWS_SESSION_TOKEN"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -194,34 +194,11 @@ func TestValidateRequiresS3BucketAndRegion(t *testing.T) {
 	}
 }
 
-func TestValidateRequiresHTTPSForProductionS3Endpoint(t *testing.T) {
+func TestValidateAllowsAWSWorkloadIdentity(t *testing.T) {
 	cfg := validStagingConfig()
-	cfg.S3Endpoint = "http://objects.example.com:9000"
-
-	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "S3_ENDPOINT must use HTTPS") {
-		t.Fatalf("expected insecure S3 endpoint to be rejected, got %v", err)
-	}
-}
-
-func TestValidateAcceptsCustomHTTPSStorageEndpoint(t *testing.T) {
-	cfg := validStagingConfig()
-	cfg.S3Endpoint = "https://objects.example.com:8443/s3"
-	cfg.S3AccessKeyID = "test-access-key"
-	cfg.S3SecretAccessKey = "test-secret-key"
 
 	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected secure custom storage endpoint to be accepted, got %v", err)
-	}
-}
-
-func TestValidateRequiresExplicitCredentialsForCustomStorageEndpoint(t *testing.T) {
-	cfg := validStagingConfig()
-	cfg.S3Endpoint = "https://objects.example.com"
-
-	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "S3_ACCESS_KEY_ID") {
-		t.Fatalf("expected custom S3 endpoint without static credentials to be rejected, got %v", err)
+		t.Fatalf("expected AWS workload identity without static keys to be accepted, got %v", err)
 	}
 }
 

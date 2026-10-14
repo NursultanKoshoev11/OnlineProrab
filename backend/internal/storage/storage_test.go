@@ -13,7 +13,24 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
+
+func newTestS3Store(t *testing.T, server *httptest.Server) *S3Store {
+	t.Helper()
+	client := s3.NewFromConfig(aws.Config{
+		Region:      "us-east-1",
+		Credentials: credentials.NewStaticCredentialsProvider("test-access-key", "test-secret-key", ""),
+		HTTPClient:  server.Client(),
+	}, func(options *s3.Options) {
+		options.BaseEndpoint = aws.String(server.URL)
+		options.UsePathStyle = true
+	})
+	return &S3Store{client: client, bucket: "stroy-test"}
+}
 
 func TestLocalStoreRoundTripAndTraversalRejection(t *testing.T) {
 	store, err := NewLocal(t.TempDir())
@@ -113,17 +130,7 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 	}))
 	defer server.Close()
 
-	store, err := NewS3(context.Background(), S3Options{
-		Region:          "us-east-1",
-		Bucket:          "stroy-test",
-		Endpoint:        server.URL,
-		AccessKeyID:     "test-access-key",
-		SecretAccessKey: "test-secret-key",
-		ForcePathStyle:  true,
-	})
-	if err != nil {
-		t.Fatalf("create S3 store: %v", err)
-	}
+	store := newTestS3Store(t, server)
 	if err := store.Check(context.Background()); err != nil {
 		t.Fatalf("S3 health check failed: %v", err)
 	}
@@ -157,17 +164,7 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 func TestS3StoreMapsNotFoundToFilesystemNotExist(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	defer server.Close()
-	store, err := NewS3(context.Background(), S3Options{
-		Region:          "us-east-1",
-		Bucket:          "stroy-test",
-		Endpoint:        server.URL,
-		AccessKeyID:     "test-access-key",
-		SecretAccessKey: "test-secret-key",
-		ForcePathStyle:  true,
-	})
-	if err != nil {
-		t.Fatalf("create S3 store: %v", err)
-	}
+	store := newTestS3Store(t, server)
 	if _, err := store.Get(context.Background(), "project/missing.pdf"); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("expected missing object to map to fs.ErrNotExist, got %v", err)
 	}

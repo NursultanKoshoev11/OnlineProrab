@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
@@ -20,13 +19,8 @@ import (
 )
 
 type S3Options struct {
-	Region          string
-	Bucket          string
-	Endpoint        string
-	AccessKeyID     string
-	SecretAccessKey string
-	SessionToken    string
-	ForcePathStyle  bool
+	Region string
+	Bucket string
 }
 
 type S3Store struct {
@@ -37,28 +31,11 @@ type S3Store struct {
 func NewS3(ctx context.Context, options S3Options) (*S3Store, error) {
 	options.Region = strings.TrimSpace(options.Region)
 	options.Bucket = strings.TrimSpace(options.Bucket)
-	options.Endpoint = strings.TrimSpace(options.Endpoint)
-	options.AccessKeyID = strings.TrimSpace(options.AccessKeyID)
-	options.SecretAccessKey = strings.TrimSpace(options.SecretAccessKey)
-	options.SessionToken = strings.TrimSpace(options.SessionToken)
 	if options.Region == "" || options.Bucket == "" {
 		return nil, fmt.Errorf("S3 region and bucket are required")
 	}
-	if (options.AccessKeyID == "") != (options.SecretAccessKey == "") {
-		return nil, fmt.Errorf("S3 access key ID and secret access key must be configured together")
-	}
 
-	loadOptions := []func(*awsconfig.LoadOptions) error{
-		awsconfig.WithRegion(options.Region),
-	}
-	if options.AccessKeyID != "" {
-		loadOptions = append(loadOptions, awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			options.AccessKeyID,
-			options.SecretAccessKey,
-			options.SessionToken,
-		)))
-	}
-	awsConfig, err := awsconfig.LoadDefaultConfig(ctx, loadOptions...)
+	awsConfig, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(options.Region))
 	if err != nil {
 		return nil, fmt.Errorf("load S3 client configuration: %w", err)
 	}
@@ -68,12 +45,7 @@ func NewS3(ctx context.Context, options S3Options) (*S3Store, error) {
 		return nil, fmt.Errorf("S3 credentials are unavailable")
 	}
 
-	client := s3.NewFromConfig(awsConfig, func(clientOptions *s3.Options) {
-		clientOptions.UsePathStyle = options.ForcePathStyle
-		if options.Endpoint != "" {
-			clientOptions.BaseEndpoint = aws.String(options.Endpoint)
-		}
-	})
+	client := s3.NewFromConfig(awsConfig)
 	return &S3Store{client: client, bucket: options.Bucket}, nil
 }
 

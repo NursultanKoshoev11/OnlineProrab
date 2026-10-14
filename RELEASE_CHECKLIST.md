@@ -39,7 +39,7 @@
 - [ ] Set production `CORS_ALLOWED_ORIGINS`
 - [ ] Configure HTTPS and domain
 - [ ] Configure PostgreSQL backups
-- [ ] Configure a private S3-compatible bucket and credentials or workload identity
+- [ ] Configure a private AWS S3 bucket, Block Public Access, encryption, and least-privilege IAM role or credentials
 - [ ] Back up the active local upload volume and database
 - [ ] Stop API writes and run `storage-migrate -direction=local-to-s3`
 - [ ] Verify existing object sizes/digests and test upload/download/delete against staging

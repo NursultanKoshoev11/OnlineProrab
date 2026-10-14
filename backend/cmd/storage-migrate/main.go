@@ -49,13 +49,8 @@ func main() {
 		log.Fatalf("configure local storage: %v", err)
 	}
 	objectStore, err := storage.NewS3(ctx, storage.S3Options{
-		Region:          cfg.S3Region,
-		Bucket:          cfg.S3Bucket,
-		Endpoint:        cfg.S3Endpoint,
-		AccessKeyID:     cfg.S3AccessKeyID,
-		SecretAccessKey: cfg.S3SecretAccessKey,
-		SessionToken:    cfg.S3SessionToken,
-		ForcePathStyle:  cfg.S3ForcePathStyle,
+		Region: cfg.S3Region,
+		Bucket: cfg.S3Bucket,
 	})
 	if err != nil {
 		log.Fatalf("configure object storage: %v", err)

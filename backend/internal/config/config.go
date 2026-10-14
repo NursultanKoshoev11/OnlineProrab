@@ -47,11 +47,9 @@ type Config struct {
 	MaxUploadBytes            int64
 	S3Region                  string
 	S3Bucket                  string
-	S3Endpoint                string
-	S3AccessKeyID             string
-	S3SecretAccessKey         string
-	S3SessionToken            string
-	S3ForcePathStyle          bool
+	AWSAccessKeyID            string
+	AWSSecretAccessKey        string
+	AWSSessionToken           string
 	SMSProvider               string
 	ReviewOnlyMode            bool
 	ReviewSMSPhone            string
@@ -103,11 +101,9 @@ func Load() Config {
 	cfg.MaxUploadBytes = int64(getEnvInt("MAX_UPLOAD_MB", 10)) * 1024 * 1024
 	cfg.S3Region = strings.TrimSpace(os.Getenv("S3_REGION"))
 	cfg.S3Bucket = strings.TrimSpace(os.Getenv("S3_BUCKET"))
-	cfg.S3Endpoint = strings.TrimSpace(os.Getenv("S3_ENDPOINT"))
-	cfg.S3AccessKeyID = strings.TrimSpace(os.Getenv("S3_ACCESS_KEY_ID"))
-	cfg.S3SecretAccessKey = strings.TrimSpace(os.Getenv("S3_SECRET_ACCESS_KEY"))
-	cfg.S3SessionToken = strings.TrimSpace(os.Getenv("S3_SESSION_TOKEN"))
-	cfg.S3ForcePathStyle = getEnvBool("S3_FORCE_PATH_STYLE", false)
+	cfg.AWSAccessKeyID = strings.TrimSpace(os.Getenv("AWS_ACCESS_KEY_ID"))
+	cfg.AWSSecretAccessKey = strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY"))
+	cfg.AWSSessionToken = strings.TrimSpace(os.Getenv("AWS_SESSION_TOKEN"))
 	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
 	cfg.ReviewOnlyMode = getEnvBool("REVIEW_ONLY_MODE", false)
 	cfg.ReviewSMSPhone = normalizePhone(os.Getenv("REVIEW_SMS_PHONE"))
@@ -193,19 +189,11 @@ func (cfg Config) Validate() error {
 		if cfg.S3Bucket == "" {
 			problems = append(problems, "S3_BUCKET is required when STORAGE_DRIVER=s3")
 		}
-		if (cfg.S3AccessKeyID == "") != (cfg.S3SecretAccessKey == "") {
-			problems = append(problems, "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be configured together")
+		if (cfg.AWSAccessKeyID == "") != (cfg.AWSSecretAccessKey == "") {
+			problems = append(problems, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be configured together")
 		}
-		if cfg.S3SessionToken != "" && cfg.S3AccessKeyID == "" {
-			problems = append(problems, "S3_SESSION_TOKEN requires S3 access key credentials")
-		}
-		if cfg.S3Endpoint != "" {
-			if err := validateS3Endpoint(cfg.S3Endpoint, cfg.IsProductionLike()); err != nil {
-				problems = append(problems, err.Error())
-			}
-			if cfg.S3AccessKeyID == "" {
-				problems = append(problems, "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are required with S3_ENDPOINT")
-			}
+		if cfg.AWSSessionToken != "" && cfg.AWSAccessKeyID == "" {
+			problems = append(problems, "AWS_SESSION_TOKEN requires AWS access key credentials")
 		}
 	}
 	if cfg.AccessTokenTTL <= 0 {
@@ -330,20 +318,6 @@ func validateVerifiedDatabaseTLS(databaseURL string) error {
 		if !usesVerifiedPostgresTLS(fallback.TLSConfig) {
 			return errors.New("DATABASE_URL must use sslmode=verify-full for every staging and production database host")
 		}
-	}
-	return nil
-}
-
-func validateS3Endpoint(endpoint string, requireHTTPS bool) error {
-	parsed, err := url.Parse(strings.TrimSpace(endpoint))
-	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Opaque != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
-		return errors.New("S3_ENDPOINT must be a valid absolute HTTP(S) endpoint without credentials, query, or fragment")
-	}
-	if parsed.Scheme != "https" && parsed.Scheme != "http" {
-		return errors.New("S3_ENDPOINT must use HTTP or HTTPS")
-	}
-	if requireHTTPS && parsed.Scheme != "https" {
-		return errors.New("S3_ENDPOINT must use HTTPS in staging and production")
 	}
 	return nil
 }
