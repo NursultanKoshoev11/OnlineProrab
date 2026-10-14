@@ -61,8 +61,8 @@ jobs:
         run: go vet ./...
       - name: Race tests
         run: go test -race ./...
-      - name: Build
-        run: go build ./cmd/api
+      - name: Build API entry points
+        run: go build ./cmd/api ./cmd/prodapi
 
   infrastructure-checks:
     name: AWS infrastructure templates
