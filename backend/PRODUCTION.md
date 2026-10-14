@@ -124,7 +124,11 @@ the uploads before the migration command starts.
 
 The migration command refuses missing active source files, checks the database
 size, verifies each destination object's size and digest, and keeps the local
-volume unchanged. After it reports success, start the API and test a real
+volume unchanged. It holds one object at a time in memory, refuses objects over
+64 MiB, and does not write migration copies to host temporary storage. The
+default upload limit is 10 MiB; if the configured limit or existing files are
+larger than 64 MiB, stop and arrange a separately reviewed migration method
+before cutover. After it reports success, start the API and test a real
 authenticated upload, download, and deletion in staging before production
 cutover. Use the same command with `-direction=s3-to-local` to rehydrate active
 objects into the mounted local volume before rolling back to a pre-S3 API image.

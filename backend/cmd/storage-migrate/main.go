@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -17,6 +18,8 @@ import (
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/database"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
+
+const maxMigrationObjectBytes int64 = 64 * 1024 * 1024
 
 func main() {
 	direction := flag.String("direction", "local-to-s3", "copy direction: local-to-s3 or s3-to-local")
@@ -109,6 +112,10 @@ func migrateActiveFiles(ctx context.Context, db *database.DB, source, target sto
 }
 
 func copyAndVerify(ctx context.Context, source, target storage.ObjectStore, key string, expectedSize int64, contentType string) error {
+	if expectedSize < 0 || expectedSize > maxMigrationObjectBytes {
+		return fmt.Errorf("object exceeds the 64 MiB in-memory migration limit")
+	}
+
 	object, err := source.Get(ctx, key)
 	if err != nil {
 		return fmt.Errorf("read source object: %w", err)
@@ -120,36 +127,21 @@ func copyAndVerify(ctx context.Context, source, target storage.ObjectStore, key 
 		return fmt.Errorf("source object size does not match database metadata")
 	}
 
-	temporary, err := os.CreateTemp("", ".stroy-storage-migration-*")
-	if err != nil {
-		_ = object.Body.Close()
-		return fmt.Errorf("create temporary copy: %w", err)
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	defer temporary.Close()
-
-	sourceHash := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(temporary, sourceHash), io.LimitReader(object.Body, expectedSize+1))
+	content, readErr := io.ReadAll(io.LimitReader(object.Body, expectedSize+1))
 	closeErr := object.Body.Close()
-	if copyErr != nil {
-		return fmt.Errorf("copy source object: %w", copyErr)
+	if readErr != nil {
+		return fmt.Errorf("read source object: %w", readErr)
 	}
 	if closeErr != nil {
 		return fmt.Errorf("close source object: %w", closeErr)
 	}
-	if written != expectedSize {
+	if int64(len(content)) != expectedSize {
 		return fmt.Errorf("source object bytes do not match database metadata")
 	}
-	if err := temporary.Sync(); err != nil {
-		return fmt.Errorf("sync temporary copy: %w", err)
-	}
-	sourceDigest := hex.EncodeToString(sourceHash.Sum(nil))
+	sourceHash := sha256.Sum256(content)
+	sourceDigest := hex.EncodeToString(sourceHash[:])
 
-	if _, err := temporary.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("rewind temporary copy: %w", err)
-	}
-	if err := target.Put(ctx, key, temporary, expectedSize, contentType); err != nil {
+	if err := target.Put(ctx, key, bytes.NewReader(content), expectedSize, contentType); err != nil {
 		return fmt.Errorf("write destination object: %w", err)
 	}
 	verified, err := target.Get(ctx, key)
