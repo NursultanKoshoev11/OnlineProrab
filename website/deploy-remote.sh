@@ -75,6 +75,32 @@ restore_compose() {
     up --detach --no-build --wait --wait-timeout 120
 }
 
+remove_failed_release_container() {
+  local compose_file="${release_dir}/website/docker-compose.yml"
+  if [[ -f "$compose_file" && ! -L "$compose_file" ]]; then
+    docker compose -p website -f "$compose_file" rm --stop --force stroy-website
+  fi
+}
+
+restore_current_pointer() {
+  local active_release=""
+  if [[ -L "$current_link" ]]; then
+    active_release="$(readlink -f "$current_link" || true)"
+  fi
+  if [[ "$active_release" != "$release_dir" ]]; then
+    return 0
+  fi
+
+  if [[ -n "$previous_release" ]]; then
+    next_link="${deploy_root}/.current-rollback-${release_sha}-$$"
+    ln -s "$previous_release" "$next_link"
+    mv -Tf "$next_link" "$current_link"
+    next_link=""
+  else
+    rm -f "$current_link"
+  fi
+}
+
 rollback() {
   local status=$?
   trap - EXIT
@@ -92,7 +118,9 @@ rollback() {
         echo "Could not restore the previous image tag; inspect the website service manually" >&2
       fi
     else
-      echo "No previous website image was available for rollback" >&2
+      echo "No previous website image existed; removing the failed first release" >&2
+      remove_failed_release_container || echo "Could not remove the failed website container; inspect the service manually" >&2
+      restore_current_pointer || echo "Could not restore the previous website release pointer; inspect it manually" >&2
     fi
   fi
 
@@ -127,12 +155,18 @@ read_rollback_state() {
   fi
   previous_image_id="${state[0]}"
   previous_release="${state[1]}"
-  if [[ ! "$previous_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-    echo "No previous website image is available for rollback" >&2
+  if [[ -n "$previous_image_id" && ! "$previous_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "Previous website image identifier is invalid" >&2
+    return 2
+  fi
+  if [[ -n "$previous_image_id" && -z "$previous_release" ]]; then
+    echo "Previous website release path is missing" >&2
     return 2
   fi
   local valid_previous_release=0
-  if [[ "$previous_release" == "$releases_dir/baseline" ]]; then
+  if [[ -z "$previous_release" && -z "$previous_image_id" ]]; then
+    valid_previous_release=1
+  elif [[ "$previous_release" == "$releases_dir/baseline" ]]; then
     valid_previous_release=1
   elif [[ "$previous_release" == "$releases_dir/"* ]]; then
     local previous_sha="${previous_release#"$releases_dir/"}"
@@ -140,9 +174,10 @@ read_rollback_state() {
       valid_previous_release=1
     fi
   fi
-  if (( valid_previous_release == 0 )) || [[ -L "$previous_release" || ! -d "$previous_release" || \
+  if (( valid_previous_release == 0 )) || { [[ -n "$previous_release" ]] && \
+      [[ -L "$previous_release" || ! -d "$previous_release" || \
       ! -f "$previous_release/website/docker-compose.yml" || \
-      -L "$previous_release/website/docker-compose.yml" ]]; then
+      -L "$previous_release/website/docker-compose.yml" ]]; }; then
     echo "Previous release path is invalid; refusing rollback" >&2
     return 2
   fi
@@ -154,11 +189,17 @@ rollback_public_probe() {
     echo "Current website release changed; refusing stale rollback" >&2
     return 2
   fi
+  if [[ -z "$previous_image_id" ]]; then
+    remove_failed_release_container
+    restore_current_pointer
+    rm -f "$rollback_state_file"
+    rmdir "$rollback_dir" 2>/dev/null || true
+    echo "Removed failed first website release $release_sha; no previous container existed"
+    return 0
+  fi
   docker image tag "$rollback_image_tag" stroy-website:production
   restore_compose "$previous_release/website/docker-compose.yml"
-  next_link="${deploy_root}/.current-rollback-${release_sha}-$$"
-  ln -s "$previous_release" "$next_link"
-  mv -Tf "$next_link" "$current_link"
+  restore_current_pointer
   docker image rm --force "$rollback_image_tag" >/dev/null 2>&1 || echo "Could not remove temporary rollback image tag $rollback_image_tag" >&2
   rm -f "$rollback_state_file"
   rmdir "$rollback_dir" 2>/dev/null || true

@@ -155,6 +155,45 @@ MOCK_FAIL_FIRST_COMPOSE=0 \
 [[ ! -e "$public_rollback_root/.rollback/$sha" ]]
 grep -Fq "image tag stroy-website:rollback-$sha stroy-website:production" "$mock_log"
 
+first_public_rollback_root="$test_root/first-public-rollback"
+mkdir -m 700 "$first_public_rollback_root"
+sha="$(new_sha)"
+create_image_archive "$sha"
+create_regular_source_archive "$sha"
+calls_file="$test_root/first-public-rollback-compose-calls"
+MOCK_COMPOSE_CALLS_FILE="$calls_file" \
+MOCK_EXISTING_CONTAINER=0 \
+MOCK_FAIL_FIRST_COMPOSE=0 \
+  bash "$deploy_script" "$sha" "$first_public_rollback_root" >/dev/null
+[[ -L "$first_public_rollback_root/current" ]]
+[[ -f "$first_public_rollback_root/.rollback/$sha" ]]
+MOCK_COMPOSE_CALLS_FILE="$calls_file" \
+MOCK_EXISTING_CONTAINER=0 \
+MOCK_FAIL_FIRST_COMPOSE=0 \
+  bash "$deploy_script" "$sha" "$first_public_rollback_root" rollback >/dev/null
+[[ ! -e "$first_public_rollback_root/current" && ! -L "$first_public_rollback_root/current" ]]
+[[ ! -e "$first_public_rollback_root/.rollback/$sha" ]]
+[[ "$(cat "$calls_file")" == 2 ]]
+grep -Fq "compose -p website -f $first_public_rollback_root/releases/$sha/website/docker-compose.yml rm --stop --force stroy-website" "$mock_log"
+
+first_failure_root="$test_root/first-failure"
+mkdir -m 700 "$first_failure_root"
+sha="$(new_sha)"
+create_image_archive "$sha"
+create_regular_source_archive "$sha"
+calls_file="$test_root/first-failure-compose-calls"
+if MOCK_COMPOSE_CALLS_FILE="$calls_file" \
+  MOCK_EXISTING_CONTAINER=0 \
+  MOCK_FAIL_FIRST_COMPOSE=1 \
+  bash "$deploy_script" "$sha" "$first_failure_root" >/dev/null 2>&1; then
+  echo "Expected first deployment health-check failure to fail the deployment" >&2
+  exit 1
+fi
+[[ ! -e "$first_failure_root/current" && ! -L "$first_failure_root/current" ]]
+[[ ! -e "$first_failure_root/.rollback/$sha" ]]
+[[ "$(cat "$calls_file")" == 2 ]]
+grep -Fq "compose -p website -f $first_failure_root/releases/$sha/website/docker-compose.yml rm --stop --force stroy-website" "$mock_log"
+
 rollback_root="$test_root/rollback"
 baseline="$rollback_root/releases/baseline"
 mkdir -p "$baseline/website"
