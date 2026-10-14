@@ -85,7 +85,10 @@ test("public pages and resources comply with the production CSP", () => {
   assert.match(privacy, /нормализованный\s+номер телефона, IP-адрес клиента/);
   assert.match(privacy, /обычно хранятся 7 дней/);
   assert.match(privacy, /24\s+часа после\s+истечения срока действия кода/);
-  assert.match(privacy, /Плановая очистка запускается\s+примерно каждые 6 часов/);
+  assert.match(
+    privacy,
+    /Плановая очистка запускается\s+примерно каждые 6 часов/,
+  );
 });
 
 function createElement() {
