@@ -41,7 +41,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 - Authenticated app deletion: `DELETE /api/v1/account` with a Bearer token.
 - Public deletion flow: `/account-deletion` requests an SMS challenge and verifies it through `POST /api/v1/account/deletion/verify`. That endpoint does not create or update a user and does not accept project invitations; it issues a ten-minute `account:delete` token that is accepted only by the account deletion endpoint. The public flow then calls `DELETE /api/v1/account`.
-- The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. Files are removed from storage after the transaction commits.
+- The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. Protected API requests verify that the account still exists, so deletion also revokes outstanding access JWTs immediately instead of waiting for token expiry. Files are removed from storage after the transaction commits.
 
 ## Local smoke test
 
