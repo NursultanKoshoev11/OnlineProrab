@@ -2,10 +2,12 @@ package sms
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -113,5 +115,49 @@ func TestTwilioSenderDoesNotExposeProviderBodyInError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "provider-internal-detail") {
 		t.Fatalf("provider response body leaked in error: %v", err)
+	}
+}
+
+func TestTwilioSenderDoesNotFollowRedirects(t *testing.T) {
+	var redirectTargetRequests atomic.Int32
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirectTargetRequests.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer redirectTarget.Close()
+
+	for _, status := range []int{
+		http.StatusMovedPermanently,
+		http.StatusFound,
+		http.StatusSeeOther,
+		http.StatusTemporaryRedirect,
+		http.StatusPermanentRedirect,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Location", redirectTarget.URL)
+				w.WriteHeader(status)
+			}))
+			defer provider.Close()
+
+			sender, err := newTwilioSender(TwilioConfig{
+				AccountSID:   testAccountSID,
+				APIKeySID:    testAPIKeySID,
+				APIKeySecret: testCredential,
+				From:         "+15550000000",
+			}, provider.Client(), provider.URL)
+			if err != nil {
+				t.Fatalf("newTwilioSender: %v", err)
+			}
+
+			err = sender.SendLoginCode(context.Background(), "+996700000000", "123456")
+			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("status %d", status)) {
+				t.Fatalf("expected redirect status %d to fail closed, got %v", status, err)
+			}
+		})
+	}
+
+	if count := redirectTargetRequests.Load(); count != 0 {
+		t.Fatalf("Twilio client followed redirects to the target %d times", count)
 	}
 }
