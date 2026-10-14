@@ -9,8 +9,38 @@ trap 'rm -rf -- "$temporary_dir"' EXIT
 mkdir -p "$temporary_dir/bin"
 cat > "$temporary_dir/bin/docker" <<'DOCKER'
 #!/usr/bin/env bash
-echo "docker must not be called for rejected deployment input" >&2
-exit 99
+set -euo pipefail
+
+if [[ "${FAKE_DOCKER_MODE:-reject}" != "deploy" ]]; then
+  echo "docker must not be called for rejected deployment input" >&2
+  exit 99
+fi
+
+case "${1:-}" in
+  ps)
+    exit 0
+    ;;
+  load)
+    exit 0
+    ;;
+  image)
+    if [[ "${2:-}" == "inspect" && "${3:-}" == "--format" ]]; then
+      printf '%s\n' "$VALID_SHA"
+      exit 0
+    fi
+    ;;
+  compose)
+    if [[ "${API_IMAGE:-}" != "stroy-api:$VALID_SHA" ]]; then
+      echo "compose received an unexpected API image" >&2
+      exit 98
+    fi
+    printf '%s\n' "$*" >> "$DOCKER_LOG"
+    exit 0
+    ;;
+esac
+
+echo "unexpected docker invocation: $*" >&2
+exit 98
 DOCKER
 chmod +x "$temporary_dir/bin/docker"
 export PATH="$temporary_dir/bin:$PATH"
@@ -59,4 +89,54 @@ mkdir -p "$deploy_root/releases" "$temporary_dir/outside"
 ln -s ../outside "$deploy_root/current"
 expect_rejection "current release pointer is not a canonical managed release" rollback "$valid_sha" "$deploy_root" api-production
 
-echo "Backend deployment input guards passed."
+successful_root="$temporary_dir/successful-api"
+mkdir -p "$successful_root"
+: > "$successful_root/.env"
+chmod 600 "$successful_root/.env"
+image_archive="/tmp/stroy-api-$valid_sha.image.tar.gz"
+compose_file="/tmp/stroy-api-$valid_sha.compose.yml"
+backup_script="/tmp/stroy-api-$valid_sha.backup.sh"
+safe_path_script="/tmp/stroy-api-$valid_sha.safe-path.sh"
+for artifact in "$image_archive" "$compose_file" "$backup_script" "$safe_path_script"; do
+  if [[ -e "$artifact" || -L "$artifact" ]]; then
+    echo "deployment test artifact already exists: $artifact" >&2
+    exit 1
+  fi
+done
+trap 'rm -rf -- "$temporary_dir"; rm -f -- "$image_archive" "$compose_file" "$backup_script" "$safe_path_script"' EXIT
+printf '%s' fake-image | gzip -c > "$image_archive"
+printf '%s\n' 'services: {}' > "$compose_file"
+cp "$script_dir/scripts/backup.sh" "$backup_script"
+cp "$script_dir/scripts/safe-path.sh" "$safe_path_script"
+docker_log="$temporary_dir/docker.log"
+if ! FAKE_DOCKER_MODE=deploy VALID_SHA="$valid_sha" DOCKER_LOG="$docker_log" \
+  bash "$deploy_script" deploy "$valid_sha" "$successful_root" api-production; then
+  echo "expected deployment fixture to succeed" >&2
+  exit 1
+fi
+if [[ "$(readlink -- "$successful_root/current")" != "releases/$valid_sha" ]]; then
+  echo "successful deployment did not activate its managed release" >&2
+  exit 1
+fi
+if ! cmp -s "$script_dir/scripts/backup.sh" "$successful_root/releases/$valid_sha/backend/scripts/backup.sh" || \
+  ! cmp -s "$script_dir/scripts/safe-path.sh" "$successful_root/releases/$valid_sha/backend/scripts/safe-path.sh"; then
+  echo "successful deployment did not install the matching backup scripts" >&2
+  exit 1
+fi
+if [[ "$(stat -c '%a' "$successful_root/releases/$valid_sha/backend/scripts/backup.sh")" != "644" || \
+  "$(stat -c '%a' "$successful_root/releases/$valid_sha/backend/scripts/safe-path.sh")" != "644" ]]; then
+  echo "deployed backup scripts have unexpected permissions" >&2
+  exit 1
+fi
+if ! grep -Fq 'up --detach --no-build --pull never --wait --wait-timeout 180 api' "$docker_log"; then
+  echo "successful deployment did not start the API release" >&2
+  exit 1
+fi
+for artifact in "$image_archive" "$compose_file" "$backup_script" "$safe_path_script"; do
+  if [[ -e "$artifact" || -L "$artifact" ]]; then
+    echo "deployment left a transferred artifact behind: $artifact" >&2
+    exit 1
+  fi
+done
+
+echo "Backend deployment guards and release installation passed."
