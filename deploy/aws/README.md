@@ -12,11 +12,15 @@ object versioning stays disabled because account deletion must permanently
 remove user files. The backup archive bucket has versioning enabled and expires
 current snapshots after `BackupArchiveRetentionDays` (180 days by default);
 noncurrent versions expire after a further 30 days. Deletion tombstones have no
-expiration rule. Keeping them indefinitely ensures that restoring any retained
-backup cannot resurrect an account or file deleted after that snapshot. The
-ledger contains account UUIDs and opaque object keys, so keep its read access
-restricted to recovery operators. The uploads bucket aborts incomplete multipart
-uploads after seven days. All three
+expiration rule by product decision. Keeping them indefinitely ensures that
+restoring even an old or separately retained backup cannot resurrect an account
+or file deleted after that snapshot. Each entry contains only an account UUID or
+object storage path and its deletion timestamp; it does not retain names, phone
+numbers, or other profile fields. Treat the UUID and storage path as retained
+personal data: the bucket is private and SSE-S3 encrypted, the API can write
+tombstones but cannot read them, and only recovery operators should have read
+access. The uploads bucket aborts incomplete multipart uploads after seven
+days. All three
 buckets are retained if the CloudFormation stack is deleted or a bucket is
 replaced.
 
