@@ -57,6 +57,32 @@ func TestMultipartUploadPlanCoversAWSSizeLimit(t *testing.T) {
 	}
 }
 
+func TestS3StorePutStreamSupportsNonseekableBody(t *testing.T) {
+	const content = "one-pass stream"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/stroy-test/project/stream.bin" {
+			t.Errorf("unexpected stream upload request %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if got := r.Header.Get("X-Amz-Content-Sha256"); got != "UNSIGNED-PAYLOAD" {
+			t.Errorf("nonseekable body should use the TLS-protected unsigned payload signature, got %q", got)
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != content {
+			t.Errorf("uploaded body = %q, want %q", body, content)
+		}
+		w.Header().Set("ETag", "\"stream-etag\"")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	store := newTestS3Store(t, server)
+	if err := store.PutStream(context.Background(), "project/stream.bin", strings.NewReader(content), int64(len(content)), "application/octet-stream"); err != nil {
+		t.Fatalf("put nonseekable S3 stream: %v", err)
+	}
+}
+
 func TestS3StoreMultipartUploadCompletesKnownSizeStream(t *testing.T) {
 	var partBody []byte
 	var completed bool
@@ -219,6 +245,9 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 			if strings.HasPrefix(r.URL.Path, "/stroy-test/") {
 				if got := r.Header.Get("Content-Type"); got != "application/pdf" {
 					t.Errorf("unexpected upload content type %q", got)
+				}
+				if got := r.Header.Get("X-Amz-Content-Sha256"); got == "UNSIGNED-PAYLOAD" {
+					t.Error("seekable application uploads should retain signed payloads")
 				}
 				var err error
 				storedBody, err = io.ReadAll(r.Body)
