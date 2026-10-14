@@ -81,7 +81,7 @@ window have passed.
 ## Account deletion
 
 - Authenticated app deletion: `DELETE /api/v1/account` with a Bearer token.
-- Public deletion flow: `/account-deletion` sends an SMS challenge, verifies the phone, then calls the same authenticated endpoint.
+- Public deletion flow: `/account-deletion` requests an SMS challenge and verifies it through `POST /api/v1/account/deletion/verify`. That endpoint does not create or update a user and does not accept project invitations; it issues a ten-minute `account:delete` token that is accepted only by the account deletion endpoint. The public flow then calls `DELETE /api/v1/account`.
 - The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. It records storage removals in the same database transaction; a background worker deletes queued objects and retries failures with bounded exponential backoff.
 
 ## Local smoke test
