@@ -60,18 +60,20 @@ class _BackendProjectDashboardScreenV2State
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: widget.embedded ? null : AppBar(
-        title: Text(
-          widget.project.name.isEmpty ? 'Project' : widget.project.name,
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: Text(
+                widget.project.name.isEmpty ? 'Project' : widget.project.name,
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Refresh',
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
       body: FutureBuilder<ProjectDashboardDataV2>(
         future: dashboardFuture,
         builder: (context, snapshot) {
