@@ -24,6 +24,10 @@ type State struct {
 	UploadDir               string
 	MaxUploadBytes          int64
 	IsProduction            bool
+	IsProductionLike        bool
+	IsDevelopment           bool
+	TrustedProxyCIDRs       []string
+	DevSMSCodeEnabled       bool
 	ReviewOnlyMode          bool
 	ReviewSMSPhone          string
 	ReviewSMSCode           string
@@ -53,6 +57,10 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		UploadDir:               cfg.UploadDir,
 		MaxUploadBytes:          cfg.MaxUploadBytes,
 		IsProduction:            cfg.IsProduction(),
+		IsProductionLike:        cfg.IsProductionLike(),
+		IsDevelopment:           cfg.IsDevelopment(),
+		TrustedProxyCIDRs:       append([]string(nil), cfg.TrustedProxyCIDRs...),
+		DevSMSCodeEnabled:       cfg.DevSMSCodeEnabled,
 		ReviewOnlyMode:          cfg.ReviewOnlyMode,
 		ReviewSMSPhone:          cfg.ReviewSMSPhone,
 		ReviewSMSCode:           cfg.ReviewSMSCode,

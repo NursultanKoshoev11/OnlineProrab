@@ -18,7 +18,8 @@ val stroyApplicationId = System.getenv("STROY_APPLICATION_ID")
 android {
     namespace = "com.onlineprorab.online_prorab"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    // Match the Android Gradle plugin and native Flutter plugins explicitly.
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

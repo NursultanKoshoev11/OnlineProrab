@@ -73,9 +73,10 @@ class RemoteExpenseAiResult {
     final items = rawItems is List
         ? rawItems
               .whereType<Map>()
-              .map((item) => RemoteCostItem.fromJson(
-                    Map<String, dynamic>.from(item),
-                  ))
+              .map(
+                (item) =>
+                    RemoteCostItem.fromJson(Map<String, dynamic>.from(item)),
+              )
               .where((item) => item.id.isNotEmpty)
               .toList()
         : <RemoteCostItem>[];

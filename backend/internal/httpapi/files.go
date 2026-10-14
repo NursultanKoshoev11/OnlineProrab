@@ -104,7 +104,7 @@ func listFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func createFileMetadata(w http.ResponseWriter, r *http.Request) {
-	if appState.IsProduction {
+	if appState.IsProductionLike {
 		Error(w, http.StatusForbidden, "direct file metadata creation is disabled; use the upload endpoint")
 		return
 	}
