@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -13,7 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
@@ -24,10 +25,13 @@ const (
 	authAttemptRetention    = 7 * 24 * time.Hour
 	smsCodeRetention        = 24 * time.Hour
 	authAttemptPruneEvery   = 6 * time.Hour
+	authAttemptPruneRetry   = 15 * time.Minute
 	authAttemptPruneBatch   = 5000
 )
 
-var lastAuthAttemptPrune atomic.Int64
+var authAttemptPruneMu sync.Mutex
+var lastAuthAttemptPrune time.Time
+var authAttemptPruneRunning bool
 
 var errInvalidClientAddress = errors.New("cannot determine client IP from the configured trusted proxy")
 
@@ -182,18 +186,58 @@ func smsRateLimitPhone(phone string) string {
 }
 
 func pruneAuthHistoryIfDue() {
-	now := time.Now().Unix()
-	last := lastAuthAttemptPrune.Load()
-	if now-last < int64(authAttemptPruneEvery.Seconds()) || !lastAuthAttemptPrune.CompareAndSwap(last, now) {
-		return
+	pruneAuthHistoryIfDueContext(context.Background())
+}
+
+// RunAuthHistoryPruner periodically removes expired login security records,
+// including when the API receives no SMS traffic.
+func RunAuthHistoryPruner(ctx context.Context) {
+	pruneAuthHistoryIfDueContext(ctx)
+	ticker := time.NewTicker(authAttemptPruneRetry)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pruneAuthHistoryIfDueContext(ctx)
+		}
 	}
+}
+
+func pruneAuthHistoryIfDueContext(parent context.Context) {
 	if appState.DB == nil || appState.DB.Pool == nil {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	now := time.Now()
+	authAttemptPruneMu.Lock()
+	if authAttemptPruneRunning || (!lastAuthAttemptPrune.IsZero() && now.Sub(lastAuthAttemptPrune) < authAttemptPruneEvery) {
+		authAttemptPruneMu.Unlock()
+		return
+	}
+	authAttemptPruneRunning = true
+	authAttemptPruneMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
-	if _, err := appState.DB.Pool.Exec(ctx, `
+	err := pruneAuthHistory(ctx)
+
+	authAttemptPruneMu.Lock()
+	authAttemptPruneRunning = false
+	if err == nil {
+		lastAuthAttemptPrune = now
+	}
+	authAttemptPruneMu.Unlock()
+
+	if err != nil {
+		log.Printf("auth abuse: failed to prune expired login records: %v", err)
+	}
+}
+
+func pruneAuthHistory(ctx context.Context) error {
+	if err := deleteExpiredAuthRows(ctx, `
 		DELETE FROM auth_attempts
 		WHERE id IN (
 			SELECT id FROM auth_attempts
@@ -201,10 +245,10 @@ func pruneAuthHistoryIfDue() {
 			ORDER BY id
 			LIMIT $2
 		)
-	`, int(authAttemptRetention.Seconds()), authAttemptPruneBatch); err != nil {
-		log.Printf("auth abuse: failed to prune old attempts: %v", err)
+	`, authAttemptRetention); err != nil {
+		return fmt.Errorf("auth attempts: %w", err)
 	}
-	if _, err := appState.DB.Pool.Exec(ctx, `
+	if err := deleteExpiredAuthRows(ctx, `
 		DELETE FROM sms_login_codes
 		WHERE id IN (
 			SELECT id FROM sms_login_codes
@@ -212,8 +256,24 @@ func pruneAuthHistoryIfDue() {
 			ORDER BY expires_at
 			LIMIT $2
 		)
-	`, int(smsCodeRetention.Seconds()), authAttemptPruneBatch); err != nil {
-		log.Printf("auth abuse: failed to prune old SMS codes: %v", err)
+	`, smsCodeRetention); err != nil {
+		return fmt.Errorf("SMS login codes: %w", err)
+	}
+	return nil
+}
+
+func deleteExpiredAuthRows(ctx context.Context, query string, retention time.Duration) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		result, err := appState.DB.Pool.Exec(ctx, query, int(retention.Seconds()), authAttemptPruneBatch)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() < authAttemptPruneBatch {
+			return nil
+		}
 	}
 }
 
