@@ -5,6 +5,17 @@ set -eu
 UPLOAD_DIR="${UPLOAD_DIR:-/data/uploads}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/onlineprorab}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
+STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
+
+case "$STORAGE_DRIVER" in
+  local) ;;
+  s3)
+    : "${S3_REGION:?S3_REGION is required when STORAGE_DRIVER=s3}"
+    : "${S3_BUCKET:?S3_BUCKET is required when STORAGE_DRIVER=s3}"
+    command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required when STORAGE_DRIVER=s3" >&2; exit 127; }
+    ;;
+  *) echo "STORAGE_DRIVER must be local or s3" >&2; exit 2 ;;
+esac
 
 script_dir="$(CDPATH= cd "$(dirname "$0")" && pwd)"
 . "$script_dir/safe-path.sh"
@@ -53,18 +64,33 @@ pg_dump \
   --file="$tmp_dir/database.dump" \
   "$DATABASE_URL"
 
-if [ -d "$UPLOAD_DIR" ]; then
-  if find "$UPLOAD_DIR" ! -type d ! -type f -print -quit | grep -q .; then
-    echo "UPLOAD_DIR may contain only regular files and directories" >&2
-    exit 2
-  fi
-  tar -C "$UPLOAD_DIR" -czf "$tmp_dir/uploads.tar.gz" .
-else
-  empty_dir="$tmp_dir/empty-uploads"
-  mkdir -p "$empty_dir"
-  tar -C "$empty_dir" -czf "$tmp_dir/uploads.tar.gz" .
-  rmdir "$empty_dir"
-fi
+case "$STORAGE_DRIVER" in
+  local)
+    if [ -d "$UPLOAD_DIR" ]; then
+      if find "$UPLOAD_DIR" ! -type d ! -type f -print -quit | grep -q .; then
+        echo "UPLOAD_DIR may contain only regular files and directories" >&2
+        exit 2
+      fi
+      tar -C "$UPLOAD_DIR" -czf "$tmp_dir/uploads.tar.gz" .
+    else
+      empty_dir="$tmp_dir/empty-uploads"
+      mkdir -p "$empty_dir"
+      tar -C "$empty_dir" -czf "$tmp_dir/uploads.tar.gz" .
+      rmdir "$empty_dir"
+    fi
+    ;;
+  s3)
+    s3_stage="$tmp_dir/s3-uploads"
+    mkdir -m 700 "$s3_stage"
+    aws --region "$S3_REGION" s3 sync "s3://$S3_BUCKET" "$s3_stage" --only-show-errors
+    if find "$s3_stage" ! -type d ! -type f -print -quit | grep -q .; then
+      echo "S3 download may contain only regular files and directories" >&2
+      exit 2
+    fi
+    tar -C "$s3_stage" -czf "$tmp_dir/uploads.tar.gz" .
+    rm -rf "$s3_stage"
+    ;;
+esac
 
 (
   cd "$tmp_dir"

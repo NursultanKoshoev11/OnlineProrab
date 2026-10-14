@@ -9,6 +9,17 @@ if [ "$CONFIRM_RESTORE" != "YES" ]; then
   exit 2
 fi
 
+STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
+case "$STORAGE_DRIVER" in
+  local) ;;
+  s3)
+    : "${S3_REGION:?S3_REGION is required when STORAGE_DRIVER=s3}"
+    : "${S3_BUCKET:?S3_BUCKET is required when STORAGE_DRIVER=s3}"
+    command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required when STORAGE_DRIVER=s3" >&2; exit 127; }
+    ;;
+  *) echo "STORAGE_DRIVER must be local or s3" >&2; exit 2 ;;
+esac
+
 script_dir="$(CDPATH= cd "$(dirname "$0")" && pwd)"
 . "$script_dir/safe-path.sh"
 UPLOAD_DIR="$(safe_directory_path "${UPLOAD_DIR:-/data/uploads}" UPLOAD_DIR)"
@@ -78,8 +89,15 @@ pg_restore \
   --dbname="$DATABASE_URL" \
   "$backup_dir/database.dump"
 
-find "$UPLOAD_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-cp -a "$staging_dir"/. "$UPLOAD_DIR"/
+case "$STORAGE_DRIVER" in
+  local)
+    find "$UPLOAD_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    cp -a "$staging_dir"/. "$UPLOAD_DIR"/
+    ;;
+  s3)
+    aws --region "$S3_REGION" s3 sync "$staging_dir" "s3://$S3_BUCKET" --delete --only-show-errors
+    ;;
+esac
 
 rm -rf "$staging_dir"
 staging_created=0

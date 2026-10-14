@@ -40,15 +40,42 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 1. Deploy one private AWS S3 stack per environment with [`deploy/aws/README.md`](../deploy/aws/README.md), attach its least-privilege policy, and configure the API credentials. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
 2. Ship JSON logs to a secure external collector, configure alerts, and monitor `/health` and `/ready` externally.
-3. Test PostgreSQL and object-storage backup/restore in staging, including account-deletion and object-version retention behavior.
+3. Run a real PostgreSQL + S3 backup/restore drill in staging with a dedicated recovery bucket and database; store backup archives on encrypted, independently protected storage.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
+6. Define a durable account-deletion tombstone/replay process: restoring an older database and S3 snapshot can otherwise bring back accounts or files deleted after that snapshot.
 
 ## Application logs
 
 - Staging and production write one JSON record per event to standard output. HTTP request records include request ID, method, path, status, response bytes, and duration; request bodies, query strings, and client IP addresses are omitted.
 - Development keeps readable text logs.
 - Production and staging Compose rotate container logs at 10 MB per file and retain five files. Configure a secure external log collector and alert rules for sustained server errors, readiness failures, and SMS/storage errors before public launch.
+
+## PostgreSQL and uploaded-file backups
+
+`scripts/backup.sh` backs up PostgreSQL and the upload files. Set `STORAGE_DRIVER=s3`, `S3_REGION`, and `S3_BUCKET` to include S3 objects; the host must have the AWS CLI and AWS credentials from its standard credential chain. S3 backup needs `s3:ListBucket` and `s3:GetObject`. Local-storage backup continues to archive `UPLOAD_DIR`.
+
+Quiesce API writes and the storage-deletion worker for the duration of a backup so the database dump and object archive describe one point in time. Put `BACKUP_DIR` on encrypted storage with access restricted to operators, and copy completed archives to an independent protected location. Archives contain user files and database data; the script protects local file permissions and verifies SHA-256 checksums, but does not encrypt the archive itself.
+
+```bash
+STORAGE_DRIVER=s3 \
+S3_REGION=us-east-1 \
+S3_BUCKET=onlineprorab-staging-uploads \
+BACKUP_DIR=/var/backups/onlineprorab \
+UPLOAD_DIR=/tmp/onlineprorab-unused-uploads \
+sh backend/scripts/backup.sh
+```
+
+Replace the example bucket names with the CloudFormation stack outputs. Restore with `CONFIRM_RESTORE=YES`, the same storage settings, and the snapshot directory. For S3, restore synchronizes the archived objects to `S3_BUCKET` with `aws s3 sync --delete`; it removes objects absent from the snapshot. Stop every API instance and storage worker first, and use a dedicated recovery bucket/database when validating a restore. The restore identity needs `s3:ListBucket`, `s3:PutObject`, and `s3:DeleteObject` on the destination bucket. Keep the API stopped while validating, then point its `S3_BUCKET` setting at the restored bucket before starting it.
+
+```bash
+CONFIRM_RESTORE=YES \
+STORAGE_DRIVER=s3 \
+S3_REGION=us-east-1 \
+S3_BUCKET=onlineprorab-staging-recovery \
+UPLOAD_DIR=/tmp/onlineprorab-restore-target \
+sh backend/scripts/restore.sh /var/backups/onlineprorab/20261014T120000Z
+```
 
 ## File-storage migration and rollback
 
@@ -82,7 +109,7 @@ window have passed.
 
 - Authenticated app deletion: `DELETE /api/v1/account` with a Bearer token.
 - Public deletion flow: `/account-deletion` requests an SMS challenge and verifies it through `POST /api/v1/account/deletion/verify`. That endpoint does not create or update a user and does not accept project invitations; it issues a ten-minute `account:delete` token that is accepted only by the account deletion endpoint. The public flow then calls `DELETE /api/v1/account`.
-- The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. It records storage removals in the same database transaction; a background worker deletes queued objects and retries failures with bounded exponential backoff.
+- The endpoint deletes the user, owned projects, sessions, support requests, and user-uploaded files. It records storage removals in the same database transaction; a background worker deletes queued objects and retries failures with bounded exponential backoff. Backup archives can retain deleted records and objects until their configured retention expires (14 days by default). Restoring a snapshot from before a deletion can reintroduce that data; reconcile post-snapshot deletion requests before reopening traffic.
 
 ## Local smoke test
 
