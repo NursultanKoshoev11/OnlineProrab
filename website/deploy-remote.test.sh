@@ -9,6 +9,7 @@ mock_log="$test_root/docker.log"
 mkdir -m 700 "$mock_bin"
 export MOCK_DOCKER_LOG="$mock_log"
 export PATH="$mock_bin:$PATH"
+export MOCK_PREVIOUS_IMAGE_ID="sha256:$(printf 'a%.0s' {1..64})"
 
 cleanup() {
   rm -rf "$test_root"
@@ -22,7 +23,7 @@ printf '%s\n' "$*" >> "$MOCK_DOCKER_LOG"
 case "${1:-}" in
   inspect)
     if [[ "${2:-}" == --format ]]; then
-      printf '%s\n' 'sha256:previous-image'
+      printf '%s\n' "$MOCK_PREVIOUS_IMAGE_ID"
       exit 0
     fi
     [[ "${MOCK_EXISTING_CONTAINER:-0}" == 1 ]]
@@ -31,7 +32,7 @@ case "${1:-}" in
     exit 0
     ;;
   image)
-    [[ "${2:-}" == tag ]]
+    [[ "${2:-}" == tag || "${2:-}" == rm ]]
     exit 0
     ;;
   compose)
@@ -126,6 +127,33 @@ MOCK_FAIL_FIRST_COMPOSE=0 \
   bash "$deploy_script" "$sha" "$canonical_root" >/dev/null
 [[ "$(readlink -f "$canonical_root/current")" == "$canonical_root/releases/$sha" ]]
 [[ "$(cat "$calls_file")" == 1 ]]
+bash "$deploy_script" "$sha" "$canonical_root" finalize >/dev/null
+[[ ! -e "$canonical_root/.rollback/$sha" ]]
+
+public_rollback_root="$test_root/public-rollback"
+public_baseline="$public_rollback_root/releases/baseline"
+mkdir -p "$public_baseline/website"
+printf '%s\n' 'services: {}' > "$public_baseline/website/docker-compose.yml"
+ln -s "$public_baseline" "$public_rollback_root/current"
+sha="$(new_sha)"
+create_image_archive "$sha"
+create_regular_source_archive "$sha"
+calls_file="$test_root/public-rollback-compose-calls"
+MOCK_COMPOSE_CALLS_FILE="$calls_file" \
+MOCK_EXISTING_CONTAINER=1 \
+MOCK_FAIL_FIRST_COMPOSE=0 \
+  bash "$deploy_script" "$sha" "$public_rollback_root" >/dev/null
+[[ "$(readlink -f "$public_rollback_root/current")" == "$public_rollback_root/releases/$sha" ]]
+[[ -f "$public_rollback_root/.rollback/$sha" ]]
+grep -Fq "image tag $MOCK_PREVIOUS_IMAGE_ID stroy-website:rollback-$sha" "$mock_log"
+MOCK_COMPOSE_CALLS_FILE="$calls_file" \
+MOCK_EXISTING_CONTAINER=1 \
+MOCK_FAIL_FIRST_COMPOSE=0 \
+  bash "$deploy_script" "$sha" "$public_rollback_root" rollback >/dev/null
+[[ "$(readlink -f "$public_rollback_root/current")" == "$public_baseline" ]]
+[[ "$(cat "$calls_file")" == 2 ]]
+[[ ! -e "$public_rollback_root/.rollback/$sha" ]]
+grep -Fq "image tag stroy-website:rollback-$sha stroy-website:production" "$mock_log"
 
 rollback_root="$test_root/rollback"
 baseline="$rollback_root/releases/baseline"
@@ -145,6 +173,6 @@ if MOCK_COMPOSE_CALLS_FILE="$calls_file" \
 fi
 [[ "$(readlink -f "$rollback_root/current")" == "$baseline" ]]
 [[ "$(cat "$calls_file")" == 2 ]]
-grep -q '^image tag sha256:previous-image stroy-website:production$' "$mock_log"
+grep -Fq "image tag $MOCK_PREVIOUS_IMAGE_ID stroy-website:production" "$mock_log"
 
 printf '%s\n' 'Remote deployment path, archive, and rollback checks passed'

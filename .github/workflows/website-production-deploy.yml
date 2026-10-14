@@ -114,15 +114,17 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
 
       - name: Deploy and wait for container health
+        id: deployment
         if: steps.revision.outputs.deploy == 'true'
         shell: bash
         run: |
           set -euo pipefail
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
-          printf -v remote_command 'bash -s -- %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH"
+          printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" deploy
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
 
       - name: Verify the public HTTPS site
+        id: public_site
         if: steps.revision.outputs.deploy == 'true'
         shell: bash
         run: |
@@ -132,19 +134,44 @@ jobs:
           headers="$(mktemp)"
           trap 'rm -f "$homepage" "$deletion_page" "$headers"' EXIT
 
-          curl --fail --silent --show-error --location --max-time 30 \
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
             --output "$homepage" https://stroy.com.kg/
           grep -Fq '<title>STROY — стройте больше. Управляйте проще.</title>' "$homepage"
 
-          curl --fail --silent --show-error --location --max-time 30 \
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
             --output "$deletion_page" https://stroy.com.kg/account-deletion/
           grep -Fq '<title>Удаление аккаунта — STROY</title>' "$deletion_page"
 
-          curl --fail --silent --show-error --head --max-time 30 \
+          curl --fail --silent --show-error --head --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
             https://stroy.com.kg/ --dump-header "$headers" --output /dev/null
           grep -Eiq '^Content-Security-Policy:' "$headers"
           grep -Eiq '^Permissions-Policy:' "$headers"
           tr -d '\r' < "$headers" | grep -Eiq '^Strict-Transport-Security:[[:space:]]*max-age=31536000([;[:space:]]|$)'
+
+      - name: Roll back if public verification fails
+        if: >-
+          always() &&
+          steps.revision.outputs.deploy == 'true' &&
+          steps.deployment.outcome == 'success' &&
+          steps.public_site.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" rollback
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
+
+      - name: Finalize deployment after public verification
+        if: >-
+          steps.revision.outputs.deploy == 'true' &&
+          steps.deployment.outcome == 'success' &&
+          steps.public_site.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" finalize
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
 
       - name: Remove SSH credentials
         if: always()

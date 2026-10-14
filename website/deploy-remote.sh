@@ -3,6 +3,12 @@ set -Eeuo pipefail
 
 release_sha="${1:?release SHA is required}"
 deploy_root="${2:?deployment directory is required}"
+operation="${3:-deploy}"
+
+if [[ "$operation" != deploy && "$operation" != rollback && "$operation" != finalize ]]; then
+  echo "Invalid deployment operation" >&2
+  exit 2
+fi
 
 if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
   echo "Invalid release SHA" >&2
@@ -28,9 +34,14 @@ source_archive="/tmp/stroy-website-${release_sha}.source.tar.gz"
 releases_dir="${deploy_root}/releases"
 release_dir="${releases_dir}/${release_sha}"
 staging_dir="${deploy_root}/releases/.${release_sha}.tmp.$$"
+rollback_dir="${deploy_root}/.rollback"
+rollback_state_file="${rollback_dir}/${release_sha}"
+rollback_image_tag="stroy-website:rollback-${release_sha}"
+rollback_state_tmp=""
 previous_release=""
 previous_image_id=""
 deployment_started=0
+rollback_tag_created=0
 next_link=""
 
 current_link="${deploy_root}/current"
@@ -85,6 +96,16 @@ rollback() {
     fi
   fi
 
+  if (( status != 0 )); then
+    rm -f "$rollback_state_file"
+    if [[ -n "$rollback_state_tmp" ]]; then
+      rm -f "$rollback_state_tmp"
+    fi
+    if (( rollback_tag_created == 1 )); then
+      docker image rm --force "$rollback_image_tag" >/dev/null 2>&1 || echo "Could not remove temporary rollback image tag $rollback_image_tag" >&2
+    fi
+  fi
+
   rm -f "$image_archive" "$source_archive"
   if [[ -n "$next_link" ]]; then
     rm -f "$next_link"
@@ -92,6 +113,89 @@ rollback() {
   rm -rf "$staging_dir"
   exit "$status"
 }
+
+read_rollback_state() {
+  if [[ -L "$rollback_dir" || ! -d "$rollback_dir" || -L "$rollback_state_file" || ! -f "$rollback_state_file" ]]; then
+    echo "No safe rollback state exists for revision $release_sha" >&2
+    return 2
+  fi
+  local -a state=()
+  mapfile -t state < "$rollback_state_file"
+  if [[ "${#state[@]}" -ne 2 ]]; then
+    echo "Rollback state is malformed for revision $release_sha" >&2
+    return 2
+  fi
+  previous_image_id="${state[0]}"
+  previous_release="${state[1]}"
+  if [[ ! "$previous_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "No previous website image is available for rollback" >&2
+    return 2
+  fi
+  local valid_previous_release=0
+  if [[ "$previous_release" == "$releases_dir/baseline" ]]; then
+    valid_previous_release=1
+  elif [[ "$previous_release" == "$releases_dir/"* ]]; then
+    local previous_sha="${previous_release#"$releases_dir/"}"
+    if [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]]; then
+      valid_previous_release=1
+    fi
+  fi
+  if (( valid_previous_release == 0 )) || [[ -L "$previous_release" || ! -d "$previous_release" || \
+      ! -f "$previous_release/website/docker-compose.yml" || \
+      -L "$previous_release/website/docker-compose.yml" ]]; then
+    echo "Previous release path is invalid; refusing rollback" >&2
+    return 2
+  fi
+}
+
+rollback_public_probe() {
+  read_rollback_state
+  if [[ ! -L "$current_link" || "$(readlink -f "$current_link" || true)" != "$release_dir" ]]; then
+    echo "Current website release changed; refusing stale rollback" >&2
+    return 2
+  fi
+  docker image tag "$rollback_image_tag" stroy-website:production
+  restore_compose "$previous_release/website/docker-compose.yml"
+  next_link="${deploy_root}/.current-rollback-${release_sha}-$$"
+  ln -s "$previous_release" "$next_link"
+  mv -Tf "$next_link" "$current_link"
+  docker image rm --force "$rollback_image_tag" >/dev/null 2>&1 || echo "Could not remove temporary rollback image tag $rollback_image_tag" >&2
+  rm -f "$rollback_state_file"
+  rmdir "$rollback_dir" 2>/dev/null || true
+  echo "Rolled back website revision $release_sha after public verification failed"
+}
+
+finalize_rollback_window() {
+  if [[ -L "$rollback_dir" || ( -e "$rollback_dir" && ! -d "$rollback_dir" ) ]]; then
+    echo "Rollback state path is not a regular directory" >&2
+    return 2
+  fi
+  if [[ ! -e "$rollback_state_file" && ! -L "$rollback_state_file" ]]; then
+    return 0
+  fi
+  if [[ -L "$rollback_state_file" || ! -f "$rollback_state_file" ]]; then
+    echo "Rollback state is not a regular file" >&2
+    return 2
+  fi
+  docker image rm --force "$rollback_image_tag" >/dev/null 2>&1 || true
+  rm -f "$rollback_state_file"
+  rmdir "$rollback_dir" 2>/dev/null || true
+  echo "Finalized website revision $release_sha"
+}
+
+case "$operation" in
+  rollback)
+    rollback_public_probe
+    exit $?
+    ;;
+  finalize)
+    finalize_rollback_window
+    exit $?
+    ;;
+  deploy)
+    ;;
+esac
+
 trap rollback EXIT
 
 if [[ -n "$previous_image_id" && ( -z "$previous_release" || ! -f "$previous_release/website/docker-compose.yml" ) ]]; then
@@ -100,6 +204,16 @@ if [[ -n "$previous_image_id" && ( -z "$previous_release" || ! -f "$previous_rel
 fi
 
 [[ -f "$image_archive" && -f "$source_archive" ]]
+if [[ -L "$rollback_dir" || ( -e "$rollback_dir" && ! -d "$rollback_dir" ) ]]; then
+  echo "Rollback state path must be a regular directory" >&2
+  exit 2
+fi
+mkdir -m 700 -p "$rollback_dir"
+chmod 700 "$rollback_dir"
+if [[ -e "$rollback_state_file" || -L "$rollback_state_file" ]]; then
+  echo "A rollback window already exists for revision $release_sha" >&2
+  exit 2
+fi
 if [[ -L "$releases_dir" || ( -e "$releases_dir" && ! -d "$releases_dir" ) ]]; then
   echo "Release history path must be a regular directory" >&2
   exit 2
@@ -134,10 +248,20 @@ else
   mv "$staging_dir" "$release_dir"
 fi
 
-docker load --input "$image_archive" >/dev/null
+if [[ -n "$previous_image_id" ]]; then
+  docker image tag "$previous_image_id" "$rollback_image_tag"
+  rollback_tag_created=1
+fi
 deployment_started=1
+docker load --input "$image_archive" >/dev/null
 docker compose -p website -f "$release_dir/website/docker-compose.yml" \
   up --detach --no-build --wait --wait-timeout 120
+
+rollback_state_tmp="$(mktemp "${rollback_dir}/.${release_sha}.tmp.XXXXXX")"
+printf '%s\n%s\n' "$previous_image_id" "$previous_release" > "$rollback_state_tmp"
+chmod 600 "$rollback_state_tmp"
+mv -T "$rollback_state_tmp" "$rollback_state_file"
+rollback_state_tmp=""
 
 next_link="${deploy_root}/.current-${release_sha}-$$"
 ln -s "$release_dir" "$next_link"
