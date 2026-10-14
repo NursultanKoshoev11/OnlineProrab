@@ -253,7 +253,11 @@ func TestValidateRequiresExplicitTrustedProxyCIDRsInProductionLikeEnvironments(t
 	}{
 		{name: "missing"},
 		{name: "all IPv4", cidrs: []string{"0.0.0.0/0"}},
+		{name: "half IPv4 space", cidrs: []string{"128.0.0.0/1"}},
+		{name: "broad IPv4 network", cidrs: []string{"10.0.0.0/8"}},
 		{name: "all IPv6", cidrs: []string{"::/0"}},
+		{name: "half IPv6 space", cidrs: []string{"8000::/1"}},
+		{name: "broad IPv6 network", cidrs: []string{"fd00:abcd::/48"}},
 		{name: "malformed", cidrs: []string{"proxy.internal"}},
 	}
 	for _, test := range tests {
@@ -270,7 +274,7 @@ func TestValidateRequiresExplicitTrustedProxyCIDRsInProductionLikeEnvironments(t
 
 func TestValidateAcceptsTrustedProxyAddressAndCIDR(t *testing.T) {
 	cfg := validProductionConfig()
-	cfg.TrustedProxyCIDRs = []string{"10.20.0.4", "fd00:abcd::/64"}
+	cfg.TrustedProxyCIDRs = []string{"10.20.0.4", "10.20.0.0/16", "fd00:abcd::/64"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected explicit trusted proxy addresses to be valid, got %v", err)
 	}

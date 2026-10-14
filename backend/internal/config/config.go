@@ -238,8 +238,8 @@ func (cfg Config) Validate() error {
 		} else {
 			for _, value := range cfg.TrustedProxyCIDRs {
 				prefix, err := parseTrustedProxyCIDR(value)
-				if err != nil || prefix.Bits() == 0 || prefix.Addr().IsUnspecified() {
-					problems = append(problems, "TRUSTED_PROXY_CIDRS must contain explicit proxy IP addresses or CIDRs, not an unrestricted range")
+				if err != nil || !isNarrowTrustedProxyPrefix(prefix) {
+					problems = append(problems, "TRUSTED_PROXY_CIDRS must use IPv4 prefixes of /16 or longer and IPv6 prefixes of /64 or longer")
 					break
 				}
 			}
@@ -272,6 +272,17 @@ func parseTrustedProxyCIDR(value string) (netip.Prefix, error) {
 		return netip.Prefix{}, errors.New("invalid trusted proxy address or CIDR")
 	}
 	return prefix.Masked(), nil
+}
+
+func isNarrowTrustedProxyPrefix(prefix netip.Prefix) bool {
+	if !prefix.IsValid() || prefix.Addr().IsUnspecified() {
+		return false
+	}
+	minimumBits := 64
+	if prefix.Addr().Is4() {
+		minimumBits = 16
+	}
+	return prefix.Bits() >= minimumBits
 }
 
 func validateVerifiedDatabaseTLS(databaseURL string) error {
