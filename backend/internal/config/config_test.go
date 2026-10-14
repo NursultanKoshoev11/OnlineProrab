@@ -205,6 +205,39 @@ func TestValidateAllowsAWSWorkloadIdentity(t *testing.T) {
 }
 
 func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
+	cfg := validNikitaProductionConfig()
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid Nikita production config, got %v", err)
+	}
+}
+
+func TestValidateRejectsUnsafeNikitaEndpointsInProductionLikeEnvironments(t *testing.T) {
+	unsafeURLs := []string{
+		"http://smspro.nikita.kg/api/message",
+		"https://attacker.example/api/message",
+		"https://smspro.nikita.kg/other",
+		"https://user@smspro.nikita.kg/api/message",
+		"https://smspro.nikita.kg:8443/api/message",
+		"https://smspro.nikita.kg/api/message?next=https://attacker.example",
+		"https://smspro.nikita.kg/api/message#fragment",
+	}
+	for _, env := range []string{StagingEnv, ProductionEnv} {
+		for _, endpoint := range unsafeURLs {
+			t.Run(env+"/"+endpoint, func(t *testing.T) {
+				cfg := validNikitaProductionConfig()
+				cfg.Env = env
+				cfg.NikitaAPIURL = endpoint
+				err := cfg.Validate()
+				if err == nil || !strings.Contains(err.Error(), "NIKITA_API_URL") {
+					t.Fatalf("expected unsafe Nikita endpoint %q to be rejected, got %v", endpoint, err)
+				}
+			})
+		}
+	}
+}
+
+func validNikitaProductionConfig() Config {
 	cfg := validProductionConfig()
 	cfg.SMSProvider = SMSProviderNikita
 	cfg.TwilioAccountSID = ""
@@ -215,10 +248,7 @@ func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
 	cfg.NikitaLogin = "test-login"
 	cfg.NikitaPassword = "test-password"
 	cfg.NikitaSender = "SMSPRO.KG"
-
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected valid Nikita production config, got %v", err)
-	}
+	return cfg
 }
 
 func TestValidateAcceptsNikitaStagingConfig(t *testing.T) {
