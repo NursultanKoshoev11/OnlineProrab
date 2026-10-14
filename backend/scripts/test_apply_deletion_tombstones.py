@@ -35,12 +35,13 @@ class DeletionTombstoneTests(unittest.TestCase):
 
     def test_writes_sql_and_batched_s3_delete_manifest(self):
         storage_path = "projects/2026/receipt.pdf"
+        user_id = "7cbcf034-8122-4d2d-92fd-f704dcdf8752"
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             sql_path = root / "apply.sql"
             delete_directory = root / "delete-objects"
             MODULE.write_replay_artifacts(
-                {"7cbcf034-8122-4d2d-92fd-f704dcdf8752"},
+                {user_id},
                 {storage_path},
                 sql_path,
                 delete_directory,
@@ -49,10 +50,57 @@ class DeletionTombstoneTests(unittest.TestCase):
             sql = sql_path.read_text(encoding="utf-8")
             manifest = json.loads((delete_directory / "delete-000001.json").read_text(encoding="utf-8"))
 
-        self.assertIn("DELETE FROM users", sql)
+        delete_user_files = f"DELETE FROM files WHERE uploaded_by = '{user_id}'::uuid;"
+        delete_user = f"DELETE FROM users WHERE id = '{user_id}'::uuid;"
+        self.assertIn(delete_user_files, sql)
+        self.assertIn(delete_user, sql)
+        self.assertLess(sql.index(delete_user_files), sql.index(delete_user))
         self.assertIn(f"DELETE FROM files WHERE storage_path = '{storage_path}';", sql)
         self.assertEqual(manifest["Objects"], [{"Key": storage_path}])
         self.assertTrue(manifest["Quiet"])
+
+    def test_records_outbox_objects_before_deleting_them(self):
+        explicit_object = "project/nested/deleted-by-tombstone.bin"
+        account_object = "project/nested/deleted-account-file.bin"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            delete_directory = root / "delete-objects"
+            MODULE.write_replay_artifacts(set(), {explicit_object}, root / "apply.sql", delete_directory)
+            outbox_paths = root / "pending-paths.hex"
+            outbox_paths.write_text(account_object.encode("utf-8").hex() + "\n", encoding="ascii")
+            tombstone_directory = root / "recovery-tombstones"
+            completion_sql = root / "complete-outbox.sql"
+
+            MODULE.prepare_outbox_replay_artifacts(
+                outbox_paths, tombstone_directory, delete_directory, completion_sql
+            )
+
+            digest = hashlib.sha256(account_object.encode("utf-8")).hexdigest()
+            tombstone = json.loads(
+                (tombstone_directory / "objects" / f"{digest}.json").read_text(encoding="utf-8")
+            )
+            batches = [json.loads(path.read_text(encoding="utf-8")) for path in delete_directory.glob("*.json")]
+            completion = completion_sql.read_text(encoding="utf-8")
+
+        self.assertEqual(tombstone["kind"], "object")
+        self.assertEqual(tombstone["storage_path"], account_object)
+        self.assertEqual(
+            {item["Key"] for batch in batches for item in batch["Objects"]},
+            {explicit_object, account_object},
+        )
+        self.assertIn(f"DELETE FROM file_storage_deletions WHERE storage_path = '{account_object}';", completion)
+
+    def test_rejects_unsafe_database_outbox_paths(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            delete_directory = root / "delete-objects"
+            delete_directory.mkdir()
+            outbox_paths = root / "pending-paths.hex"
+            outbox_paths.write_text(b"../outside".hex() + "\n", encoding="ascii")
+            with self.assertRaises(SystemExit):
+                MODULE.prepare_outbox_replay_artifacts(
+                    outbox_paths, root / "recovery-tombstones", delete_directory, root / "complete-outbox.sql"
+                )
 
     def test_rejects_unexpected_files_and_unsafe_object_keys(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
