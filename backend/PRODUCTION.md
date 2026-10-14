@@ -26,6 +26,7 @@ The API refuses unsafe production configuration when `APP_ENV=production` and th
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
 - Set `TRUSTED_PROXY_CIDRS` to the exact IP addresses or narrow CIDRs of proxies that connect to the API container. The API trusts `X-Forwarded-For` only when `RemoteAddr` belongs to one of these networks; direct requests cannot spoof the limiter's client IP.
 - SMS request quotas are 6 attempts per phone per hour, plus 30 per client IP per hour. Code verification is limited to 10 attempts per phone and 30 per client IP per 15 minutes. These counters include failed delivery/verification attempts and reserve each request before it reaches the SMS provider or code handler.
+- Login abuse records retain the normalized phone number and client IP for 7 days. SMS-code records are retained until 24 hours after expiry. The API prunes these records every 6 hours in batches; a failed or timed-out cleanup is retried within 15 minutes, and a large backlog is drained over successive batches.
 
 For local development, the fixed `dev_code` response is disabled by default. To opt in, set `DEV_SMS_CODE_ENABLED=true` and bind `HTTP_ADDR` to `127.0.0.1` or `localhost`.
 

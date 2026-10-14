@@ -80,8 +80,12 @@ test("public pages and resources comply with the production CSP", () => {
   assert.match(privacy, /бессрочно храним в закрытом журнале/);
   assert.match(
     privacy,
-    /идентификатор удалённого\s+аккаунта либо путь удалённого файла/,
+    /идентификатор удалённого\s+аккаунта\s+либо путь удалённого файла/,
   );
+  assert.match(privacy, /нормализованный\s+номер телефона, IP-адрес клиента/);
+  assert.match(privacy, /обычно хранятся 7 дней/);
+  assert.match(privacy, /24\s+часа после\s+истечения срока действия кода/);
+  assert.match(privacy, /Плановая очистка запускается\s+примерно каждые 6 часов/);
 });
 
 function createElement() {
