@@ -184,7 +184,7 @@ Until the SMS provider is connected, closed testing can use a single dedicated r
 - `APP_ENV=production`
 - `REVIEW_ONLY_MODE=true`
 - `REVIEW_SMS_PHONE=+996...`
-- `REVIEW_SMS_CODE=111111`
+- `REVIEW_SMS_CODE=<six-digit-secret>`
 - leave `SMS_PROVIDER` empty only for this temporary mode
 
-The fixed code is accepted only for the exact configured phone. Other phone numbers receive an SMS-unavailable response and cannot sign in. Do not use a universal code for all numbers. Disable `REVIEW_ONLY_MODE` and configure the real SMS provider before a public release.
+The placeholder above is not a usable code. Keep the actual review phone and code in the deployment secret store; never commit either value. The fixed code is accepted only for the exact configured phone. Other phone numbers receive an SMS-unavailable response and cannot sign in. Do not use a universal code for all numbers. Disable `REVIEW_ONLY_MODE` and configure the real SMS provider before a public release.
