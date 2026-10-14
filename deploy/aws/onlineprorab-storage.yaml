@@ -29,12 +29,6 @@ Parameters:
     AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
     ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
     Description: Globally unique S3 backup archive bucket name; it must differ from the uploads and deletion ledger buckets.
-  DeletionLedgerRetentionDays:
-    Type: Number
-    Default: 365
-    MinValue: 14
-    MaxValue: 3650
-    Description: Must exceed the maximum retention of every database or object backup that may be restored.
   BackupArchiveRetentionDays:
     Type: Number
     Default: 180
@@ -73,6 +67,12 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       Tags:
         - Key: Application
           Value: OnlineProrab
@@ -97,12 +97,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: ExpireDeletionTombstones
-            Status: Enabled
-            Prefix: tombstones/
-            ExpirationInDays: !Ref DeletionLedgerRetentionDays
       Tags:
         - Key: Application
           Value: OnlineProrab
@@ -230,6 +224,7 @@ Resources:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
+              - s3:AbortMultipartUpload
             Resource: !Sub "${UploadsBucket.Arn}/*"
           - Sid: WriteDeletionTombstones
             Effect: Allow
@@ -312,6 +307,7 @@ Resources:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
+              - s3:AbortMultipartUpload
             Resource: !Sub "${UploadsBucket.Arn}/*"
 
 Outputs:
@@ -330,9 +326,6 @@ Outputs:
   S3BackupArchiveRetentionDays:
     Description: Retention period applied to encrypted snapshots under snapshots/.
     Value: !Ref BackupArchiveRetentionDays
-  S3DeletionLedgerRetentionDays:
-    Description: Configure backup retention to remain shorter than this value.
-    Value: !Ref DeletionLedgerRetentionDays
   UploadsBucketArn:
     Description: S3 uploads bucket ARN for operational verification.
     Value: !GetAtt UploadsBucket.Arn
