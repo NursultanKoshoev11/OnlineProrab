@@ -64,15 +64,22 @@ func NewS3(ctx context.Context, options S3Options) (*S3Store, error) {
 }
 
 func (s *S3Store) Put(ctx context.Context, key string, source io.ReadSeeker, size int64, contentType string) error {
+	if source == nil || size < 0 {
+		return fmt.Errorf("invalid object body or size")
+	}
+	if _, err := source.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("rewind object body: %w", err)
+	}
+	return s.PutStream(ctx, key, source, size, contentType)
+}
+
+func (s *S3Store) PutStream(ctx context.Context, key string, source io.Reader, size int64, contentType string) error {
 	key, err := cleanKey(key)
 	if err != nil {
 		return err
 	}
 	if source == nil || size < 0 {
 		return fmt.Errorf("invalid object body or size")
-	}
-	if _, err := source.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("rewind object body: %w", err)
 	}
 	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
@@ -207,3 +214,4 @@ func responseErrorStatus(err error) int {
 }
 
 var _ ObjectStore = (*S3Store)(nil)
+var _ StreamingObjectStore = (*S3Store)(nil)

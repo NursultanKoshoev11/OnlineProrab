@@ -6,8 +6,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
+
+func TestMigrationS3OptionsIncludeRequiredBuckets(t *testing.T) {
+	cfg := config.Config{
+		S3Region:               "us-east-1",
+		S3Bucket:               "onlineprorab-uploads",
+		S3DeletionLedgerBucket: "onlineprorab-deletions",
+	}
+	options := migrationS3Options(cfg)
+	if options.Region != cfg.S3Region || options.Bucket != cfg.S3Bucket || options.DeletionLedgerBucket != cfg.S3DeletionLedgerBucket {
+		t.Fatalf("unexpected migration S3 options: %+v", options)
+	}
+}
 
 func TestCopyAndVerifyCopiesAndChecksObject(t *testing.T) {
 	source, err := storage.NewLocal(t.TempDir())
@@ -66,30 +79,16 @@ func TestCopyAndVerifyRejectsMismatchWithDatabaseSize(t *testing.T) {
 	assertObjectContent(t, target, key, oldContent)
 }
 
-func TestCopyAndVerifyRejectsOversizedObjectBeforeReadingOrWriting(t *testing.T) {
-	ctx := context.Background()
-	target, err := storage.NewLocal(t.TempDir())
-	if err != nil {
-		t.Fatalf("create target store: %v", err)
+func TestCopyAndVerifyStreamsObjectsLargerThan64MiB(t *testing.T) {
+	size := int64(64*1024*1024) + 1
+	source := &generatedObjectStore{size: size}
+	target := &generatedObjectStore{size: size}
+	if err := copyAndVerify(context.Background(), source, target, "project/large.bin", size, "application/octet-stream"); err != nil {
+		t.Fatalf("stream large object: %v", err)
 	}
-	key := "project/file.pdf"
-	oldContent := "keep destination intact"
-	if err := target.Put(ctx, key, strings.NewReader(oldContent), int64(len(oldContent)), "application/pdf"); err != nil {
-		t.Fatalf("put existing destination object: %v", err)
+	if target.bytesWritten != size {
+		t.Fatalf("expected %d streamed bytes, got %d", size, target.bytesWritten)
 	}
-
-	source := &testObjectStore{
-		body: "must not be read",
-		size: maxMigrationObjectBytes + 1,
-	}
-	err = copyAndVerify(ctx, source, target, key, maxMigrationObjectBytes+1, "application/pdf")
-	if err == nil || !strings.Contains(err.Error(), "64 MiB") {
-		t.Fatalf("expected the migration size limit error, got %v", err)
-	}
-	if source.gets != 0 {
-		t.Fatal("oversized source should be rejected before it is read")
-	}
-	assertObjectContent(t, target, key, oldContent)
 }
 
 func TestCopyAndVerifyRejectsShortSourceWithoutChangingDestination(t *testing.T) {
@@ -143,3 +142,58 @@ func (s *testObjectStore) Get(context.Context, string) (storage.Object, error) {
 }
 
 func (*testObjectStore) Delete(context.Context, string) error { return nil }
+
+func (*testObjectStore) PutStream(context.Context, string, io.Reader, int64, string) error {
+	return nil
+}
+
+type generatedObjectStore struct {
+	size         int64
+	bytesWritten int64
+}
+
+func (s *generatedObjectStore) Put(_ context.Context, key string, source io.ReadSeeker, size int64, contentType string) error {
+	if _, err := source.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return s.PutStream(context.Background(), key, source, size, contentType)
+}
+
+func (s *generatedObjectStore) PutStream(_ context.Context, _ string, source io.Reader, size int64, _ string) error {
+	written, err := io.CopyN(io.Discard, source, size)
+	s.bytesWritten = written
+	if err != nil {
+		return err
+	}
+	if written != size {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+
+func (s *generatedObjectStore) Get(context.Context, string) (storage.Object, error) {
+	return storage.Object{
+		Body: io.NopCloser(&repeatedByteReader{remaining: s.size}),
+		Size: s.size,
+	}, nil
+}
+
+func (*generatedObjectStore) Delete(context.Context, string) error { return nil }
+
+type repeatedByteReader struct {
+	remaining int64
+}
+
+func (r *repeatedByteReader) Read(buffer []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	if int64(len(buffer)) > r.remaining {
+		buffer = buffer[:int(r.remaining)]
+	}
+	for index := range buffer {
+		buffer[index] = 'x'
+	}
+	r.remaining -= int64(len(buffer))
+	return len(buffer), nil
+}
