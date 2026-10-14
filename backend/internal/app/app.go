@@ -85,6 +85,11 @@ func Run() {
 
 	httpapi.SetState(cfg, db, smsSender, fileStore)
 	go storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
+	authPrunerDone := make(chan struct{})
+	go func() {
+		defer close(authPrunerDone)
+		httpapi.RunAuthHistoryPruner(rootCtx)
+	}()
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -127,5 +132,6 @@ func Run() {
 		slog.Error("graceful_shutdown_failed", "error", err)
 		_ = server.Close()
 	}
+	<-authPrunerDone
 	slog.Info("api_stopped")
 }
