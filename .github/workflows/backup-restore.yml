@@ -10,6 +10,7 @@ on:
       - 'backend/scripts/apply-deletion-tombstones.py'
       - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
+      - 'deploy/aws/onlineprorab-storage.yaml'
       - '.github/workflows/backup-restore.yml'
   pull_request:
     paths:
@@ -18,6 +19,7 @@ on:
       - 'backend/scripts/apply-deletion-tombstones.py'
       - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
+      - 'deploy/aws/onlineprorab-storage.yaml'
       - '.github/workflows/backup-restore.yml'
 
 permissions:
@@ -142,7 +144,7 @@ jobs:
 
       - name: Prepare isolated S3 test bucket and CLI stub
         run: |
-          mkdir -p "$RUNNER_TEMP/fake-aws-bin" "$RUNNER_TEMP/fake-s3-bucket/project/nested" "$RUNNER_TEMP/fake-s3-ledger/tombstones/accounts" "$RUNNER_TEMP/fake-s3-ledger/tombstones/objects"
+          mkdir -p "$RUNNER_TEMP/fake-aws-bin" "$RUNNER_TEMP/fake-s3-bucket/project/nested" "$RUNNER_TEMP/fake-s3-ledger/tombstones/accounts" "$RUNNER_TEMP/fake-s3-ledger/tombstones/objects" "$RUNNER_TEMP/fake-s3-archive"
           cat > "$RUNNER_TEMP/fake-aws-bin/aws" <<'SH'
           #!/bin/sh
           set -eu
@@ -168,6 +170,28 @@ jobs:
             printf '%s' '{"Deleted":[]}'
             exit 0
           fi
+          if [ "$#" -eq 7 ] && [ "$1" = "--region" ] && [ "$3" = "s3" ] && [ "$4" = "cp" ]; then
+            source="$5"
+            destination="$6"
+            case "$source" in
+              "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+                object_path="${source#s3://$S3_BACKUP_BUCKET/}"
+                mkdir -p "$(dirname "$destination")"
+                cp "$FAKE_S3_ARCHIVE_DIR/$object_path" "$destination"
+                ;;
+              *)
+                case "$destination" in
+                  "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+                    object_path="${destination#s3://$S3_BACKUP_BUCKET/}"
+                    mkdir -p "$(dirname "$FAKE_S3_ARCHIVE_DIR/$object_path")"
+                    cp "$source" "$FAKE_S3_ARCHIVE_DIR/$object_path"
+                    ;;
+                  *) echo "unexpected S3 copy path" >&2; exit 2 ;;
+                esac
+                ;;
+            esac
+            exit 0
+          fi
           if [ "$#" -lt 7 ] || [ "$1" != "--region" ] || [ "$3" != "s3" ] || [ "$4" != "sync" ]; then
             echo "unexpected AWS CLI arguments" >&2
             exit 2
@@ -175,6 +199,11 @@ jobs:
           source="$5"
           destination="$6"
           case "$source" in
+            "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+              snapshot_path="${source#s3://$S3_BACKUP_BUCKET/}"
+              mkdir -p "$destination"
+              cp -a "$FAKE_S3_ARCHIVE_DIR/$snapshot_path". "$destination"/
+              ;;
             "s3://$S3_BUCKET")
               mkdir -p "$destination"
               cp -a "$FAKE_S3_BUCKET_DIR"/. "$destination"/
@@ -184,13 +213,23 @@ jobs:
               cp -a "$FAKE_S3_LEDGER_DIR"/. "$destination"/
               ;;
             *)
-              if [ "$destination" != "s3://$S3_BUCKET" ] || [ "$7" != "--delete" ]; then
-                echo "restore must replace the exact test bucket" >&2
-                exit 2
-              fi
-              rm -rf "$FAKE_S3_BUCKET_DIR"
-              mkdir -p "$FAKE_S3_BUCKET_DIR"
-              cp -a "$source"/. "$FAKE_S3_BUCKET_DIR"/
+              case "$destination" in
+                "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+                  snapshot_path="${destination#s3://$S3_BACKUP_BUCKET/}"
+                  mkdir -p "$FAKE_S3_ARCHIVE_DIR/$snapshot_path"
+                  cp -a "$source"/. "$FAKE_S3_ARCHIVE_DIR/$snapshot_path".
+                  ;;
+                "s3://$S3_BUCKET")
+                  if [ "$7" != "--delete" ]; then
+                    echo "restore must replace the exact test bucket" >&2
+                    exit 2
+                  fi
+                  rm -rf "$FAKE_S3_BUCKET_DIR"
+                  mkdir -p "$FAKE_S3_BUCKET_DIR"
+                  cp -a "$source"/. "$FAKE_S3_BUCKET_DIR"/
+                  ;;
+                *) echo "unexpected S3 destination" >&2; exit 2 ;;
+              esac
               ;;
           esac
           SH
@@ -204,7 +243,8 @@ jobs:
           export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
           export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
           export BACKUP_AGE_RECIPIENTS_FILE="$RUNNER_TEMP/backup-age-recipients.txt"
-          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger
+          export FAKE_S3_ARCHIVE_DIR="$RUNNER_TEMP/fake-s3-archive"
+          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger S3_BACKUP_BUCKET=onlineprorab-ci-backups
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           CREATE TABLE s3_backup_probe (id integer PRIMARY KEY, value text NOT NULL);
           INSERT INTO s3_backup_probe (id, value) VALUES (1, 's3-backup-ok');
@@ -218,10 +258,12 @@ jobs:
           RETENTION_DAYS=14 \
           sh scripts/backup.sh > "$RUNNER_TEMP/s3-backup-path.txt"
           test -s "$RUNNER_TEMP/s3-backup-path.txt"
-          backup_dir="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
-          test -s "$backup_dir/snapshot.tar.age"
-          test ! -e "$backup_dir/database.dump"
-          test ! -e "$backup_dir/uploads.tar.gz"
+          backup_uri="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
+          archive_dir="$FAKE_S3_ARCHIVE_DIR/${backup_uri#s3://$S3_BACKUP_BUCKET/}"
+          test -s "$archive_dir/snapshot.tar.age"
+          test -s "$archive_dir/MANIFEST"
+          test ! -e "$archive_dir/database.dump"
+          test ! -e "$archive_dir/uploads.tar.gz"
 
       - name: Destroy S3-backed source data
         run: |
@@ -244,10 +286,19 @@ jobs:
           export PATH="$RUNNER_TEMP/fake-aws-bin:$PATH"
           export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
           export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
+          export FAKE_S3_ARCHIVE_DIR="$RUNNER_TEMP/fake-s3-archive"
           export BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/backup-age-identity.txt"
-          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger CONFIRM_RESTORE=YES
-          backup_dir="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
-          if BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/unrelated-age-identity.txt" UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_dir" >/dev/null 2>&1; then
+          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger S3_BACKUP_BUCKET=onlineprorab-ci-backups CONFIRM_RESTORE=YES
+          backup_uri="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "${backup_uri/onlineprorab-ci-backups/untrusted-backups}" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unconfigured backup bucket" >&2
+            exit 1
+          fi
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "s3://$S3_BACKUP_BUCKET/snapshots/../outside/" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unsafe backup object prefix" >&2
+            exit 1
+          fi
+          if BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/unrelated-age-identity.txt" UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri" >/dev/null 2>&1; then
             echo "restore unexpectedly accepted an unrelated age identity" >&2
             exit 1
           fi
@@ -256,7 +307,7 @@ jobs:
             echo "restore unexpectedly accepted an unencrypted S3 backup without explicit approval" >&2
             exit 1
           fi
-          UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_dir"
+          UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri"
 
       - name: Verify S3-backed restore
         run: |
@@ -268,5 +319,9 @@ jobs:
           test ! -e "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-after-snapshot.bin"
           if find "$RUNNER_TEMP" -maxdepth 1 -name '.onlineprorab-restore-data.*' -print -quit | grep -q .; then
             echo "restore left decrypted data in its private staging directory" >&2
+            exit 1
+          fi
+          if find "$RUNNER_TEMP" -maxdepth 1 -name '.onlineprorab-backup-download.*' -print -quit | grep -q .; then
+            echo "restore left its downloaded backup staging directory" >&2
             exit 1
           fi

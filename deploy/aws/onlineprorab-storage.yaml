@@ -22,18 +22,37 @@ Parameters:
     AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
     ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
     Description: Globally unique S3 deletion ledger bucket name; it must differ from the uploads bucket.
+  BackupArchiveBucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 backup archive bucket name; it must differ from the uploads and deletion ledger buckets.
   DeletionLedgerRetentionDays:
     Type: Number
     Default: 365
     MinValue: 14
     MaxValue: 3650
     Description: Must exceed the maximum retention of every database or object backup that may be restored.
+  BackupArchiveRetentionDays:
+    Type: Number
+    Default: 180
+    MinValue: 14
+    MaxValue: 3650
+    Description: Number of days to retain current encrypted backup archives in S3.
 
 Rules:
   UploadsAndLedgerMustBeSeparate:
     Assertions:
       - Assert: !Not [!Equals [!Ref BucketName, !Ref DeletionLedgerBucketName]]
         AssertDescription: The uploads and deletion ledger buckets must be different.
+  AllStorageBucketsMustBeSeparate:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BucketName, !Ref BackupArchiveBucketName]]
+        AssertDescription: The backup archive bucket must differ from the uploads bucket.
+      - Assert: !Not [!Equals [!Ref DeletionLedgerBucketName, !Ref BackupArchiveBucketName]]
+        AssertDescription: The backup archive bucket must differ from the deletion ledger bucket.
 
 Resources:
   UploadsBucket:
@@ -92,6 +111,44 @@ Resources:
         - Key: Purpose
           Value: DeletionLedger
 
+  BackupArchiveBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BackupArchiveBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireBackupArchives
+            Status: Enabled
+            Prefix: snapshots/
+            ExpirationInDays: !Ref BackupArchiveRetentionDays
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupArchive
+
   UploadsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     DeletionPolicy: Retain
@@ -128,6 +185,26 @@ Resources:
             Resource:
               - !GetAtt DeletionLedgerBucket.Arn
               - !Sub "${DeletionLedgerBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  BackupArchiveBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref BackupArchiveBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt BackupArchiveBucket.Arn
+              - !Sub "${BackupArchiveBucket.Arn}/*"
             Condition:
               Bool:
                 aws:SecureTransport: "false"
@@ -180,6 +257,44 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
 
+  BackupWriterPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read uploaded objects and write encrypted snapshots to this environment's S3 backup archive.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListUploadsForSnapshot
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: ReadUploadsForSnapshot
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteEncryptedBackupSnapshots
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+          - Sid: CompleteAndCleanMultipartSnapshotUploads
+            Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+
+  BackupArchiveReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read encrypted snapshots from this environment's S3 backup archive.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ReadBackupSnapshots
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+
   StorageRecoveryPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -209,6 +324,12 @@ Outputs:
   S3DeletionLedgerBucketName:
     Description: Set this value as S3_DELETION_LEDGER_BUCKET.
     Value: !Ref DeletionLedgerBucket
+  S3BackupArchiveBucketName:
+    Description: Set this value as S3_BACKUP_BUCKET for backup and recovery commands.
+    Value: !Ref BackupArchiveBucket
+  S3BackupArchiveRetentionDays:
+    Description: Retention period applied to encrypted snapshots under snapshots/.
+    Value: !Ref BackupArchiveRetentionDays
   S3DeletionLedgerRetentionDays:
     Description: Configure backup retention to remain shorter than this value.
     Value: !Ref DeletionLedgerRetentionDays
@@ -224,3 +345,9 @@ Outputs:
   StorageRecoveryPolicyArn:
     Description: Attach to a recovery operator that must read or restore uploads.
     Value: !Ref StorageRecoveryPolicy
+  BackupWriterPolicyArn:
+    Description: Attach to a backup runner that reads uploads and writes encrypted snapshots.
+    Value: !Ref BackupWriterPolicy
+  BackupArchiveReadPolicyArn:
+    Description: Attach to a recovery identity that downloads encrypted snapshots.
+    Value: !Ref BackupArchiveReadPolicy

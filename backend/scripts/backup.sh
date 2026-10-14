@@ -7,6 +7,7 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/onlineprorab}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
 APP_ENV="${APP_ENV:-development}"
+S3_BACKUP_BUCKET="${S3_BACKUP_BUCKET:-}"
 BACKUP_AGE_RECIPIENTS_FILE="${BACKUP_AGE_RECIPIENTS_FILE:-}"
 
 case "$APP_ENV" in
@@ -23,6 +24,14 @@ case "$STORAGE_DRIVER" in
   s3)
     : "${S3_REGION:?S3_REGION is required when STORAGE_DRIVER=s3}"
     : "${S3_BUCKET:?S3_BUCKET is required when STORAGE_DRIVER=s3}"
+    : "${S3_DELETION_LEDGER_BUCKET:?S3_DELETION_LEDGER_BUCKET is required when STORAGE_DRIVER=s3}"
+    : "${S3_BACKUP_BUCKET:?S3_BACKUP_BUCKET is required when STORAGE_DRIVER=s3}"
+    if [ "$S3_BUCKET" = "$S3_BACKUP_BUCKET" ] || \
+      [ "$S3_BUCKET" = "$S3_DELETION_LEDGER_BUCKET" ] || \
+      [ "$S3_BACKUP_BUCKET" = "$S3_DELETION_LEDGER_BUCKET" ]; then
+      echo "S3_BUCKET, S3_DELETION_LEDGER_BUCKET, and S3_BACKUP_BUCKET must be different" >&2
+      exit 2
+    fi
     : "${BACKUP_AGE_RECIPIENTS_FILE:?BACKUP_AGE_RECIPIENTS_FILE is required when STORAGE_DRIVER=s3}"
     command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required when STORAGE_DRIVER=s3" >&2; exit 127; }
     command -v age >/dev/null 2>&1 || { echo "age is required for encrypted S3 backups" >&2; exit 127; }
@@ -137,6 +146,19 @@ chmod -R go-rwx "$tmp_dir"
 mv "$tmp_dir" "$final_dir"
 trap - EXIT HUP INT TERM
 
+backup_reference="$final_dir"
+if [ "$STORAGE_DRIVER" = "s3" ]; then
+  archive_host="$(hostname 2>/dev/null | tr -cd 'A-Za-z0-9-')"
+  [ -n "$archive_host" ] || archive_host=unknown
+  archive_id="$timestamp-$archive_host-$$"
+  archive_prefix="s3://$S3_BACKUP_BUCKET/snapshots/$archive_id"
+  aws --region "$S3_REGION" s3 cp "$final_dir/snapshot.tar.age" \
+    "$archive_prefix/snapshot.tar.age" --only-show-errors
+  aws --region "$S3_REGION" s3 cp "$final_dir/MANIFEST" \
+    "$archive_prefix/MANIFEST" --only-show-errors
+  backup_reference="$archive_prefix/"
+fi
+
 for snapshot_dir in "$BACKUP_DIR"/*; do
   [ -d "$snapshot_dir" ] || continue
   [ ! -L "$snapshot_dir" ] || continue
@@ -148,4 +170,4 @@ for snapshot_dir in "$BACKUP_DIR"/*; do
   find "$snapshot_dir" -maxdepth 0 -mtime "+$RETENTION_DAYS" -exec rm -rf {} \;
 done
 
-printf '%s\n' "$final_dir"
+printf '%s\n' "$backup_reference"

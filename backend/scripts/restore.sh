@@ -11,6 +11,7 @@ fi
 
 STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
 APP_ENV="${APP_ENV:-development}"
+S3_BACKUP_BUCKET="${S3_BACKUP_BUCKET:-}"
 case "$APP_ENV" in
   staging|production)
     if [ "$STORAGE_DRIVER" != "s3" ]; then
@@ -42,25 +43,23 @@ UPLOAD_DIR="$(safe_directory_path "${UPLOAD_DIR:-/data/uploads}" UPLOAD_DIR)"
 
 backup_dir="${1:-}"
 if [ -z "$backup_dir" ]; then
-  echo "usage: restore.sh /path/to/backup-directory" >&2
+  echo "usage: restore.sh /path/to/backup-directory or s3://backup-bucket/snapshots/TIMESTAMP/" >&2
   exit 2
 fi
-backup_dir="$(cd "$backup_dir" && pwd)"
 
 command -v pg_restore >/dev/null 2>&1 || { echo "pg_restore is required" >&2; exit 127; }
 command -v tar >/dev/null 2>&1 || { echo "tar is required" >&2; exit 127; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 127; }
 
-if [ ! -f "$backup_dir/MANIFEST" ]; then
-  echo "backup is incomplete: missing MANIFEST" >&2
-  exit 3
-fi
-
 staging_parent="$(dirname "$UPLOAD_DIR")"
+backup_download_dir="$staging_parent/.onlineprorab-backup-download.$$"
 staging_dir="$staging_parent/.onlineprorab-restore.$$"
 restore_data_dir="$staging_parent/.onlineprorab-restore-data.$$"
 tombstone_stage="$staging_parent/.onlineprorab-tombstones.$$"
 cleanup() {
+  if [ "${backup_download_created:-0}" -eq 1 ]; then
+    rm -rf "$backup_download_dir"
+  fi
   if [ "${staging_created:-0}" -eq 1 ]; then
     rm -rf "$staging_dir"
   fi
@@ -74,6 +73,53 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 umask 077
+
+case "$backup_dir" in
+  s3://*)
+    if [ "$STORAGE_DRIVER" != "s3" ]; then
+      echo "STORAGE_DRIVER=s3 is required to restore an S3 backup URI" >&2
+      exit 2
+    fi
+    : "${S3_BACKUP_BUCKET:?S3_BACKUP_BUCKET is required to restore an S3 backup URI}"
+    if [ "$S3_BACKUP_BUCKET" = "$S3_BUCKET" ] || [ "$S3_BACKUP_BUCKET" = "$S3_DELETION_LEDGER_BUCKET" ]; then
+      echo "S3_BACKUP_BUCKET must differ from the uploads and deletion ledger buckets" >&2
+      exit 2
+    fi
+    case "$backup_dir" in
+      "s3://$S3_BACKUP_BUCKET/"*) ;;
+      *) echo "backup URI must use the configured S3_BACKUP_BUCKET" >&2; exit 2 ;;
+    esac
+    backup_snapshot_path="${backup_dir#s3://$S3_BACKUP_BUCKET/}"
+    if ! printf '%s\n' "$backup_snapshot_path" | grep -Eq '^snapshots/[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9-]+-[0-9]+/$'; then
+      echo "backup URI must identify one snapshots/TIMESTAMP-HOST-PID/ directory" >&2
+      exit 2
+    fi
+    if [ -e "$backup_download_dir" ] || [ -L "$backup_download_dir" ]; then
+      echo "backup download staging path already exists" >&2
+      exit 2
+    fi
+    mkdir -m 700 "$backup_download_dir"
+    backup_download_created=1
+    archive_prefix="${backup_dir%/}"
+    aws --region "$S3_REGION" s3 cp "$archive_prefix/MANIFEST" \
+      "$backup_download_dir/MANIFEST" --only-show-errors
+    aws --region "$S3_REGION" s3 cp "$archive_prefix/snapshot.tar.age" \
+      "$backup_download_dir/snapshot.tar.age" --only-show-errors
+    backup_dir="$backup_download_dir"
+    ;;
+  *)
+    if [ ! -d "$backup_dir" ] || [ -L "$backup_dir" ]; then
+      echo "backup directory must exist and must not be a symbolic link" >&2
+      exit 2
+    fi
+    backup_dir="$(CDPATH= cd "$backup_dir" && pwd -P)"
+    ;;
+esac
+
+if [ ! -f "$backup_dir/MANIFEST" ] || [ -L "$backup_dir/MANIFEST" ]; then
+  echo "backup is incomplete or unsafe: MANIFEST is missing" >&2
+  exit 3
+fi
 
 manifest_format="$(awk -F= '$1 == "format_version" { print $2 }' "$backup_dir/MANIFEST")"
 case "$manifest_format" in
