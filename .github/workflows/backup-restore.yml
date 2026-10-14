@@ -288,8 +288,16 @@ jobs:
           export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
           export FAKE_S3_ARCHIVE_DIR="$RUNNER_TEMP/fake-s3-archive"
           export BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/backup-age-identity.txt"
-          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger S3_BACKUP_BUCKET=onlineprorab-ci-backups CONFIRM_RESTORE=YES
+          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger S3_BACKUP_BUCKET=onlineprorab-ci-backups CONFIRM_RESTORE=YES CONFIRM_S3_TARGET_BUCKET=onlineprorab-ci-test
           backup_uri="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
+          if env -u CONFIRM_S3_TARGET_BUCKET UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a missing S3 target confirmation" >&2
+            exit 1
+          fi
+          if CONFIRM_S3_TARGET_BUCKET=unintended-bucket UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a mismatched S3 target confirmation" >&2
+            exit 1
+          fi
           if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "${backup_uri/onlineprorab-ci-backups/untrusted-backups}" >/dev/null 2>&1; then
             echo "restore unexpectedly accepted an unconfigured backup bucket" >&2
             exit 1
