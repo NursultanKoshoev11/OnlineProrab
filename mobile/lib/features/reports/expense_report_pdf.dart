@@ -44,11 +44,7 @@ Future<Uint8List> buildExpenseReportPdf({
     fontWeight: pw.FontWeight.bold,
     color: PdfColors.white,
   );
-  final mutedStyle = pw.TextStyle(
-    font: font,
-    fontSize: 9,
-    color: _stroyMuted,
-  );
+  final mutedStyle = pw.TextStyle(font: font, fontSize: 9, color: _stroyMuted);
   final smallStyle = pw.TextStyle(font: font, fontSize: 8, color: _stroyInk);
   final boldStyle = pw.TextStyle(
     font: font,
@@ -76,10 +72,7 @@ Future<Uint8List> buildExpenseReportPdf({
                 letterSpacing: 1.2,
               ),
             ),
-            pw.Text(
-              'Предпросмотр отчёта по расходам',
-              style: mutedStyle,
-            ),
+            pw.Text('Предпросмотр отчёта по расходам', style: mutedStyle),
           ],
         ),
       ),
@@ -169,8 +162,10 @@ Future<Uint8List> buildExpenseReportPdf({
                   totals.isEmpty
                       ? _formatMoney(0, 'KGS')
                       : totals.entries
-                          .map((entry) => _formatMoney(entry.value, entry.key))
-                          .join('  •  '),
+                            .map(
+                              (entry) => _formatMoney(entry.value, entry.key),
+                            )
+                            .join('  •  '),
                   textAlign: pw.TextAlign.right,
                   style: pw.TextStyle(
                     font: font,
@@ -220,16 +215,13 @@ Future<Uint8List> buildExpenseReportPdf({
                 header: true,
               ),
               ...items.asMap().entries.map(
-                    (entry) => _tableRow(
-                      [
-                        '${entry.key + 1}',
-                        _formatDate(entry.value.spentAt),
-                        _expenseDetails(entry.value),
-                        _formatMoney(entry.value.amount, entry.value.currency),
-                      ],
-                      font: font,
-                    ),
-                  ),
+                (entry) => _tableRow([
+                  '${entry.key + 1}',
+                  _formatDate(entry.value.spentAt),
+                  _expenseDetails(entry.value),
+                  _formatMoney(entry.value.amount, entry.value.currency),
+                ], font: font),
+              ),
             ],
           ),
         pw.SizedBox(height: 16),

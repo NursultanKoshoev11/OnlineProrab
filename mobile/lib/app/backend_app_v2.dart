@@ -46,7 +46,7 @@ class _BackendOnlineProrabAppV2State extends State<BackendOnlineProrabAppV2> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-        title: 'STROY',
+      title: 'STROY',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
