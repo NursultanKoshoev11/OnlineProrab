@@ -370,10 +370,16 @@ func validateTwilioConfig(cfg Config) []string {
 
 func validateNikitaConfig(cfg Config) []string {
 	var problems []string
-	if strings.TrimSpace(cfg.NikitaAPIURL) == "" {
+	endpoint := strings.TrimSpace(cfg.NikitaAPIURL)
+	if endpoint == "" {
 		problems = append(problems, "NIKITA_API_URL is required")
-	} else if cfg.IsProductionLike() && !isOfficialNikitaAPIURL(cfg.NikitaAPIURL) {
-		problems = append(problems, "NIKITA_API_URL must be the official HTTPS endpoint https://smspro.nikita.kg/api/message in staging and production")
+	} else {
+		apiURL, err := url.Parse(endpoint)
+		if err != nil || apiURL.Scheme == "" || apiURL.Host == "" {
+			problems = append(problems, "NIKITA_API_URL must be a valid absolute URL")
+		} else if cfg.IsProductionLike() && !isOfficialNikitaAPIURL(apiURL) {
+			problems = append(problems, "NIKITA_API_URL must be the official HTTPS endpoint https://smspro.nikita.kg/api/message in staging and production")
+		}
 	}
 	if strings.TrimSpace(cfg.NikitaLogin) == "" {
 		problems = append(problems, "NIKITA_LOGIN is required")
@@ -387,19 +393,14 @@ func validateNikitaConfig(cfg Config) []string {
 	return problems
 }
 
-func isOfficialNikitaAPIURL(value string) bool {
-	endpoint, err := url.Parse(strings.TrimSpace(value))
-	if err != nil {
+func isOfficialNikitaAPIURL(apiURL *url.URL) bool {
+	if apiURL == nil || !strings.EqualFold(apiURL.Scheme, "https") || apiURL.User != nil || apiURL.Opaque != "" {
 		return false
 	}
-	return strings.EqualFold(endpoint.Scheme, "https") &&
-		strings.EqualFold(endpoint.Host, "smspro.nikita.kg") &&
-		endpoint.Path == "/api/message" &&
-		endpoint.RawQuery == "" &&
-		!endpoint.ForceQuery &&
-		endpoint.Fragment == "" &&
-		endpoint.User == nil &&
-		endpoint.Opaque == ""
+	if !strings.EqualFold(apiURL.Hostname(), "smspro.nikita.kg") || (apiURL.Port() != "" && apiURL.Port() != "443") {
+		return false
+	}
+	return apiURL.EscapedPath() == "/api/message" && apiURL.RawQuery == "" && !apiURL.ForceQuery && apiURL.Fragment == ""
 }
 
 func isUnsafeSigningKey(value string) bool {
