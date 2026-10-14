@@ -14,7 +14,7 @@ This checklist tracks the minimum work required before a real public release.
 - `UPLOAD_DIR=/app/uploads`
 - `MAX_UPLOAD_MB=10`
 
-The API refuses unsafe production configuration when `APP_ENV=production` and the JWT secret is missing or still uses the default placeholder.
+Generate `JWT_SECRET` with `openssl rand -hex 32` and store it directly in the host's secret configuration. The API refuses missing secrets, known placeholders, short values, low observed byte entropy, repeated patterns, and long sequential character runs in staging and production.
 
 ## Staging environment
 

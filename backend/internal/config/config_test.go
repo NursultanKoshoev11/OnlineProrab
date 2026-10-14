@@ -39,6 +39,28 @@ func TestValidateRejectsShortProductionSigningKey(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsPredictableProductionSigningKeys(t *testing.T) {
+	weakKeys := []string{
+		strings.Repeat("a", 32),
+		strings.Repeat("0123456789abcdef", 2),
+		strings.Repeat("a", 16) + strings.Repeat("b", 16),
+		"abcdefghijklmnopqrstuvwxyz123456",
+		"ZYXWVUTSRQPONMLKJIHGFEDCBA987654",
+	}
+
+	for _, key := range weakKeys {
+		t.Run(key[:min(len(key), 16)], func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.JWTSecret = key
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "JWT_SECRET") {
+				t.Fatalf("expected predictable signing key to be rejected, got %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateRejectsLocalhostCORSInProduction(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com", "http://localhost:5173"}
@@ -232,7 +254,7 @@ func validProductionConfig() Config {
 		Env:                ProductionEnv,
 		HTTPAddr:           ":8080",
 		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
-		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
+		JWTSecret:          "Q7vJ3f2xC9kL4s1nR8pW6aZ5mH0dB2yT",
 		AccessTokenTTL:     15 * time.Minute,
 		CORSAllowedOrigins: []string{"https://app.example.com"},
 		TrustedProxyCIDRs:  []string{"10.20.0.4"},
