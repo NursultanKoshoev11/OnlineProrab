@@ -330,8 +330,11 @@ func validateTwilioConfig(cfg Config) []string {
 
 func validateNikitaConfig(cfg Config) []string {
 	var problems []string
-	if strings.TrimSpace(cfg.NikitaAPIURL) == "" {
-		problems = append(problems, "NIKITA_API_URL is required")
+	apiURL, err := url.Parse(strings.TrimSpace(cfg.NikitaAPIURL))
+	if err != nil || strings.TrimSpace(cfg.NikitaAPIURL) == "" {
+		problems = append(problems, "NIKITA_API_URL must be a valid URL")
+	} else if cfg.IsProductionLike() && !isOfficialNikitaAPIURL(apiURL) {
+		problems = append(problems, "NIKITA_API_URL must use the official HTTPS SMS endpoint in staging and production")
 	}
 	if strings.TrimSpace(cfg.NikitaLogin) == "" {
 		problems = append(problems, "NIKITA_LOGIN is required")
@@ -343,6 +346,16 @@ func validateNikitaConfig(cfg Config) []string {
 		problems = append(problems, "NIKITA_SENDER is required")
 	}
 	return problems
+}
+
+func isOfficialNikitaAPIURL(apiURL *url.URL) bool {
+	if apiURL == nil || apiURL.Scheme != "https" || apiURL.User != nil || apiURL.Opaque != "" {
+		return false
+	}
+	if !strings.EqualFold(apiURL.Hostname(), "smspro.nikita.kg") || (apiURL.Port() != "" && apiURL.Port() != "443") {
+		return false
+	}
+	return apiURL.EscapedPath() == "/api/message" && apiURL.RawQuery == "" && !apiURL.ForceQuery && apiURL.Fragment == ""
 }
 
 func isUnsafeSigningKey(value string) bool {
