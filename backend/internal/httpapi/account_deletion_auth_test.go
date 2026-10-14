@@ -88,7 +88,11 @@ func TestVerifyAccountDeletionSMSCodeDoesNotMutateAccountOrAcceptInvites(t *test
 func TestScopedDeletionTokenIsAcceptedOnlyByAccountDeletionAuth(t *testing.T) {
 	db := openSMSAuthTestDB(t)
 	oldState := appState
-	appState = State{DB: db, JWTSecret: "account-deletion-test-signing-key-1234567890"}
+	appState = State{
+		DB:             db,
+		JWTSecret:      "account-deletion-test-signing-key-1234567890",
+		AccessTokenTTL: time.Hour,
+	}
 	defer func() { appState = oldState }()
 	var deletionUserID, appUserID string
 	if err := db.Pool.QueryRow(context.Background(), `INSERT INTO users (phone) VALUES ('+996700000203') RETURNING id::text`).Scan(&deletionUserID); err != nil {
