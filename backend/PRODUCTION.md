@@ -38,6 +38,7 @@ The API refuses unsafe configuration in staging and production when the JWT secr
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable. Nikita credentials are sent only to its official HTTPS endpoint; staging/production reject custom URLs. SMS clients do not follow redirects, so provider secrets or login codes cannot be replayed to another host.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
+- The API adds `Strict-Transport-Security: max-age=31536000` in staging and production. The HTTPS-terminating proxy must preserve this response header so browsers receive it over TLS.
 - Set `TRUSTED_PROXY_CIDRS` to the exact IP addresses or narrow CIDRs of proxies that connect to the API container. The API trusts `X-Forwarded-For` only when `RemoteAddr` belongs to one of these networks; direct requests cannot spoof the limiter's client IP.
 - SMS request quotas are 6 attempts per phone per hour, plus 30 per client IP per hour. Code verification is limited to 10 attempts per phone and 30 per client IP per 15 minutes. These counters include failed delivery/verification attempts and reserve each request before it reaches the SMS provider or code handler.
 
