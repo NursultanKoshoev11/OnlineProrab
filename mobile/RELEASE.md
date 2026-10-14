@@ -34,10 +34,11 @@ there:
 - Environment secret `STROY_IOS_PROVISIONING_PROFILE_BASE64`: base64-encoded App Store
   provisioning profile for the same bundle ID and team.
 
-The workflow verifies that the profile team and application identifier match
-the configured values, creates a signed IPA, and saves it as a GitHub Actions
-artifact. It does not upload the IPA to App Store Connect. The iOS deployment
-target is 14.0 because the file picker plugin requires iOS 14 or newer.
+The workflow CMS-decodes the profile before reading its plist, then checks its
+expiration, team, bundle ID, and App Store distribution settings. It creates a
+signed IPA and saves it as a GitHub Actions artifact; it does not upload the IPA
+to App Store Connect. The iOS deployment target is 14.0 because the file picker
+plugin requires iOS 14 or newer.
 
 ## Release checks
 

@@ -203,6 +203,9 @@ jobs:
           flutter --version
           xcodebuild -version
 
+      - name: Test App Store profile validation
+        run: python3 -m unittest discover -s tool -p 'test_validate_ios_profile.py'
+
       - name: Prepare platform configuration
         run: |
           python3 tool/prepare_android.py
@@ -308,34 +311,20 @@ jobs:
           mkdir -p "$PROFILE_DIR"
           python3 - <<'PY'
           import base64
-          from datetime import datetime, timezone
           import os
-          import plistlib
           from pathlib import Path
 
           profile = base64.b64decode(os.environ["STROY_IOS_PROVISIONING_PROFILE_BASE64"], validate=True)
           profile_path = Path(os.environ["RUNNER_TEMP"], "stroy-app-store.mobileprovision")
           profile_path.write_bytes(profile)
-          with profile_path.open("rb") as stream:
-              expiration = plistlib.load(stream)["ExpirationDate"]
-          if expiration.tzinfo is None:
-              expiration = expiration.replace(tzinfo=timezone.utc)
-          if expiration <= datetime.now(timezone.utc):
-              raise SystemExit("App Store provisioning profile is expired")
           PY
           security cms -D -i "$RUNNER_TEMP/stroy-app-store.mobileprovision" > "$RUNNER_TEMP/stroy-profile.plist"
-          PROFILE_TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$RUNNER_TEMP/stroy-profile.plist")"
-          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/stroy-profile.plist")"
-          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/stroy-profile.plist")"
-          PROFILE_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$RUNNER_TEMP/stroy-profile.plist")"
-          test "$PROFILE_TEAM_ID" = "$STROY_IOS_TEAM_ID"
-          case "$PROFILE_APP_ID" in
-            *".$STROY_IOS_BUNDLE_ID") ;;
-            *) echo "Provisioning profile does not match STROY_IOS_BUNDLE_ID" >&2; exit 1 ;;
-          esac
-          cp "$RUNNER_TEMP/stroy-app-store.mobileprovision" "$PROFILE_DIR/$PROFILE_UUID.mobileprovision"
-          echo "STROY_IOS_PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
-          echo "STROY_IOS_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+          STROY_IOS_PROFILE_UUID="$(python3 tool/validate_ios_profile.py \
+            --profile "$RUNNER_TEMP/stroy-profile.plist" \
+            --team-id "$STROY_IOS_TEAM_ID" \
+            --bundle-id "$STROY_IOS_BUNDLE_ID")"
+          cp "$RUNNER_TEMP/stroy-app-store.mobileprovision" "$PROFILE_DIR/$STROY_IOS_PROFILE_UUID.mobileprovision"
+          echo "STROY_IOS_PROFILE_UUID=$STROY_IOS_PROFILE_UUID" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile
@@ -368,7 +357,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="$STROY_IOS_SIGNING_IDENTITY" \
             DEVELOPMENT_TEAM="$STROY_IOS_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$STROY_IOS_PROFILE_NAME" \
+            PROVISIONING_PROFILE_SPECIFIER="$STROY_IOS_PROFILE_UUID" \
             PRODUCT_BUNDLE_IDENTIFIER="$STROY_IOS_BUNDLE_ID"
 
       - name: Export signed IPA
@@ -384,7 +373,7 @@ jobs:
               "signingStyle": "manual",
               "teamID": os.environ["STROY_IOS_TEAM_ID"],
               "provisioningProfiles": {
-                  os.environ["STROY_IOS_BUNDLE_ID"]: os.environ["STROY_IOS_PROFILE_NAME"]
+                  os.environ["STROY_IOS_BUNDLE_ID"]: os.environ["STROY_IOS_PROFILE_UUID"]
               },
               "stripSwiftSymbols": True,
               "uploadSymbols": True,
