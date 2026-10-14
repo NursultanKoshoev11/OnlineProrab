@@ -7,11 +7,13 @@ on:
     paths:
       - 'backend/scripts/backup.sh'
       - 'backend/scripts/restore.sh'
+      - 'backend/scripts/safe-path.sh'
       - '.github/workflows/backup-restore.yml'
   pull_request:
     paths:
       - 'backend/scripts/backup.sh'
       - 'backend/scripts/restore.sh'
+      - 'backend/scripts/safe-path.sh'
       - '.github/workflows/backup-restore.yml'
 
 permissions:
@@ -48,6 +50,40 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
+      - name: Reject unsafe backup and restore paths
+        run: |
+          set -eu
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" BACKUP_DIR=/ sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted BACKUP_DIR=/" >&2
+            exit 1
+          fi
+          if UPLOAD_DIR=/ BACKUP_DIR="$RUNNER_TEMP/onlineprorab-backups" sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted UPLOAD_DIR=/" >&2
+            exit 1
+          fi
+          ln -s / "$RUNNER_TEMP/root-backup-link"
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" BACKUP_DIR="$RUNNER_TEMP/root-backup-link" sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted a symlink to /" >&2
+            exit 1
+          fi
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" BACKUP_DIR="$RUNNER_TEMP/root-backup-link/backups" sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted a symlink in its parent path" >&2
+            exit 1
+          fi
+          if CONFIRM_RESTORE=YES UPLOAD_DIR=/ sh scripts/restore.sh "$RUNNER_TEMP/missing-backup" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted UPLOAD_DIR=/" >&2
+            exit 1
+          fi
+          ln -s / "$RUNNER_TEMP/root-upload-link"
+          if CONFIRM_RESTORE=YES UPLOAD_DIR="$RUNNER_TEMP/root-upload-link" sh scripts/restore.sh "$RUNNER_TEMP/missing-backup" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a symlink to /" >&2
+            exit 1
+          fi
+          if CONFIRM_RESTORE=YES UPLOAD_DIR="$RUNNER_TEMP/root-upload-link/uploads" sh scripts/restore.sh "$RUNNER_TEMP/missing-backup" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a symlink in its parent path" >&2
+            exit 1
+          fi
+
       - name: Seed database and uploads
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
@@ -56,6 +92,8 @@ jobs:
           SQL
           mkdir -p "$RUNNER_TEMP/onlineprorab-uploads/nested"
           printf '%s' 'receipt-content' > "$RUNNER_TEMP/onlineprorab-uploads/nested/receipt.txt"
+          long_name="$(printf '%120s' '' | tr ' ' x)"
+          printf '%s' 'long-name-content' > "$RUNNER_TEMP/onlineprorab-uploads/$long_name"
 
       - name: Create backup
         run: |
@@ -82,3 +120,5 @@ jobs:
         run: |
           test "$(psql "$DATABASE_URL" -Atc 'SELECT value FROM backup_probe WHERE id = 1')" = 'backup-ok'
           test "$(cat "$RUNNER_TEMP/onlineprorab-uploads/nested/receipt.txt")" = 'receipt-content'
+          long_name="$(printf '%120s' '' | tr ' ' x)"
+          test "$(cat "$RUNNER_TEMP/onlineprorab-uploads/$long_name")" = 'long-name-content'
