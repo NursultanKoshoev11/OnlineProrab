@@ -58,6 +58,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          flutter-version: '3.44.4'
           cache: true
 
       - name: Show Flutter version
@@ -67,14 +68,13 @@ jobs:
         run: python3 tool/prepare_android.py
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Generate adaptive STROY launcher icons
         run: dart run flutter_launcher_icons
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
-        continue-on-error: true
 
       - name: Analyze application
         run: flutter analyze
@@ -100,8 +100,9 @@ jobs:
           retention-days: 14
 
   production-bundle:
-    if: github.event_name == 'workflow_dispatch' && inputs.production_release == 'true'
+    if: github.event_name == 'workflow_dispatch' && inputs.production_release == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment: production-mobile
     permissions:
       contents: read
     defaults:
@@ -109,7 +110,7 @@ jobs:
         working-directory: mobile
     env:
       STROY_APPLICATION_ID: ${{ vars.STROY_APPLICATION_ID }}
-      STROY_KEYSTORE_PATH: ${{ runner.temp }}/stroy-upload.jks
+      STROY_KEYSTORE_PATH: ${{ github.workspace }}/mobile/stroy-upload.jks
       STROY_KEYSTORE_PASSWORD: ${{ secrets.STROY_KEYSTORE_PASSWORD }}
       STROY_KEY_ALIAS: ${{ secrets.STROY_KEY_ALIAS }}
       STROY_KEY_PASSWORD: ${{ secrets.STROY_KEY_PASSWORD }}
@@ -124,6 +125,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          flutter-version: '3.44.4'
           cache: true
 
       - name: Decode upload keystore
@@ -145,7 +147,7 @@ jobs:
         run: python3 tool/prepare_android.py
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Generate adaptive STROY launcher icons
         run: dart run flutter_launcher_icons
@@ -166,3 +168,7 @@ jobs:
           path: mobile/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+
+      - name: Remove upload keystore
+        if: always()
+        run: rm -f "$STROY_KEYSTORE_PATH"
