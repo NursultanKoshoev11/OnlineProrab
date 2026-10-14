@@ -39,10 +39,16 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 ## Current production blockers
 
 1. Provision a private S3-compatible bucket and least-privilege credentials for each environment. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
-2. Add structured logs, alerting and external uptime monitoring.
+2. Ship JSON logs to a secure external collector, configure alerts, and monitor `/health` and `/ready` externally.
 3. Test PostgreSQL and object-storage backup/restore in staging, including account-deletion and object-version retention behavior.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
+
+## Application logs
+
+- Staging and production write one JSON record per event to standard output. HTTP request records include request ID, method, path, status, response bytes, and duration; request bodies, query strings, and client IP addresses are omitted.
+- Development keeps readable text logs.
+- Production and staging Compose rotate container logs at 10 MB per file and retain five files. Configure a secure external log collector and alert rules for sustained server errors, readiness failures, and SMS/storage errors before public launch.
 
 ## File-storage migration and rollback
 

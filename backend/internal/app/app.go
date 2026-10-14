@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -12,12 +13,14 @@ import (
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/bootstrap"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/httpapi"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/observability"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/sms"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 func Run() {
 	cfg := config.Load()
+	observability.Configure(cfg.Env)
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}
@@ -108,16 +111,16 @@ func Run() {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("onlineprorab api starting env=%s addr=%s", cfg.Env, cfg.HTTPAddr)
+		slog.Info("api_starting", "environment", cfg.Env, "listen_address", cfg.HTTPAddr)
 		serverErrors <- server.ListenAndServe()
 	}()
 
 	select {
 	case <-rootCtx.Done():
-		log.Printf("shutdown signal received")
+		slog.Info("shutdown_signal_received")
 	case err := <-serverErrors:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("http server stopped unexpectedly: %v", err)
+			slog.Error("http_server_stopped_unexpectedly", "error", err)
 		}
 		stop()
 	}
@@ -125,8 +128,8 @@ func Run() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("graceful shutdown failed: %v", err)
+		slog.Error("graceful_shutdown_failed", "error", err)
 		_ = server.Close()
 	}
-	log.Printf("onlineprorab api stopped")
+	slog.Info("api_stopped")
 }

@@ -5,6 +5,11 @@ services:
       dockerfile: Dockerfile
     container_name: stroy-api
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - stroy_default
     environment:
