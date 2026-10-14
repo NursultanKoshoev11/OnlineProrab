@@ -107,7 +107,9 @@ func TestRequestLoggerRecordsRecoveredPanicWithoutPanicValue(t *testing.T) {
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
 			t.Fatalf("expected JSON log record, got %q: %v", line, err)
 		}
-		if event["msg"] == "http_request" && event["status"] == float64(http.StatusInternalServerError) {
+		if event["msg"] == "http_request" &&
+			event["status"] == float64(http.StatusInternalServerError) &&
+			event["level"] == "ERROR" {
 			foundRequestEvent = true
 		}
 	}

@@ -56,6 +56,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 ## Application logs
 
 - Staging and production write one JSON record per event to standard output. HTTP request records include request ID, method, path, status, response bytes, and duration; request bodies, query strings, and client IP addresses are omitted.
+- Startup, SMS, storage, database, and HTTP 5xx failures use the JSON `ERROR` level with stable event names and separate fields; expected retries and partial-provider results use `WARN`. Alert rules can filter on `level` and the event name instead of parsing formatted log text.
 - Development keeps readable text logs.
 - Production and staging Compose rotate container logs at 10 MB per file and retain five files. Configure a secure external log collector and alert rules for sustained server errors, readiness failures, and SMS/storage errors before public launch.
 
