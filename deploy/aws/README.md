@@ -11,9 +11,12 @@ object ownership, SSE-S3 encryption, and HTTPS-only bucket policies. Upload
 object versioning stays disabled because account deletion must permanently
 remove user files. The backup archive bucket has versioning enabled and expires
 current snapshots after `BackupArchiveRetentionDays` (180 days by default);
-noncurrent versions expire after a further 30 days. Deletion tombstones expire
-after `DeletionLedgerRetentionDays` (365 days by default); configure this longer
-than the maximum age of any archive version that can be restored. All three
+noncurrent versions expire after a further 30 days. Deletion tombstones have no
+expiration rule. Keeping them indefinitely ensures that restoring any retained
+backup cannot resurrect an account or file deleted after that snapshot. The
+ledger contains account UUIDs and opaque object keys, so keep its read access
+restricted to recovery operators. The uploads bucket aborts incomplete multipart
+uploads after seven days. All three
 buckets are retained if the CloudFormation stack is deleted or a bucket is
 replaced.
 
@@ -31,7 +34,6 @@ aws cloudformation deploy \
     BucketName=onlineprorab-staging-uploads-unique-suffix \
     DeletionLedgerBucketName=onlineprorab-staging-deletions-unique-suffix \
     BackupArchiveBucketName=onlineprorab-staging-backups-unique-suffix \
-    DeletionLedgerRetentionDays=365 \
     BackupArchiveRetentionDays=180
 ```
 
