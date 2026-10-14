@@ -48,6 +48,42 @@ func TestValidateRejectsLocalhostCORSInProduction(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUnsafeCORSOriginsInStaging(t *testing.T) {
+	unsafeOrigins := []string{
+		"http://app.example.com",
+		"https://app.example.com/",
+		"https://user@app.example.com",
+		"https://app.example.com?next=https://other.example.com",
+		"https://app.example.com#fragment",
+		"https://*.example.com",
+		"https://localhost:8443",
+		"https://127.0.0.1:8443",
+		"https://[::1]:8443",
+		"https://0.0.0.0:8443",
+	}
+
+	for _, origin := range unsafeOrigins {
+		t.Run(origin, func(t *testing.T) {
+			cfg := validStagingConfig()
+			cfg.CORSAllowedOrigins = []string{origin}
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "CORS_ALLOWED_ORIGINS") {
+				t.Fatalf("expected staging CORS origin %q to be rejected, got %v", origin, err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsHTTPSCORSOriginWithPortInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.CORSAllowedOrigins = []string{"https://staging.example.com:8443"}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected HTTPS staging origin with explicit port to be accepted, got %v", err)
+	}
+}
+
 func TestValidateRejectsTooShortProductionAccessTokenTTL(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.AccessTokenTTL = 4 * time.Minute

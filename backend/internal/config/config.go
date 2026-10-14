@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -320,8 +321,25 @@ func isUnsafeSigningKey(value string) bool {
 }
 
 func isUnsafeProductionOrigin(origin string) bool {
-	value := strings.ToLower(strings.TrimSpace(origin))
-	return value == "*" || strings.Contains(value, "localhost") || strings.Contains(value, "127.0.0.1") || strings.Contains(value, "0.0.0.0")
+	parsed, err := url.Parse(strings.TrimSpace(origin))
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return true
+	}
+	if parsed.User != nil || parsed.Opaque != "" || parsed.Path != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+		return true
+	}
+	if strings.Contains(parsed.Host, "*") {
+		return true
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsLoopback() || ip.IsUnspecified()) {
+		return true
+	}
+	return false
 }
 
 func normalizePhone(value string) string {
