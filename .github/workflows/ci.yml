@@ -153,6 +153,9 @@ jobs:
       - name: Prepare Android platform
         run: python3 tool/prepare_android.py
 
+      - name: Install and verify Android NDK
+        run: python3 tool/install_android_ndk.py
+
       - name: Get dependencies
         run: flutter pub get --enforce-lockfile
 
