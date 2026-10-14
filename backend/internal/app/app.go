@@ -95,7 +95,11 @@ func Run() {
 	migrationCancel()
 
 	httpapi.SetState(cfg, db, smsSender, fileStore)
-	go storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
+	deletionWorkerDone := make(chan struct{})
+	go func() {
+		defer close(deletionWorkerDone)
+		storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
+	}()
 	authPrunerDone := make(chan struct{})
 	go func() {
 		defer close(authPrunerDone)
@@ -143,6 +147,7 @@ func Run() {
 		slog.Error("graceful_shutdown_failed", "error", err)
 		_ = server.Close()
 	}
+	<-deletionWorkerDone
 	<-authPrunerDone
 	slog.Info("api_stopped")
 }
