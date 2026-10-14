@@ -151,6 +151,18 @@ jobs:
           test -n "$STROY_KEY_ALIAS"
           test -n "$STROY_KEY_PASSWORD"
 
+      - name: Verify public privacy and account-deletion pages
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/privacy/ --output "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Политика конфиденциальности' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Google Gemini' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'бессрочно храним в закрытом журнале' "$RUNNER_TEMP/stroy-privacy.html"
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
+          grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
+
       - name: Prepare Android platform
         run: python3 tool/prepare_android.py
 
@@ -237,6 +249,9 @@ jobs:
       - name: Build iOS simulator app
         run: flutter build ios --simulator --no-codesign --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
 
+      - name: Validate bundled iOS privacy manifest
+        run: python3 tool/validate_privacy_manifest.py --app-bundle build/ios/iphonesimulator/Runner.app
+
   production-ios-ipa:
     name: Signed iOS IPA
     if: github.event_name == 'workflow_dispatch' && inputs.production_ios_release == 'true' && github.ref == 'refs/heads/main'
@@ -270,6 +285,18 @@ jobs:
           test -n "$STROY_IOS_BUNDLE_ID"
           [[ "$STROY_IOS_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]
           python3 tool/configure_ios_bundle_id.py "$STROY_IOS_BUNDLE_ID"
+
+      - name: Verify public privacy and account-deletion pages
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/privacy/ --output "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Политика конфиденциальности' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Google Gemini' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'бессрочно храним в закрытом журнале' "$RUNNER_TEMP/stroy-privacy.html"
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
+          grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
 
       - name: Create temporary signing keychain
         env:
@@ -369,6 +396,12 @@ jobs:
             DEVELOPMENT_TEAM="$STROY_IOS_TEAM_ID" \
             PROVISIONING_PROFILE_SPECIFIER="$STROY_IOS_PROFILE_UUID" \
             PRODUCT_BUNDLE_IDENTIFIER="$STROY_IOS_BUNDLE_ID"
+
+      - name: Validate archived iOS privacy manifest
+        run: |
+          APP_BUNDLE="$(find "$RUNNER_TEMP/STROY.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$APP_BUNDLE"
+          python3 tool/validate_privacy_manifest.py --app-bundle "$APP_BUNDLE"
 
       - name: Export signed IPA
         run: |

@@ -49,6 +49,16 @@ plugin requires iOS 14 or newer.
   store records.
 - Complete the app privacy details and provide the public privacy-policy and
   support URLs in each store listing.
+- Use `https://stroy.com.kg/privacy/` as the public privacy-policy URL. For
+  Google Play's external account-deletion URL, use
+  `https://stroy.com.kg/account-deletion/`. The signed Android and iOS release
+  jobs check that both pages return their expected public content before they
+  create release artifacts.
+- Disclose the app's account and project data, uploaded files, voice
+  recognition, and external AI expense-search processing in each store's
+  privacy forms. Voice audio is sent to the device's speech-recognition
+  service; the AI search sends the query and selected project's expense records
+  to the configured provider (which can be Google Gemini, Groq, or OpenRouter).
 - Test sign-in, project and expense flows, file selection/download, PDF export,
   and voice search on real Android and iOS devices.
 - Keep the signing key and Apple certificate in the store-specific upload
