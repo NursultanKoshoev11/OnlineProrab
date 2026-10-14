@@ -30,6 +30,10 @@ case "$STORAGE_DRIVER" in
       echo "S3_BUCKET and S3_DELETION_LEDGER_BUCKET must be different" >&2
       exit 2
     fi
+    if [ "${CONFIRM_S3_TARGET_BUCKET:-}" != "$S3_BUCKET" ]; then
+      echo "CONFIRM_S3_TARGET_BUCKET must exactly match S3_BUCKET before an S3 restore" >&2
+      exit 2
+    fi
     command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required when STORAGE_DRIVER=s3" >&2; exit 127; }
     command -v python3 >/dev/null 2>&1 || { echo "Python 3 is required when STORAGE_DRIVER=s3" >&2; exit 127; }
     command -v psql >/dev/null 2>&1 || { echo "psql is required when STORAGE_DRIVER=s3" >&2; exit 127; }
