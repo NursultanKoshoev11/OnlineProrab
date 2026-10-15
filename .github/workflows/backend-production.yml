@@ -65,8 +65,19 @@ jobs:
           S3_REGION: us-east-1
           S3_BUCKET: onlineprorab-ci-uploads
           S3_DELETION_LEDGER_BUCKET: onlineprorab-ci-deletions
+          API_LOG_GROUP: /onlineprorab/production/api
           SMS_PROVIDER: twilio
-        run: docker compose -f backend/docker-compose.prod.yml config --quiet
+        run: |
+          set -euo pipefail
+          if env -u API_LOG_GROUP docker compose -f backend/docker-compose.prod.yml config --quiet >/dev/null 2>&1; then
+            echo "production Compose unexpectedly accepted a missing API_LOG_GROUP" >&2
+            exit 1
+          fi
+          resolved_config="$(docker compose -f backend/docker-compose.prod.yml config)"
+          printf '%s\n' "$resolved_config" | grep -F 'driver: awslogs' >/dev/null
+          printf '%s\n' "$resolved_config" | grep -F "awslogs-group: $API_LOG_GROUP" >/dev/null
+          printf '%s\n' "$resolved_config" | grep -F 'awslogs-create-group: "false"' >/dev/null
+          printf '%s\n' "$resolved_config" | grep -F 'mode: non-blocking' >/dev/null
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

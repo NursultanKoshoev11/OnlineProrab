@@ -15,6 +15,7 @@ This checklist tracks the minimum work required before a real public release.
 - `S3_REGION=<bucket-region>`
 - `S3_BUCKET=<private-bucket>`
 - `S3_DELETION_LEDGER_BUCKET=<separate-private-bucket>`
+- `API_LOG_GROUP=/onlineprorab/production/api` (CloudFormation `ApiLogGroupName` output)
 - `S3_BACKUP_BUCKET=<separate-private-backup-archive-bucket>` for encrypted S3 backup archives
 - `BACKUP_AGE_RECIPIENTS_FILE=<public-age-recipient-list>` for encrypted S3 backups
 - `BACKUP_AGE_IDENTITY_FILE=<restore-only-private-age-identity>` for encrypted restore
@@ -47,8 +48,8 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## Current production blockers
 
-1. Deploy the three-bucket private AWS S3 stack per environment with [`deploy/aws/README.md`](../deploy/aws/README.md), attach its least-privilege policies, and configure the API credentials. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
-2. Ship JSON logs to a secure external collector, configure API alerts, and monitor `/health` and `/ready` externally. The AWS storage stack separately alarms on missed S3 backups.
+1. Deploy the private AWS storage stack per environment with [`deploy/aws/README.md`](../deploy/aws/README.md), attach its least-privilege policies, and configure the API credentials. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
+2. Configure the Docker daemon's AWS credentials for the `awslogs` driver, attach `ApiLogWriterPolicyArn`, and set `API_LOG_GROUP` from `ApiLogGroupName`. Confirm JSON API logs arrive in CloudWatch and the SNS error alarm reaches the operator. Monitor `/health` and `/ready` externally; CloudWatch Logs cannot detect a host outage that prevents log delivery.
 3. Install and enable the daily encrypted S3 backup timer on the production runner, confirm its CloudWatch/SNS missed-backup alarm, and complete a real PostgreSQL + S3 restore drill in staging with a dedicated recovery uploads bucket and database. Keep the age identity in the separate recovery secret store.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
@@ -56,10 +57,10 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## Application logs
 
-- Staging and production write one JSON record per event to standard output. HTTP request records include request ID, method, path, status, response bytes, and duration; request bodies, query strings, and client IP addresses are omitted.
+- Staging and production write one JSON record per event to standard output. HTTP request records include request ID, method, the matched route pattern, status, response bytes, and duration; path values, request bodies, query strings, and client IP addresses are omitted.
 - Startup, SMS, storage, database, and HTTP 5xx failures use the JSON `ERROR` level with stable event names and separate fields; expected retries and partial-provider results use `WARN`. Alert rules can filter on `level` and the event name instead of parsing formatted log text.
 - Development keeps readable text logs.
-- Production and staging Compose rotate container logs at 10 MB per file and retain five files. Configure a secure external log collector and alert rules for sustained server errors, readiness failures, and SMS/storage errors before public launch.
+- Production Compose sends JSON container logs to the environment's CloudWatch log group with non-blocking delivery, so CloudWatch backpressure does not block API stdout. Docker may drop new log messages if its 4 MB per-container buffer fills during a prolonged CloudWatch outage. CloudWatch retains production log events for 30 days by default; set `ApiLogRetentionDays` explicitly when deploying if a different approved retention period is required. A metric filter counts `ERROR` records and sends an SNS email when at least one arrives in a five-minute window. Keep an independent external check for `/health` and `/ready`, since missing API logs are not treated as an application error.
 
 ## PostgreSQL and uploaded-file backups
 

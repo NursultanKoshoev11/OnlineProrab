@@ -177,10 +177,14 @@ func requestLogger(next http.Handler) http.Handler {
 		if status >= http.StatusInternalServerError {
 			level = slog.LevelError
 		}
+		route := r.Pattern
+		if route == "" {
+			route = "unmatched"
+		}
 		slog.Log(r.Context(), level, "http_request",
 			"request_id", requestIDFromContext(r.Context()),
 			"method", r.Method,
-			"path", r.URL.Path,
+			"route", route,
 			"status", status,
 			"bytes", recorder.bytes,
 			"duration_ms", time.Since(start).Milliseconds(),

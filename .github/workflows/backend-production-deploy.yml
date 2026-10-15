@@ -120,6 +120,7 @@ jobs:
           S3_REGION: us-east-1
           S3_BUCKET: onlineprorab-ci-uploads
           S3_DELETION_LEDGER_BUCKET: onlineprorab-ci-deletions
+          API_LOG_GROUP: /onlineprorab/production/api
           SMS_PROVIDER: twilio
         run: docker compose -f backend/docker-compose.prod.yml config --quiet
 

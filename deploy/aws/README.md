@@ -60,10 +60,18 @@ corresponding scoped policy to a dedicated IAM user and store its access key in
 the host's secret configuration. The template does not create credentials or
 attach permissions to an existing principal automatically.
 
-The stack creates a CloudWatch alarm and an SNS topic for missed backup
-heartbeats. Set `BackupAlertEmail` when creating the production stack and
-confirm the subscription from the AWS notification email before enabling the
-timer. Staging can omit the email. Set `BACKUP_METRIC_NAMESPACE` in the backup
+The stack creates a CloudWatch Logs group for API output, a metric filter for
+JSON `ERROR` records, API error and missed-backup alarms, and an SNS topic.
+The API log group retains events for 30 days by default; set
+`ApiLogRetentionDays` to an allowed value when deploying if the operator's
+retention policy differs. The stack outputs `ApiLogGroupName` and
+`ApiLogWriterPolicyArn`. Set `API_LOG_GROUP` on the API host from that output,
+and attach the log-writer policy to the Docker daemon's AWS identity. The API
+container's `awslogs` driver sends logs to the group using the S3 region.
+
+Set `BackupAlertEmail` when creating the production stack and confirm the
+subscription from the AWS notification email before enabling the timer.
+Staging can omit the email. Set `BACKUP_METRIC_NAMESPACE` in the backup
 runner environment to the stack's `BackupMetricNamespace` output. After the
 encrypted snapshot and its manifest upload successfully, the runner publishes
 one heartbeat to that environment-specific namespace. `BackupWriterPolicyArn`
@@ -78,8 +86,9 @@ database and S3 object backups daily at 02:00 UTC. Install the runner with an
 identity limited to `BackupWriterPolicyArn`, follow the host setup in
 [`../../backend/PRODUCTION.md`](../../backend/PRODUCTION.md), run the service
 once, and verify the encrypted archive in S3 before enabling the timer. The
-CloudWatch alarm covers missed or failed daily backups; use external monitoring
-for API errors, readiness failures, and SMS/storage alerts.
+CloudWatch emails API error-level records and missed-backup alerts; use an
+independent external check for `/health` and `/ready`, because log delivery
+cannot prove the API host is online.
 Back up PostgreSQL and the existing upload volume, stop API writes, run the
 checksum-verified migration described in
 [`../../backend/PRODUCTION.md`](../../backend/PRODUCTION.md), and keep the
