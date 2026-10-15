@@ -101,8 +101,6 @@ func (s *S3Store) Put(ctx context.Context, key string, source io.ReadSeeker, siz
 	return nil
 }
 
-// PutStream streams a known-size object to S3. Large objects use sequential
-// multipart requests so the migration path does not need to buffer whole files.
 func (s *S3Store) PutStream(ctx context.Context, key string, source io.Reader, size int64, contentType string) error {
 	return s.putStream(ctx, key, source, size, contentType, s3SinglePutMaximumBytes)
 }
@@ -393,3 +391,4 @@ func responseErrorStatus(err error) int {
 }
 
 var _ ObjectStore = (*S3Store)(nil)
+var _ StreamingObjectStore = (*S3Store)(nil)

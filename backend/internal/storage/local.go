@@ -51,6 +51,16 @@ func (s *LocalStore) Check(ctx context.Context) error {
 }
 
 func (s *LocalStore) Put(ctx context.Context, key string, source io.ReadSeeker, size int64, _ string) error {
+	if source == nil || size < 0 {
+		return fmt.Errorf("invalid object body or size")
+	}
+	if _, err := source.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("rewind object body: %w", err)
+	}
+	return s.PutStream(ctx, key, source, size, "")
+}
+
+func (s *LocalStore) PutStream(ctx context.Context, key string, source io.Reader, size int64, _ string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -77,10 +87,6 @@ func (s *LocalStore) Put(ctx context.Context, key string, source io.ReadSeeker, 
 	if err := temporary.Chmod(0o640); err != nil {
 		_ = temporary.Close()
 		return fmt.Errorf("set object permissions: %w", err)
-	}
-	if _, err := source.Seek(0, io.SeekStart); err != nil {
-		_ = temporary.Close()
-		return fmt.Errorf("rewind object body: %w", err)
 	}
 	written, copyErr := io.CopyN(temporary, source, size)
 	if copyErr != nil || written != size {
@@ -152,3 +158,4 @@ func (s *LocalStore) pathFor(key string) (string, error) {
 }
 
 var _ ObjectStore = (*LocalStore)(nil)
+var _ StreamingObjectStore = (*LocalStore)(nil)
