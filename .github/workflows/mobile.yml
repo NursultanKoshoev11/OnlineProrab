@@ -204,7 +204,7 @@ jobs:
 
   ios-simulator:
     name: iOS simulator build
-    runs-on: macos-15
+    runs-on: macos-26
     defaults:
       run:
         working-directory: mobile
@@ -264,7 +264,7 @@ jobs:
   production-ios-ipa:
     name: Signed iOS IPA
     if: github.event_name == 'workflow_dispatch' && inputs.production_ios_release == 'true' && github.ref == 'refs/heads/main'
-    runs-on: macos-15
+    runs-on: macos-26
     environment: production-mobile
     permissions:
       contents: read

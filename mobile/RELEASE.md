@@ -42,9 +42,10 @@ plugin requires iOS 14 or newer.
 
 Apple requires uploads to App Store Connect to use Xcode 26 or later with the
 iOS 26 SDK as of April 28, 2026. Both the iOS simulator CI job and the signed
-IPA job enforce these toolchain versions before building. Apple has announced
-that submissions beginning in April 2027 must target iOS 15 or later; review the
-deployment target before that deadline if support for iOS 14 devices is needed.
+IPA job run on the `macos-26` image and enforce these toolchain versions before
+building. Apple has announced that submissions beginning in April 2027 must
+target iOS 15 or later; review the deployment target before that deadline if
+support for iOS 14 devices is needed.
 
 ## Release checks
 
