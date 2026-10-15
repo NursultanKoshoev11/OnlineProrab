@@ -69,6 +69,11 @@ retention policy differs. The stack outputs `ApiLogGroupName` and
 and attach the log-writer policy to the Docker daemon's AWS identity. The API
 container's `awslogs` driver sends logs to the group using the S3 region.
 
+The API readiness check writes and removes a fixed canary object at
+`healthchecks/api-readiness.json` to verify deletion-ledger write access. The
+application policy permits cleanup only for that exact object, so it cannot
+delete account or file tombstones.
+
 Set `BackupAlertEmail` when creating the production stack and confirm the
 subscription from the AWS notification email before enabling the timer.
 Staging can omit the email. Set `BACKUP_METRIC_NAMESPACE` in the backup
