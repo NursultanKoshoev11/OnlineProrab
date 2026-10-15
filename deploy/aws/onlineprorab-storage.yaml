@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Private Amazon S3 uploads and deletion ledger for OnlineProrab.
+Description: Private storage and missed-backup monitoring for OnlineProrab.
 
 Parameters:
   Environment:
@@ -35,6 +35,11 @@ Parameters:
     MinValue: 14
     MaxValue: 3650
     Description: Number of days to retain current encrypted backup archives in S3.
+  BackupAlertEmail:
+    Type: String
+    Default: ""
+    MaxLength: 254
+    Description: Email endpoint for missed-backup alarms; required for production and must confirm the SNS subscription.
 
 Rules:
   UploadsAndLedgerMustBeSeparate:
@@ -47,6 +52,14 @@ Rules:
         AssertDescription: The backup archive bucket must differ from the uploads bucket.
       - Assert: !Not [!Equals [!Ref DeletionLedgerBucketName, !Ref BackupArchiveBucketName]]
         AssertDescription: The backup archive bucket must differ from the deletion ledger bucket.
+  ProductionRequiresBackupAlertEmail:
+    RuleCondition: !Equals [!Ref Environment, production]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BackupAlertEmail, ""]]
+        AssertDescription: Production requires an email endpoint for missed-backup notifications.
+
+Conditions:
+  BackupAlertEmailProvided: !Not [!Equals [!Ref BackupAlertEmail, ""]]
 
 Resources:
   UploadsBucket:
@@ -271,12 +284,77 @@ Resources:
             Effect: Allow
             Action: s3:PutObject
             Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+          - Sid: PublishBackupHeartbeat
+            Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: "*"
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: !Sub "OnlineProrab/Backups/${Environment}"
           - Sid: CompleteAndCleanMultipartSnapshotUploads
             Effect: Allow
             Action:
               - s3:AbortMultipartUpload
               - s3:ListMultipartUploadParts
             Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+
+  BackupAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-backup-alerts"
+      DisplayName: !Sub "${Environment} OnlineProrab backup alerts"
+
+  BackupAlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref BackupAlertTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudWatchAlarmPublish
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref BackupAlertTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-BackupMissing"
+
+  BackupAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: BackupAlertEmailProvided
+    Properties:
+      TopicArn: !Ref BackupAlertTopic
+      Protocol: email
+      Endpoint: !Ref BackupAlertEmail
+
+  BackupMissingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-BackupMissing"
+      AlarmDescription: !Sub "No successful ${Environment} OnlineProrab S3 backup heartbeat was published for two consecutive days."
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref BackupAlertTopic
+      OKActions:
+        - !Ref BackupAlertTopic
+      Namespace: !Sub "OnlineProrab/Backups/${Environment}"
+      MetricName: BackupSucceeded
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
 
   BackupArchiveReadPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -345,6 +423,12 @@ Outputs:
   BackupWriterPolicyArn:
     Description: Attach to a backup runner that reads uploads and writes encrypted snapshots.
     Value: !Ref BackupWriterPolicy
+  BackupMetricNamespace:
+    Description: Set this value as BACKUP_METRIC_NAMESPACE in the backup runner environment.
+    Value: !Sub "OnlineProrab/Backups/${Environment}"
+  BackupAlertTopicArn:
+    Description: Subscribe an operator endpoint to this topic for backup alarms.
+    Value: !Ref BackupAlertTopic
   BackupArchiveReadPolicyArn:
     Description: Attach to a recovery identity that downloads encrypted snapshots.
     Value: !Ref BackupArchiveReadPolicy

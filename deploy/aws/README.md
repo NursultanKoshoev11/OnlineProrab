@@ -44,8 +44,10 @@ aws cloudformation deploy \
 ```
 
 Repeat with a production stack name, `Environment=production`, and three
-different globally unique bucket names. Before running the command, choose the
-AWS region and replace `us-east-1` if needed.
+different globally unique bucket names. Include
+`BackupAlertEmail=oncall@example.com` using an operator-managed address; confirm
+the SNS subscription email before enabling the timer. Before running the
+command, choose the AWS region and replace `us-east-1` if needed.
 
 Retrieve the stack outputs and attach `ApplicationStoragePolicyArn` to the API
 workload's IAM role. Attach `BackupWriterPolicyArn` to a scheduled backup
@@ -58,14 +60,26 @@ corresponding scoped policy to a dedicated IAM user and store its access key in
 the host's secret configuration. The template does not create credentials or
 attach permissions to an existing principal automatically.
 
+The stack creates a CloudWatch alarm and an SNS topic for missed backup
+heartbeats. Set `BackupAlertEmail` when creating the production stack and
+confirm the subscription from the AWS notification email before enabling the
+timer. Staging can omit the email. Set `BACKUP_METRIC_NAMESPACE` in the backup
+runner environment to the stack's `BackupMetricNamespace` output. After the
+encrypted snapshot and its manifest upload successfully, the runner publishes
+one heartbeat to that environment-specific namespace. `BackupWriterPolicyArn`
+allows metric writes only to that namespace. The alarm emails on two
+consecutive 24-hour periods without a successful heartbeat and sends an
+all-clear email when the metric resumes.
+
 Configure `S3_BUCKET`, `S3_DELETION_LEDGER_BUCKET`, `S3_BACKUP_BUCKET`, and
 `S3_REGION` from the stack and verify the API's `/ready` endpoint before
 migration. The repository's [`../systemd`](../systemd) units schedule encrypted
 database and S3 object backups daily at 02:00 UTC. Install the runner with an
 identity limited to `BackupWriterPolicyArn`, follow the host setup in
 [`../../backend/PRODUCTION.md`](../../backend/PRODUCTION.md), run the service
-once, and verify the encrypted archive in S3 before enabling the timer. Forward
-failed-unit events to external monitoring and alert on missed daily backups.
+once, and verify the encrypted archive in S3 before enabling the timer. The
+CloudWatch alarm covers missed or failed daily backups; use external monitoring
+for API errors, readiness failures, and SMS/storage alerts.
 Back up PostgreSQL and the existing upload volume, stop API writes, run the
 checksum-verified migration described in
 [`../../backend/PRODUCTION.md`](../../backend/PRODUCTION.md), and keep the
