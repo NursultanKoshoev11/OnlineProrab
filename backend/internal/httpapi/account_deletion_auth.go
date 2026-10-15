@@ -175,6 +175,9 @@ func requireAccountDeletionAuth(next http.HandlerFunc) http.HandlerFunc {
 			Error(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
+		if !requireActiveAccount(w, r, userID) {
+			return
+		}
 		next(w, r.WithContext(withUserID(r.Context(), userID)))
 	}
 }

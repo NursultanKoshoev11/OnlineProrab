@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS build
+FROM golang:1.27.2-bookworm AS build
 
 WORKDIR /src
 COPY go.mod go.sum* ./
@@ -10,8 +10,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" \
     -o /out/api \
     ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o /out/storage-migrate \
+    ./cmd/storage-migrate
 
-FROM alpine:3.20
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S onlineprorab \
@@ -21,6 +26,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 WORKDIR /app
 COPY --from=build --chown=onlineprorab:onlineprorab /out/api /app/api
+COPY --from=build --chown=onlineprorab:onlineprorab /out/storage-migrate /app/storage-migrate
 
 ENV HTTP_ADDR=:8080
 ENV UPLOAD_DIR=/data/uploads

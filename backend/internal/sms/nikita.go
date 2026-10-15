@@ -62,11 +62,7 @@ func newNikitaSender(cfg NikitaConfig, client *http.Client) (*NikitaSender, erro
 	if client == nil {
 		return nil, errors.New("http client is required")
 	}
-	secureClient := *client
-	secureClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-	return &NikitaSender{config: cfg, client: &secureClient}, nil
+	return &NikitaSender{config: cfg, client: clientWithoutRedirects(client)}, nil
 }
 
 func (s *NikitaSender) SendLoginCode(ctx context.Context, phone, code string) error {
