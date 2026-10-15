@@ -230,6 +230,12 @@ Resources:
             Effect: Allow
             Action: s3:PutObject
             Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
+          - Sid: CheckDeletionLedgerWriteAccess
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/healthchecks/api-readiness.json"
 
   DeletionJournalReadPolicy:
     Type: AWS::IAM::ManagedPolicy

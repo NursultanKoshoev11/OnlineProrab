@@ -191,6 +191,8 @@ func TestLocalStoreRequiresExactObjectSize(t *testing.T) {
 func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 	var storedBody []byte
 	tombstoneRecorded := false
+	ledgerHealthcheckWritten := false
+	ledgerHealthcheckDeleted := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			if r.URL.Path != "/stroy-test" && r.URL.Path != "/stroy-deletion-ledger-test" {
@@ -200,6 +202,18 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 			if strings.TrimSuffix(r.URL.Path, "/") != "/stroy-deletion-ledger-test" {
 				t.Errorf("unexpected S3 deletion-ledger health-check path %q", r.URL.Path)
 			}
+		} else if r.Method == http.MethodPut && r.URL.Path == "/stroy-deletion-ledger-test/"+s3DeletionLedgerHealthcheckKey {
+			ledgerHealthcheckWritten = true
+			if got := r.Header.Get("Content-Type"); got != "application/json" {
+				t.Errorf("unexpected deletion-ledger health-check content type %q", got)
+			}
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Errorf("read deletion-ledger health-check body: %v", err)
+			}
+			if got := string(body); got != "{\"status\":\"ok\"}\n" {
+				t.Errorf("unexpected deletion-ledger health-check body %q", got)
+			}
 		} else if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/stroy-deletion-ledger-test/tombstones/") {
 			tombstoneRecorded = true
 			if got := r.Header.Get("Content-Type"); got != "application/json" {
@@ -208,7 +222,8 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 			if _, err := io.Copy(io.Discard, r.Body); err != nil {
 				t.Errorf("read deletion tombstone: %v", err)
 			}
-		} else if r.URL.Path != "/stroy-test/project/2026/receipt.pdf" {
+		} else if r.URL.Path != "/stroy-test/project/2026/receipt.pdf" &&
+			r.URL.Path != "/stroy-deletion-ledger-test/"+s3DeletionLedgerHealthcheckKey {
 			t.Errorf("unexpected S3 request path %q", r.URL.Path)
 		}
 		if r.Header.Get("Authorization") == "" {
@@ -237,6 +252,14 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 			w.Header().Set("Content-Type", "application/pdf")
 			_, _ = w.Write(storedBody)
 		case http.MethodDelete:
+			if r.URL.Path == "/stroy-deletion-ledger-test/"+s3DeletionLedgerHealthcheckKey {
+				if !ledgerHealthcheckWritten {
+					t.Error("S3 deletion-ledger health check was removed before being written")
+				}
+				ledgerHealthcheckDeleted = true
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 			if !tombstoneRecorded {
 				t.Error("S3 object deletion happened before its tombstone was recorded")
 			}
@@ -253,6 +276,9 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 	store := newTestS3Store(t, server)
 	if err := store.Check(context.Background()); err != nil {
 		t.Fatalf("S3 health check failed: %v", err)
+	}
+	if !ledgerHealthcheckWritten || !ledgerHealthcheckDeleted {
+		t.Fatalf("S3 health check must verify and clean the deletion-ledger canary: wrote=%t deleted=%t", ledgerHealthcheckWritten, ledgerHealthcheckDeleted)
 	}
 
 	content := []byte("private S3 object")
@@ -278,6 +304,36 @@ func TestS3StoreUsesPrivateBucketAndSupportsObjectOperations(t *testing.T) {
 	}
 	if err := store.Delete(context.Background(), key); err != nil {
 		t.Fatalf("delete S3 object: %v", err)
+	}
+}
+
+func TestS3StoreCheckFailsWhenDeletionLedgerWriteIsDenied(t *testing.T) {
+	ledgerHealthcheckPath := "/stroy-deletion-ledger-test/" + s3DeletionLedgerHealthcheckKey
+	ledgerWriteAttempted := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead && r.URL.Path == "/stroy-test":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodGet && r.URL.Query().Has("location") && strings.TrimSuffix(r.URL.Path, "/") == "/stroy-deletion-ledger-test":
+			_, _ = io.WriteString(w, `<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">us-east-1</LocationConstraint>`)
+		case r.Method == http.MethodPut && r.URL.Path == ledgerHealthcheckPath:
+			ledgerWriteAttempted = true
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, `<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>`)
+		default:
+			t.Errorf("unexpected S3 health-check request %s %s", r.Method, r.URL.String())
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	store := newTestS3Store(t, server)
+	err := store.Check(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "deletion ledger write access") {
+		t.Fatalf("expected a ledger-write permission error, got %v", err)
+	}
+	if !ledgerWriteAttempted {
+		t.Fatal("S3 readiness did not test deletion-ledger write access")
 	}
 }
 
