@@ -23,6 +23,7 @@
 - [ ] `cd mobile && flutter pub get`
 - [ ] `cd mobile && flutter analyze`
 - [ ] `cd mobile && flutter build apk --debug`
+- [ ] `cd mobile && flutter build ios --simulator --no-codesign`
 - [ ] Login screen opens
 - [ ] Projects screen opens
 - [ ] Project dashboard opens
@@ -30,6 +31,9 @@
 - [ ] Add daily report screen opens
 - [ ] Replace project cover from the edit screen
 - [ ] Complete the auth-to-project-to-expense flow against staging
+- [ ] Run Android and iOS release workflows with the correct store IDs and signing materials
+- [ ] Test signed AAB/IPA on store testing tracks before public rollout
+- [ ] Complete the App Store privacy details, privacy-policy URL, and support URL
 
 ## Production environment
 

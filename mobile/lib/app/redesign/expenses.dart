@@ -320,6 +320,33 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   }
 
   Future<void> _voiceSearch() async {
+    final mayProcessVoice = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Обработка голосового поиска'),
+        content: const Text(
+          'Аудио передаётся системному сервису распознавания речи '
+          '(на iOS — Apple; на Android — сервис, выбранный на устройстве). '
+          'Если нажать «Найти расходы», распознанный запрос и сведения о '
+          'расходах выбранного объекта (названия, описания, суммы, валюты, '
+          'поставщики и даты) сервер STROY отправит настроенному внешнему '
+          'AI-провайдеру, если он включён (например, Google Gemini, Groq или OpenRouter). '
+          'Не диктуйте пароли, коды и другие чувствительные данные.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Продолжить'),
+          ),
+        ],
+      ),
+    );
+    if (mayProcessVoice != true || !mounted) return;
+
     bool available;
     try {
       available = await widget.speechToText.initialize(
@@ -348,11 +375,40 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     _search.text = value.trim();
     _search.selection = TextSelection.collapsed(offset: _search.text.length);
     setState(() {});
-    await _runAiSearch(value.trim());
+    await _runAiSearch(value.trim(), processingConfirmed: true);
   }
 
-  Future<void> _runAiSearch(String query) async {
+  Future<void> _runAiSearch(
+    String query, {
+    bool processingConfirmed = false,
+  }) async {
     if (query.trim().isEmpty) return;
+    if (!processingConfirmed) {
+      final mayProcess = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('AI-поиск расходов'),
+          content: const Text(
+            'Сервер STROY передаст ваш запрос и сведения о расходах этого '
+            'объекта (названия, описания, суммы, валюты, поставщики и даты) '
+            'настроенному внешнему AI-провайдеру, если он включён '
+            '(например, Google Gemini, Groq или OpenRouter). Не вводите пароли, коды и другие '
+            'чувствительные данные.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Продолжить'),
+            ),
+          ],
+        ),
+      );
+      if (mayProcess != true || !mounted) return;
+    }
     setState(() {
       _aiLoading = true;
       _aiError = null;
