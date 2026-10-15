@@ -24,12 +24,13 @@ import (
 )
 
 const (
-	s3SinglePutMaximumBytes       int64 = 5_000_000_000
-	s3MultipartMinimumPartBytes   int64 = 5 * 1024 * 1024
-	s3MultipartDefaultPartBytes   int64 = 64 * 1024 * 1024
-	s3MultipartMaximumPartBytes   int64 = 5 * 1024 * 1024 * 1024
-	s3MultipartMaximumParts       int64 = 10_000
-	s3MultipartMaximumObjectBytes int64 = s3MultipartMaximumPartBytes * s3MultipartMaximumParts
+	s3SinglePutMaximumBytes        int64 = 5_000_000_000
+	s3MultipartMinimumPartBytes    int64 = 5 * 1024 * 1024
+	s3MultipartDefaultPartBytes    int64 = 64 * 1024 * 1024
+	s3MultipartMaximumPartBytes    int64 = 5 * 1024 * 1024 * 1024
+	s3MultipartMaximumParts        int64 = 10_000
+	s3MultipartMaximumObjectBytes  int64 = s3MultipartMaximumPartBytes * s3MultipartMaximumParts
+	s3DeletionLedgerHealthcheckKey       = "healthchecks/api-readiness.json"
 )
 
 type S3Options struct {
@@ -309,6 +310,24 @@ func (s *S3Store) Check(ctx context.Context) error {
 	_, err = s.client.GetBucketLocation(ctx, &s3.GetBucketLocationInput{Bucket: aws.String(s.deletionLedgerBucket)})
 	if err != nil {
 		return fmt.Errorf("check S3 deletion ledger availability: %w", err)
+	}
+	const probeBody = "{\"status\":\"ok\"}\n"
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.deletionLedgerBucket),
+		Key:           aws.String(s3DeletionLedgerHealthcheckKey),
+		Body:          strings.NewReader(probeBody),
+		ContentLength: aws.Int64(int64(len(probeBody))),
+		ContentType:   aws.String("application/json"),
+	})
+	if err != nil {
+		return fmt.Errorf("check S3 deletion ledger write access: %w", err)
+	}
+	_, err = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.deletionLedgerBucket),
+		Key:    aws.String(s3DeletionLedgerHealthcheckKey),
+	})
+	if err != nil {
+		return fmt.Errorf("clean S3 deletion ledger health check: %w", err)
 	}
 	return nil
 }

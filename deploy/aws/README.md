@@ -58,6 +58,11 @@ corresponding scoped policy to a dedicated IAM user and store its access key in
 the host's secret configuration. The template does not create credentials or
 attach permissions to an existing principal automatically.
 
+The API readiness check writes and removes a fixed canary object at
+`healthchecks/api-readiness.json` to verify deletion-ledger write access. The
+application policy permits cleanup only for that exact object, so it cannot
+delete account or file tombstones.
+
 Configure `S3_BUCKET`, `S3_DELETION_LEDGER_BUCKET`, `S3_BACKUP_BUCKET`, and
 `S3_REGION` from the stack and verify the API's `/ready` endpoint before
 migration. Run `backend/scripts/backup.sh` on a schedule with the backup writer
