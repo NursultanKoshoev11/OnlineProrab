@@ -12,6 +12,10 @@ import (
 )
 
 func TestSecurityHeadersAreApplied(t *testing.T) {
+	previousState := appState
+	appState.IsProductionLike = true
+	t.Cleanup(func() { appState = previousState })
+
 	handler := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -22,15 +26,33 @@ func TestSecurityHeadersAreApplied(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	checks := map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "DENY",
-		"Referrer-Policy":        "no-referrer",
-		"Cache-Control":          "no-store",
+		"X-Content-Type-Options":    "nosniff",
+		"X-Frame-Options":           "DENY",
+		"Referrer-Policy":           "no-referrer",
+		"Permissions-Policy":        "camera=(), microphone=(), geolocation=()",
+		"Cache-Control":             "no-store",
+		"Strict-Transport-Security": "max-age=31536000",
 	}
 	for header, expected := range checks {
 		if got := rec.Header().Get(header); got != expected {
 			t.Fatalf("expected %s=%q, got %q", header, expected, got)
 		}
+	}
+}
+
+func TestSecurityHeadersOmitHSTSInDevelopment(t *testing.T) {
+	previousState := appState
+	appState.IsProductionLike = false
+	t.Cleanup(func() { appState = previousState })
+
+	handler := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("expected no HSTS header in development, got %q", got)
 	}
 }
 
@@ -107,12 +129,38 @@ func TestRequestLoggerRecordsRecoveredPanicWithoutPanicValue(t *testing.T) {
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
 			t.Fatalf("expected JSON log record, got %q: %v", line, err)
 		}
-		if event["msg"] == "http_request" && event["status"] == float64(http.StatusInternalServerError) {
+		if event["msg"] == "http_request" &&
+			event["status"] == float64(http.StatusInternalServerError) &&
+			event["level"] == "ERROR" {
 			foundRequestEvent = true
 		}
 	}
 	if !foundRequestEvent {
 		t.Fatalf("expected a request event for the recovered 500 response, got %q", output.String())
+	}
+}
+
+func TestRequestLoggerUsesRoutePatternWithoutPathValues(t *testing.T) {
+	previousLogger := slog.Default()
+	var output bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/files/{fileID}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := withMiddleware(mux)
+	pathValue := "private-file-id-123"
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/files/"+pathValue, nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if strings.Contains(output.String(), pathValue) {
+		t.Fatalf("request path value must not appear in logs: %q", output.String())
+	}
+	if !strings.Contains(output.String(), `"route":"GET /api/v1/files/{fileID}"`) {
+		t.Fatalf("expected a parameter-free route pattern in logs, got %q", output.String())
 	}
 }
 

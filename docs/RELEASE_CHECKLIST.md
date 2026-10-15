@@ -68,4 +68,4 @@ Ship only when:
 ## Known gaps
 
 - Production uses private AWS S3 object storage; provision its buckets and IAM roles, migrate existing uploads, and complete a real S3 backup/restore drill before cutover.
-- External log collection, alerts, uptime monitoring, live SMS credentials, and staging/production runtime settings must be configured before public launch.
+- Configure CloudWatch API log collection and error alerts, independent uptime monitoring for `/health` and `/ready`, live SMS credentials, and staging/production runtime settings before public launch.

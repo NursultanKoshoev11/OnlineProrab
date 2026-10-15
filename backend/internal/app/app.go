@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -28,7 +27,8 @@ func Run() {
 	}
 	observability.Configure(cfg.Env)
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("invalid configuration: %v", err)
+		slog.Error("invalid_configuration", "error", err)
+		os.Exit(1)
 	}
 
 	var smsSender httpapi.SMSSender
@@ -41,7 +41,8 @@ func Run() {
 			MessagingServiceSID: cfg.TwilioMessagingServiceSID,
 		})
 		if err != nil {
-			log.Fatalf("failed to initialize SMS provider: %v", err)
+			slog.Error("sms_provider_initialization_failed", "provider", cfg.SMSProvider, "error", err)
+			os.Exit(1)
 		}
 		smsSender = sender
 	} else if cfg.SMSProvider == config.SMSProviderNikita {
@@ -53,12 +54,14 @@ func Run() {
 			TestMode: cfg.NikitaTestMode,
 		})
 		if err != nil {
-			log.Fatalf("failed to initialize SMS provider: %v", err)
+			slog.Error("sms_provider_initialization_failed", "provider", cfg.SMSProvider, "error", err)
+			os.Exit(1)
 		}
 		smsSender = sender
 	}
 	if cfg.IsProductionLike() && smsSender == nil && !cfg.ReviewOnlyMode {
-		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
+		slog.Error("sms_provider_missing")
+		os.Exit(1)
 	}
 
 	var fileStore storage.ObjectStore
@@ -73,7 +76,8 @@ func Run() {
 		fileStore, storageErr = storage.NewLocal(cfg.UploadDir)
 	}
 	if storageErr != nil {
-		log.Fatalf("failed to initialize file storage: %v", storageErr)
+		slog.Error("file_storage_initialization_failed", "error", storageErr)
+		os.Exit(1)
 	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -85,12 +89,17 @@ func Run() {
 	migrationCtx, migrationCancel := context.WithTimeout(rootCtx, 60*time.Second)
 	if err := db.ApplyMigrations(migrationCtx); err != nil {
 		migrationCancel()
-		log.Fatalf("failed to apply database migrations: %v", err)
+		slog.Error("database_migration_failed", "error", err)
+		os.Exit(1)
 	}
 	migrationCancel()
 
 	httpapi.SetState(cfg, db, smsSender, fileStore)
-	go storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
+	deletionWorkerDone := make(chan struct{})
+	go func() {
+		defer close(deletionWorkerDone)
+		storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
+	}()
 	authPrunerDone := make(chan struct{})
 	go func() {
 		defer close(authPrunerDone)
@@ -138,6 +147,7 @@ func Run() {
 		slog.Error("graceful_shutdown_failed", "error", err)
 		_ = server.Close()
 	}
+	<-deletionWorkerDone
 	<-authPrunerDone
 	slog.Info("api_stopped")
 }

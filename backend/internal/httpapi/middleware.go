@@ -95,6 +95,9 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		w.Header().Set("Cache-Control", "no-store")
+		if appState.IsProductionLike {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -173,10 +176,18 @@ func requestLogger(next http.Handler) http.Handler {
 		if status == 0 {
 			status = http.StatusOK
 		}
-		slog.Info("http_request",
+		level := slog.LevelInfo
+		if status >= http.StatusInternalServerError {
+			level = slog.LevelError
+		}
+		route := r.Pattern
+		if route == "" {
+			route = "unmatched"
+		}
+		slog.Log(r.Context(), level, "http_request",
 			"request_id", requestIDFromContext(r.Context()),
 			"method", r.Method,
-			"path", r.URL.Path,
+			"route", route,
 			"status", status,
 			"bytes", recorder.bytes,
 			"duration_ms", time.Since(start).Milliseconds(),
