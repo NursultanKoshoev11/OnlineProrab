@@ -18,6 +18,10 @@ The workflow validates the release inputs, runs analysis and tests, and saves
 the AAB as a GitHub Actions artifact. It does not submit the artifact to Google
 Play.
 
+Since August 31, 2026, Google Play requires new apps and app updates to target
+Android 16 (API 36) or higher. The Android Gradle configuration targets API 36,
+and CI checks that it does not fall below this policy minimum.
+
 ## iOS
 
 The `iOS simulator build` job runs on pull requests and pushes. It compiles the
