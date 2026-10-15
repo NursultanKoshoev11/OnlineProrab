@@ -229,6 +229,9 @@ jobs:
           flutter --version
           xcodebuild -version
 
+      - name: Verify App Store Connect SDK requirements
+        run: bash tool/validate_app_store_toolchain.sh
+
       - name: Test App Store profile validation
         run: python3 -m unittest discover -s tool -p 'test_validate_ios_profile.py'
 
@@ -285,6 +288,9 @@ jobs:
           channel: stable
           flutter-version: '3.44.4'
           cache: true
+
+      - name: Verify App Store Connect SDK requirements
+        run: bash tool/validate_app_store_toolchain.sh
 
       - name: Validate iOS release settings
         run: |
