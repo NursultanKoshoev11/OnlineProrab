@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f7f2" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="description"
+      content="Подтвердите номер телефона и запросите удаление аккаунта STROY."
+    />
+    <title>Удаление аккаунта — STROY</title>
+    <link rel="icon" type="image/png" href="../assets/stroy-favicon-user.png" />
+    <link rel="stylesheet" href="../styles.css?v=20260916-readable" />
+    <link rel="stylesheet" href="../account-deletion.css?v=20261013" />
+    <script src="../account-deletion.js?v=20261013" defer></script>
+  </head>
+  <body class="legal-page min-h-screen">
+    <header class="legal-topbar">
+      <div class="legal-container legal-nav">
+        <a class="brand" href="/" aria-label="STROY — на главную"
+          ><img
+            src="../assets/stroy_icon.png"
+            width="48"
+            height="48"
+            alt=""
+          /><span>STROY.</span></a
+        >
+        <nav aria-label="Навигация">
+          <a href="/">Главная</a>
+          <a href="/privacy/">Конфиденциальность</a>
+          <a href="/terms/">Условия</a>
+        </nav>
+        <a class="legal-nav-button" href="/support/"
+          >Поддержка <span>↗</span></a
+        >
+      </div>
+    </header>
+
+    <main class="legal-main">
+      <div class="legal-container account-delete-container">
+        <div class="legal-kicker">STROY / УПРАВЛЕНИЕ ДАННЫМИ</div>
+        <h1>Удаление аккаунта</h1>
+        <p class="legal-lead">
+          Подтвердите владение номером телефона, чтобы удалить аккаунт STROY и
+          связанные с ним данные.
+        </p>
+
+        <article class="legal-content account-delete-card">
+          <section class="legal-notice legal-notice-strong">
+            Удаление необратимо. Объекты, которыми владеет аккаунт, и их данные
+            будут удалены. В проектах других владельцев общие записи могут
+            сохраниться без связи с вашим аккаунтом. Загруженные вами файлы
+            также будут удалены.
+          </section>
+
+          <form id="phone-form" class="account-delete-form">
+            <label for="phone">Номер телефона аккаунта</label>
+            <div class="account-delete-input-row">
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel"
+                placeholder="+996 700 000 000"
+                required
+                maxlength="20"
+              />
+              <button id="request-code" type="submit">Отправить код</button>
+            </div>
+            <p class="account-delete-hint">
+              Мы отправим SMS-код, чтобы убедиться, что аккаунт принадлежит вам.
+            </p>
+          </form>
+
+          <form id="code-form" class="account-delete-form" hidden>
+            <label for="code">Код из SMS</label>
+            <div class="account-delete-input-row">
+              <input
+                id="code"
+                name="code"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                pattern="[0-9]{6}"
+                placeholder="000000"
+                required
+                maxlength="6"
+              />
+              <button id="verify-code" type="submit">Подтвердить номер</button>
+            </div>
+            <button id="resend-code" class="account-delete-link" type="button">
+              Отправить новый код
+            </button>
+          </form>
+
+          <section id="confirm-section" class="account-delete-confirm" hidden>
+            <h2>Подтвердите удаление</h2>
+            <p>
+              Номер <strong id="verified-phone"></strong> подтверждён. После
+              удаления войти в этот аккаунт и восстановить его данные будет
+              нельзя.
+            </p>
+            <label class="account-delete-check">
+              <input id="confirm-delete" type="checkbox" />
+              <span>Я понимаю, что удаление аккаунта необратимо.</span>
+            </label>
+            <button
+              id="delete-account"
+              class="account-delete-danger"
+              type="button"
+              disabled
+            >
+              Удалить аккаунт и данные
+            </button>
+          </section>
+
+          <p
+            id="account-delete-status"
+            class="account-delete-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+
+          <p class="account-delete-help">
+            Не можете получить SMS или удалить аккаунт? Напишите в
+            <a href="mailto:nursultankosoev2@gmail.com">поддержку STROY</a>.
+            Подробнее — в <a href="/privacy/">политике конфиденциальности</a>.
+          </p>
+        </article>
+      </div>
+    </main>
+
+    <footer class="legal-footer">
+      <div class="legal-container legal-footer-row">
+        <a class="brand" href="/" aria-label="STROY — на главную"
+          ><img
+            src="../assets/stroy_icon.png"
+            width="48"
+            height="48"
+            alt=""
+          /><span>STROY.</span></a
+        >
+        <div class="legal-footer-links">
+          <a href="/privacy/">Конфиденциальность</a>
+          <a href="/terms/">Условия</a>
+          <a href="/support/">Поддержка</a>
+        </div>
+        <span class="legal-copy">© 2026 STROY</span>
+      </div>
+    </footer>
+  </body>
+</html>
