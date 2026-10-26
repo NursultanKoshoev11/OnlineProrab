@@ -125,12 +125,21 @@ the current deployment used a different Compose project name. The default is
 `onlineprorab_uploads`; Docker must mount the same volume that currently holds
 the uploads before the migration command starts.
 
-The migration command refuses missing active source files, checks the database
-size, verifies each destination object's size and digest, and keeps the local
-volume unchanged. Large objects use sequential S3 multipart upload; one-pass requests use SigV4 `UNSIGNED-PAYLOAD`, so HTTPS-only bucket policies are required and the completed copy is SHA-256 verified on readback. After it reports success, start the API and test a real
-authenticated upload, download, and deletion in staging before production
-cutover. Use the same command with `-direction=s3-to-local` to rehydrate active
-objects into the mounted local volume before rolling back to a pre-S3 API image.
+The migration command refuses missing active source files, streams each object
+between stores, verifies the destination size and digest, and keeps the local
+volume unchanged. It does not buffer whole objects in memory or write migration
+copies to host temporary storage. It migrates historical files even when they
+exceed the current API upload limit. Large objects use sequential S3 multipart
+upload; one-pass requests use SigV4 `UNSIGNED-PAYLOAD`, so HTTPS-only bucket
+policies are required and the completed copy is SHA-256 verified on readback.
+The migration command requires AWS access to `S3_BUCKET` and the configured
+`S3_DELETION_LEDGER_BUCKET` name needed to initialize the S3 client. Its
+migration role needs object read/write access to the uploads bucket; it does
+not write deletion tombstones. After it reports success, start the API and test
+a real authenticated upload, download, and deletion in staging before
+production cutover. Use the same command with `-direction=s3-to-local` to
+rehydrate active objects into the mounted local volume before rolling back to a
+pre-S3 API image.
 Keep the volume and database backups until the S3 backup/restore test and rollback
 window have passed.
 
