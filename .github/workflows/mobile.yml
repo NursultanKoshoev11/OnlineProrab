@@ -304,24 +304,6 @@ jobs:
           [[ "$STROY_IOS_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]
           python3 tool/configure_ios_bundle_id.py "$STROY_IOS_BUNDLE_ID"
 
-      - name: Verify public privacy and account-deletion pages
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location --max-time 30 \
-            https://stroy.com.kg/privacy/ --output "$RUNNER_TEMP/stroy-privacy.html"
-          grep -Fq 'Политика конфиденциальности' "$RUNNER_TEMP/stroy-privacy.html"
-          grep -Fq 'Google Gemini' "$RUNNER_TEMP/stroy-privacy.html"
-          grep -Fq 'бессрочно храним в закрытом журнале' "$RUNNER_TEMP/stroy-privacy.html"
-          curl --fail --silent --show-error --location --max-time 30 \
-            https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
-          grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
-          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
-            https://api.stroy.com.kg/api/v1/account/deletion/verify)"
-          if [[ "$api_status" != '405' ]]; then
-            echo "Account-deletion API route returned HTTP $api_status; expected 405 for GET." >&2
-            exit 1
-          fi
-
       - name: Create temporary signing keychain
         env:
           STROY_IOS_CERTIFICATE_BASE64: ${{ secrets.STROY_IOS_CERTIFICATE_BASE64 }}
@@ -465,6 +447,38 @@ jobs:
           path: ${{ runner.temp }}/stroy-ipa/*.ipa
           if-no-files-found: error
           retention-days: 14
+
+      - name: Check live App Store privacy and account-deletion readiness
+        id: public_readiness
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/privacy/ --output "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Политика конфиденциальности' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Google Gemini' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'бессрочно храним в закрытом журнале' "$RUNNER_TEMP/stroy-privacy.html"
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
+          grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
+          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
+            https://api.stroy.com.kg/api/v1/account/deletion/verify)"
+          if [[ "$api_status" != '405' ]]; then
+            echo "Account-deletion API route returned HTTP $api_status; expected 405 for GET." >&2
+            exit 1
+          fi
+
+      - name: Report App Store submission readiness
+        if: steps.public_readiness.outcome == 'failure'
+        run: |
+          echo "::warning title=IPA generated, App Store submission blocked::The signed IPA is available, but the live privacy/account-deletion checks failed. Add in-app account deletion and make its completion path work before submitting for review."
+          {
+            echo '## Signed IPA generated; App Store submission is not ready'
+            echo
+            echo '- The IPA artifact is available for inspection or TestFlight.'
+            echo '- The live privacy/account-deletion checks failed. The current app also has no in-app account-deletion entry point.'
+            echo '- Do not submit this build for App Review until account deletion is available from inside the app and its completion path works.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove signing materials
         if: always()
