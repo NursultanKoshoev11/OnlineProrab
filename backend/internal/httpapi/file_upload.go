@@ -6,12 +6,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 const uploadMultipartOverhead int64 = 1 * 1024 * 1024
@@ -25,7 +28,7 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
 	}
-	if strings.TrimSpace(appState.UploadDir) == "" {
+	if appState.FileStore == nil {
 		Error(w, http.StatusServiceUnavailable, "file storage is not configured")
 		return
 	}
@@ -75,7 +78,7 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stored, err := storeUploadedFile(source, header, projectID, maxBytes)
+	stored, err := storeUploadedFile(ctx, appState.FileStore, source, projectID, maxBytes)
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -83,7 +86,9 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 	cleanup := true
 	defer func() {
 		if cleanup {
-			_ = os.Remove(stored.absolutePath)
+			if err := removeStoredFile(stored.relativePath); err != nil {
+				log.Printf("request_id=%s failed_to_remove_uncommitted_upload=%q error=%v", requestIDFromContext(r.Context()), stored.relativePath, err)
+			}
 		}
 	}()
 	if kind == "project_cover" && !isAllowedProjectCoverType(stored.contentType) {
@@ -126,13 +131,15 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 type storedUpload struct {
-	absolutePath string
 	relativePath string
 	contentType  string
 	sizeBytes    int64
 }
 
-func storeUploadedFile(source multipart.File, header *multipart.FileHeader, projectID string, maxBytes int64) (storedUpload, error) {
+func storeUploadedFile(ctx context.Context, store storage.ObjectStore, source multipart.File, projectID string, maxBytes int64) (storedUpload, error) {
+	if store == nil {
+		return storedUpload{}, fmt.Errorf("file storage is not configured")
+	}
 	buffer := make([]byte, 512)
 	readCount, readErr := io.ReadFull(source, buffer)
 	if readErr != nil && readErr != io.ErrUnexpectedEOF && readErr != io.EOF {
@@ -155,46 +162,50 @@ func storeUploadedFile(source multipart.File, header *multipart.FileHeader, proj
 
 	datePath := time.Now().UTC().Format("2006/01/02")
 	relativePath := filepath.ToSlash(filepath.Join(projectID, datePath, randomName+extension))
-	absolutePath := filepath.Join(appState.UploadDir, filepath.FromSlash(relativePath))
-	if err := os.MkdirAll(filepath.Dir(absolutePath), 0o750); err != nil {
-		return storedUpload{}, fmt.Errorf("failed to prepare file storage")
-	}
-
-	destination, err := os.OpenFile(absolutePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
+	destination, err := os.CreateTemp("", ".stroy-upload-*")
 	if err != nil {
-		return storedUpload{}, fmt.Errorf("failed to create stored file")
+		return storedUpload{}, fmt.Errorf("failed to prepare temporary file")
 	}
+	temporaryPath := destination.Name()
+	defer os.Remove(temporaryPath)
 	defer destination.Close()
 
 	written, err := destination.Write(buffer)
 	if err != nil {
-		_ = os.Remove(absolutePath)
-		return storedUpload{}, fmt.Errorf("failed to store file")
+		return storedUpload{}, fmt.Errorf("failed to prepare upload")
 	}
 
 	remainingLimit := maxBytes - int64(written)
 	if remainingLimit < 0 {
-		_ = os.Remove(absolutePath)
 		return storedUpload{}, fmt.Errorf("file is too large")
 	}
 	copied, err := io.Copy(destination, io.LimitReader(source, remainingLimit+1))
 	if err != nil {
-		_ = os.Remove(absolutePath)
-		return storedUpload{}, fmt.Errorf("failed to store file")
+		return storedUpload{}, fmt.Errorf("failed to read upload")
 	}
 	totalSize := int64(written) + copied
 	if totalSize > maxBytes {
-		_ = os.Remove(absolutePath)
 		return storedUpload{}, fmt.Errorf("file is too large")
 	}
 	if err := destination.Sync(); err != nil {
-		_ = os.Remove(absolutePath)
-		return storedUpload{}, fmt.Errorf("failed to finalize file")
+		return storedUpload{}, fmt.Errorf("failed to finalize upload")
+	}
+	if _, err := destination.Seek(0, io.SeekStart); err != nil {
+		return storedUpload{}, fmt.Errorf("failed to rewind upload")
+	}
+	if err := store.Put(ctx, relativePath, destination, totalSize, contentType); err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if cleanupErr := store.Delete(cleanupCtx, relativePath); cleanupErr != nil {
+			if queueErr := queueStorageDeletion(relativePath); queueErr != nil {
+				log.Printf("failed_to_queue_partial_upload_removal=%q error=%v", relativePath, queueErr)
+			}
+			return storedUpload{}, fmt.Errorf("failed to store file and clean up partial object: %w (cleanup: %v)", err, cleanupErr)
+		}
+		return storedUpload{}, fmt.Errorf("failed to store file")
 	}
 
-	_ = header
 	return storedUpload{
-		absolutePath: absolutePath,
 		relativePath: relativePath,
 		contentType:  contentType,
 		sizeBytes:    totalSize,

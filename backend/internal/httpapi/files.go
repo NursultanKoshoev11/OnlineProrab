@@ -3,12 +3,15 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type FileDTO struct {
@@ -221,6 +224,10 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 		Error(w, http.StatusNotFound, "file not found")
 		return
 	}
+	if err := enqueueStorageDeletion(ctx, tx, storagePath); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to queue file removal")
+		return
+	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE cost_items
 		SET receipt_file_id = NULL, updated_at = now()
@@ -241,7 +248,7 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 		return
 	}
 
-	if err := removeStoredFile(storagePath); err != nil && !os.IsNotExist(err) {
+	if err := removeStoredFile(storagePath); err != nil {
 		log.Printf("request_id=%s failed_to_remove_file=%q error=%v", requestIDFromContext(r.Context()), storagePath, err)
 	}
 	publishProjectEvent(projectID, "file", fileID, "deleted")
@@ -249,7 +256,13 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 }
 
 func archivePreviousProjectCovers(ctx context.Context, projectID, currentFileID string) {
-	rows, err := appState.DB.Pool.Query(ctx, `
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		return
+	}
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `
 		UPDATE files
 		SET deleted_at = now()
 		WHERE project_id = $1
@@ -263,29 +276,83 @@ func archivePreviousProjectCovers(ctx context.Context, projectID, currentFileID 
 		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
 		return
 	}
-	defer rows.Close()
 
+	var storagePaths []string
 	for rows.Next() {
 		var storagePath string
 		if err := rows.Scan(&storagePath); err != nil {
+			rows.Close()
 			log.Printf("request_id=%s failed_to_read_archived_cover project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
-			continue
+			return
 		}
-		if err := removeStoredFile(storagePath); err != nil && !os.IsNotExist(err) {
-			log.Printf("request_id=%s failed_to_remove_previous_cover=%q error=%v", requestIDFromContext(ctx), storagePath, err)
-		}
+		storagePaths = append(storagePaths, storagePath)
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		return
+	}
+	rows.Close()
+	for _, storagePath := range storagePaths {
+		if err := enqueueStorageDeletion(ctx, tx, storagePath); err != nil {
+			log.Printf("request_id=%s failed_to_queue_archived_cover=%q error=%v", requestIDFromContext(ctx), storagePath, err)
+			return
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("request_id=%s failed_to_commit_archived_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		return
 	}
 }
 
 func removeStoredFile(storagePath string) error {
-	absolutePath, ok := resolveStoredFilePath(appState.UploadDir, storagePath)
-	if !ok {
-		return os.ErrPermission
+	if appState.FileStore == nil {
+		return errors.New("file storage is not configured")
 	}
-	return os.Remove(absolutePath)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := appState.FileStore.Delete(ctx, storagePath)
+	if err != nil {
+		if queueErr := queueStorageDeletion(storagePath); queueErr != nil {
+			return fmt.Errorf("delete stored file: %w (queue retry: %v)", err, queueErr)
+		}
+		return err
+	}
+	if appState.DB != nil && appState.DB.Pool != nil {
+		_, markErr := appState.DB.Pool.Exec(ctx, `
+			DELETE FROM file_storage_deletions
+			WHERE storage_path = $1
+		`, storagePath)
+		if markErr != nil {
+			log.Printf("file_storage_delete_succeeded_but_outbox_update_failed storage_path=%q error=%v", storagePath, markErr)
+		}
+	}
+	return nil
+}
+
+type storageDeletionExecutor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+func enqueueStorageDeletion(ctx context.Context, executor storageDeletionExecutor, storagePath string) error {
+	if !isSafeStoragePath(storagePath) {
+		return fmt.Errorf("unsafe storage path")
+	}
+	_, err := executor.Exec(ctx, `
+		INSERT INTO file_storage_deletions (storage_path)
+		VALUES ($1)
+		ON CONFLICT (storage_path) DO NOTHING
+	`, storagePath)
+	return err
+}
+
+func queueStorageDeletion(storagePath string) error {
+	if appState.DB == nil || appState.DB.Pool == nil {
+		return fmt.Errorf("database is not available to queue object removal")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return enqueueStorageDeletion(ctx, appState.DB.Pool, storagePath)
 }
 
 func resolveStoredFilePath(root, storagePath string) (string, bool) {
