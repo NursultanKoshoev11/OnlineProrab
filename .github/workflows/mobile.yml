@@ -289,7 +289,7 @@ jobs:
       run:
         working-directory: mobile
     env:
-      STROY_IOS_BUNDLE_ID: ${{ vars.STROY_IOS_BUNDLE_ID }}
+      STROY_IOS_BUNDLE_ID: ${{ vars.STROY_IOS_BUNDLE_ID || 'com.koshoev.stroy' }}
       STROY_IOS_TEAM_ID: ${{ vars.STROY_IOS_TEAM_ID }}
       STROY_KEYCHAIN_PATH: ${{ github.workspace }}/stroy-ios-signing.keychain-db
 
