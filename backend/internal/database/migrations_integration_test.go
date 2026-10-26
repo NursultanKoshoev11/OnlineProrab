@@ -219,6 +219,109 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 	}
 }
 
+func TestApplyMigrationsUpgradesLegacySchemas(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL is not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	db, err := Open(ctx, url)
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+
+	for _, legacyHistory := range []bool{false, true} {
+		name := "unversioned"
+		if legacyHistory {
+			name = "legacy version history"
+		}
+		t.Run(name, func(t *testing.T) {
+			if err := resetMigrationTestDatabase(ctx, db); err != nil {
+				t.Fatalf("reset test database: %v", err)
+			}
+			if _, err := db.Pool.Exec(ctx, coreSchemaSQL); err != nil {
+				t.Fatalf("create pre-migration schema: %v", err)
+			}
+			if legacyHistory {
+				if _, err := db.Pool.Exec(ctx, `
+					CREATE TABLE schema_migrations (
+						version INTEGER PRIMARY KEY,
+						name TEXT NOT NULL,
+						applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+					)
+				`); err != nil {
+					t.Fatalf("create legacy migration history: %v", err)
+				}
+				for version, migrationName := range map[int]string{1: "initial_schema", 2: legacyProductionConstraintsMigrationName} {
+					if _, err := db.Pool.Exec(ctx, `INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`, version, migrationName); err != nil {
+						t.Fatalf("record legacy migration %d: %v", version, err)
+					}
+				}
+			}
+
+			var userID, projectID string
+			if err := db.Pool.QueryRow(ctx, `
+				INSERT INTO users (phone, name)
+				VALUES ('+996555000008', 'Legacy migration test')
+				RETURNING id::text
+			`).Scan(&userID); err != nil {
+				t.Fatalf("insert legacy user: %v", err)
+			}
+			if err := db.Pool.QueryRow(ctx, `
+				INSERT INTO projects (owner_id, name)
+				VALUES ($1, 'Legacy project')
+				RETURNING id::text
+			`, userID).Scan(&projectID); err != nil {
+				t.Fatalf("insert legacy project: %v", err)
+			}
+
+			if err := db.ApplyMigrations(ctx); err != nil {
+				t.Fatalf("upgrade legacy schema: %v", err)
+			}
+			if err := db.ApplyMigrations(ctx); err != nil {
+				t.Fatalf("reapply migrations to upgraded legacy schema: %v", err)
+			}
+
+			for _, table := range []string{"projects", "cost_items", "daily_reports", "tasks", "files"} {
+				var exists bool
+				if err := db.Pool.QueryRow(ctx, `
+					SELECT EXISTS (
+						SELECT 1 FROM information_schema.columns
+						WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'deleted_at'
+					)
+				`, table).Scan(&exists); err != nil {
+					t.Fatalf("check %s.deleted_at: %v", table, err)
+				}
+				if !exists {
+					t.Fatalf("expected %s.deleted_at after legacy upgrade", table)
+				}
+			}
+
+			var preservedProject string
+			if err := db.Pool.QueryRow(ctx, `SELECT name FROM projects WHERE id = $1`, projectID).Scan(&preservedProject); err != nil {
+				t.Fatalf("read preserved legacy project: %v", err)
+			}
+			if preservedProject != "Legacy project" {
+				t.Fatalf("legacy project data changed during upgrade: %q", preservedProject)
+			}
+
+			if legacyHistory {
+				var migrationName string
+				if err := db.Pool.QueryRow(ctx, `SELECT name FROM schema_migrations WHERE version = 2`).Scan(&migrationName); err != nil {
+					t.Fatalf("read reconciled legacy migration: %v", err)
+				}
+				if migrationName != "000002_harden_existing_schema.up.sql" {
+					t.Fatalf("expected legacy version 2 to be reconciled, got %q", migrationName)
+				}
+			}
+		})
+	}
+}
+
 type migrationTestObjectStore struct {
 	deleted chan string
 	events  chan string

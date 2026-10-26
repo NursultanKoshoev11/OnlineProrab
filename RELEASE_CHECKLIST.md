@@ -1,6 +1,10 @@
 # OnlineProrab Release Checklist
 
-## Backend readiness
+Use the [detailed release checklist](docs/RELEASE_CHECKLIST.md) for backend, Android, and iOS checks. Use the [backend production runbook](backend/PRODUCTION.md) for environment configuration, AWS S3 migration, encrypted backup/restore, account deletion, and rollback.
+
+Do not release based on green CI alone. The staging auth-to-project flow, real-device Android and iOS checks, AWS storage migration, and a real PostgreSQL/S3 restore drill must pass before public launch. Configure live SMS credentials, external log collection, alerts, uptime monitoring, HTTPS, and the SSH website deployment secrets as described in the runbooks.
+
+## Backend smoke test
 
 - [ ] `cd backend && go mod tidy`
 - [ ] `cd backend && go test ./...`
@@ -23,6 +27,7 @@
 - [ ] `cd mobile && flutter pub get`
 - [ ] `cd mobile && flutter analyze`
 - [ ] `cd mobile && flutter build apk --debug`
+- [ ] `cd mobile && flutter build ios --simulator --no-codesign`
 - [ ] Login screen opens
 - [ ] Projects screen opens
 - [ ] Project dashboard opens
@@ -30,6 +35,9 @@
 - [ ] Add daily report screen opens
 - [ ] Replace project cover from the edit screen
 - [ ] Complete the auth-to-project-to-expense flow against staging
+- [ ] Run Android and iOS release workflows with the correct store IDs and signing materials
+- [ ] Test signed AAB/IPA on store testing tracks before public rollout
+- [ ] Complete the App Store privacy details, privacy-policy URL, and support URL
 
 ## Production environment
 
