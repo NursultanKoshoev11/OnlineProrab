@@ -145,6 +145,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify Google Play target API requirement
+        run: python3 tool/validate_android_target_sdk.py --minimum 36
+
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -163,7 +166,6 @@ jobs:
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test
-        continue-on-error: true
 
       - name: Analyze
         run: flutter analyze
