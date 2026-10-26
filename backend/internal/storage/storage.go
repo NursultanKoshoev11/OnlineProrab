@@ -14,6 +14,12 @@ type ObjectStore interface {
 	Delete(ctx context.Context, key string) error
 }
 
+// StreamingObjectStore accepts one-pass reads so large objects can be copied
+// without buffering their contents or writing plaintext migration scratch files.
+type StreamingObjectStore interface {
+	PutStream(ctx context.Context, key string, source io.Reader, size int64, contentType string) error
+}
+
 // HealthChecker reports whether the object store can currently serve requests.
 type HealthChecker interface {
 	Check(ctx context.Context) error
