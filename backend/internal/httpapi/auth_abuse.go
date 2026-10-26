@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -177,7 +177,7 @@ func completeAuthAttempt(attemptID int64, succeeded bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if _, err := appState.DB.Pool.Exec(ctx, `UPDATE auth_attempts SET succeeded = $2 WHERE id = $1`, attemptID, succeeded); err != nil {
-		log.Printf("auth abuse: failed to record SMS attempt result: %v", err)
+		slog.Error("sms_attempt_result_record_failed", "error", err)
 	}
 }
 
@@ -232,7 +232,7 @@ func pruneAuthHistoryIfDueContext(parent context.Context) {
 	authAttemptPruneMu.Unlock()
 
 	if err != nil {
-		log.Printf("auth abuse: failed to prune expired login records: %v", err)
+		slog.Error("auth_history_prune_failed", "error", err)
 	}
 }
 

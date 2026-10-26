@@ -11,6 +11,9 @@ on:
       - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
       - 'deploy/aws/onlineprorab-storage.yaml'
+      - 'deploy/systemd/onlineprorab-backup.service'
+      - 'deploy/systemd/onlineprorab-backup.timer'
+      - 'deploy/systemd/backup.env.example'
       - '.github/workflows/backup-restore.yml'
   pull_request:
     paths:
@@ -20,6 +23,9 @@ on:
       - 'backend/scripts/test_apply_deletion_tombstones.py'
       - 'backend/scripts/safe-path.sh'
       - 'deploy/aws/onlineprorab-storage.yaml'
+      - 'deploy/systemd/onlineprorab-backup.service'
+      - 'deploy/systemd/onlineprorab-backup.timer'
+      - 'deploy/systemd/backup.env.example'
       - '.github/workflows/backup-restore.yml'
 
 permissions:
@@ -52,6 +58,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Validate systemd backup units
+        run: systemd-analyze verify ../deploy/systemd/onlineprorab-backup.service ../deploy/systemd/onlineprorab-backup.timer
+
+      - name: Check shell syntax
+        run: bash -n deploy-remote.sh scripts/backup.sh scripts/safe-path.sh
 
       - name: Install PostgreSQL client
         run: |
@@ -148,6 +160,32 @@ jobs:
           cat > "$RUNNER_TEMP/fake-aws-bin/aws" <<'SH'
           #!/bin/sh
           set -eu
+          if [ "$#" -eq 8 ] && [ "$1" = "--region" ] && [ "$3" = "cloudwatch" ] && [ "$4" = "put-metric-data" ]; then
+            if [ "$5" != "--namespace" ] || [ "$6" != "OnlineProrab/Backups/production" ] || [ "$7" != "--metric-data" ]; then
+              echo "backup heartbeat must use the configured production namespace" >&2
+              exit 2
+            fi
+            if [ "${FAKE_CLOUDWATCH_FAILURE:-0}" = "1" ]; then
+              echo "simulated CloudWatch failure" >&2
+              exit 1
+            fi
+            python3 - "$8" "$FAKE_CLOUDWATCH_METRIC_FILE" <<'PY'
+          import json
+          import sys
+
+          metric = json.loads(sys.argv[1])
+          if (
+              metric.get("MetricName") != "BackupSucceeded"
+              or metric.get("Dimensions") != [{"Name": "Environment", "Value": "production"}]
+              or metric.get("Value") != 1
+              or metric.get("Unit") != "Count"
+          ):
+              raise SystemExit("backup heartbeat metric did not match the production contract")
+          with open(sys.argv[2], "a", encoding="utf-8") as output:
+              output.write(json.dumps(metric, sort_keys=True) + "\n")
+          PY
+            exit 0
+          fi
           if [ "$#" -eq 10 ] && [ "$1" = "--region" ] && [ "$3" = "s3api" ] && [ "$4" = "delete-objects" ]; then
             if [ "$5" != "--bucket" ] || [ "$6" != "$S3_BUCKET" ] || [ "$7" != "--delete" ] || [ "$9" != "--output" ] || [ "${10}" != "json" ]; then
               echo "restore must delete tombstoned keys from the exact target bucket" >&2
@@ -255,6 +293,8 @@ jobs:
           export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
           export BACKUP_AGE_RECIPIENTS_FILE="$RUNNER_TEMP/backup-age-recipients.txt"
           export FAKE_S3_ARCHIVE_DIR="$RUNNER_TEMP/fake-s3-archive"
+          export BACKUP_METRIC_NAMESPACE=OnlineProrab/Backups/production
+          export FAKE_CLOUDWATCH_METRIC_FILE="$RUNNER_TEMP/cloudwatch-metrics.jsonl"
           export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger S3_BACKUP_BUCKET=onlineprorab-ci-backups
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           CREATE TABLE s3_backup_probe (id integer PRIMARY KEY, value text NOT NULL);
@@ -292,6 +332,13 @@ jobs:
             ('project/nested/deleted-after-snapshot.bin', NULL),
             ('project/nested/deleted-account-file.bin', '7cbcf034-8122-4d2d-92fd-f704dcdf8752');
           SQL
+          if env -u BACKUP_METRIC_NAMESPACE \
+            BACKUP_DIR="$RUNNER_TEMP/onlineprorab-s3-missing-metric-config" \
+            UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" \
+            sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "production S3 backup unexpectedly accepted a missing heartbeat namespace" >&2
+            exit 1
+          fi
           BACKUP_DIR="$RUNNER_TEMP/onlineprorab-s3-backups" \
           UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" \
           RETENTION_DAYS=14 \
@@ -303,6 +350,15 @@ jobs:
           test -s "$archive_dir/MANIFEST"
           test ! -e "$archive_dir/database.dump"
           test ! -e "$archive_dir/uploads.tar.gz"
+          test "$(wc -l < "$FAKE_CLOUDWATCH_METRIC_FILE")" -eq 1
+          if FAKE_CLOUDWATCH_FAILURE=1 \
+            BACKUP_DIR="$RUNNER_TEMP/onlineprorab-s3-metric-failure" \
+            UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" \
+            RETENTION_DAYS=14 sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "S3 backup unexpectedly succeeded without its CloudWatch heartbeat" >&2
+            exit 1
+          fi
+          test "$(wc -l < "$FAKE_CLOUDWATCH_METRIC_FILE")" -eq 1
 
       - name: Destroy S3-backed source data
         run: |

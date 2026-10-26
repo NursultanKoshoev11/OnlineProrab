@@ -23,6 +23,20 @@ func TestNewHandlerUsesJSONOutsideDevelopment(t *testing.T) {
 	}
 }
 
+func TestNewHandlerPreservesErrorSeverityAndFields(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(NewHandler("production", &output))
+	logger.Error("storage_deletion_failed", "bucket", "deletion-ledger", "error", "access denied")
+
+	var record map[string]any
+	if err := json.Unmarshal(output.Bytes(), &record); err != nil {
+		t.Fatalf("expected valid JSON log record, got %q: %v", output.String(), err)
+	}
+	if record["level"] != "ERROR" || record["msg"] != "storage_deletion_failed" || record["bucket"] != "deletion-ledger" {
+		t.Fatalf("unexpected structured error log record: %#v", record)
+	}
+}
+
 func TestNewHandlerKeepsDevelopmentLogsReadable(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(NewHandler("development", &output))

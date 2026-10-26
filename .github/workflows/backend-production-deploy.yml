@@ -1,0 +1,204 @@
+name: Backend Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production_deploy:
+        description: Confirm deployment of the current main revision to the production API
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: production-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_production_deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production-api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: onlineprorab_test
+          POSTGRES_USER: onlineprorab
+          POSTGRES_PASSWORD: onlineprorab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U onlineprorab -d onlineprorab_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DEPLOY_SHA: ${{ github.sha }}
+      DEPLOY_HOST: ${{ vars.API_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.API_DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
+      COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
+      API_STORAGE_CUTOVER_COMPLETE: ${{ vars.API_STORAGE_CUTOVER_COMPLETE }}
+      TEST_DATABASE_URL: postgres://onlineprorab:onlineprorab@127.0.0.1:5432/onlineprorab_test?sslmode=disable
+      APP_ENV: development
+      DATABASE_URL: postgres://onlineprorab:onlineprorab@127.0.0.1:5432/onlineprorab_test?sslmode=disable
+      JWT_SECRET: ci-only-secret
+      ACCESS_TOKEN_TTL_MINUTES: 15
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      MAX_UPLOAD_MB: 10
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out the selected main revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify current main and deployment settings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$API_STORAGE_CUTOVER_COMPLETE" == "true" ]]
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$DEPLOY_PATH" != "/" && "$DEPLOY_PATH" != */ ]]
+          [[ "$DEPLOY_PATH" != *"//"* && "$DEPLOY_PATH" != *"/./"* && "$DEPLOY_PATH" != */. ]]
+          [[ "$DEPLOY_PATH" != *"/../"* && "$DEPLOY_PATH" != */.. ]]
+          [[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]]
+          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          if [[ "$DEPLOY_SHA" != "$current_main_sha" ]]; then
+            echo "Refusing stale revision $DEPLOY_SHA; current main is $current_main_sha." >&2
+            exit 1
+          fi
+          echo "Deploying current main revision $DEPLOY_SHA." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Download dependencies
+        working-directory: backend
+        run: go mod download
+
+      - name: Verify module metadata
+        working-directory: backend
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Verify formatting
+        working-directory: backend
+        run: test -z "$(gofmt -l .)"
+
+      - name: Run backend vet and race tests
+        working-directory: backend
+        run: |
+          go vet ./...
+          go test -race ./...
+
+      - name: Validate production Compose configuration
+        env:
+          API_IMAGE: stroy-api:production-config-check
+          DATABASE_URL: postgres://onlineprorab:ci-only@db.example.invalid:5432/onlineprorab?sslmode=verify-full
+          JWT_SECRET: ci-only-secret
+          CORS_ALLOWED_ORIGINS: https://stroy.com.kg
+          TRUSTED_PROXY_CIDRS: 127.0.0.1/32
+          S3_REGION: us-east-1
+          S3_BUCKET: onlineprorab-ci-uploads
+          S3_DELETION_LEDGER_BUCKET: onlineprorab-ci-deletions
+          API_LOG_GROUP: /onlineprorab/production/api
+          SMS_PROVIDER: twilio
+        run: docker compose -f backend/docker-compose.prod.yml config --quiet
+
+      - name: Build the revision-tagged production image
+        run: |
+          docker build --pull \
+            --label "org.opencontainers.image.revision=$DEPLOY_SHA" \
+            --tag "stroy-api:$DEPLOY_SHA" \
+            --file backend/Dockerfile backend
+          docker run --rm --entrypoint /bin/sh "stroy-api:$DEPLOY_SHA" -c 'test -x /app/storage-migrate'
+          docker save "stroy-api:$DEPLOY_SHA" | gzip -1 > "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.image.tar.gz"
+
+      - name: Install SSH credentials
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.API_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.API_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/api_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/api_known_hosts"
+          chmod 600 "$HOME/.ssh/api_deploy" "$HOME/.ssh/api_known_hosts"
+
+      - name: Transfer the image and matching Compose file
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          compose_file="$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml"
+          cp backend/docker-compose.prod.yml "$compose_file"
+          scp "${ssh_options[@]}" \
+            "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.image.tar.gz" \
+            "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml" \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
+          scp "${ssh_options[@]}" \
+            backend/scripts/backup.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/stroy-api-$DEPLOY_SHA.backup.sh"
+          scp "${ssh_options[@]}" \
+            backend/scripts/safe-path.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/stroy-api-$DEPLOY_SHA.safe-path.sh"
+
+      - name: Recheck main immediately before deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current_main_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if [[ "$DEPLOY_SHA" != "$current_main_sha" ]]; then
+            echo "Refusing stale revision $DEPLOY_SHA; current main is $current_main_sha." >&2
+            exit 1
+          fi
+      - name: Deploy the API and wait for readiness
+        id: deploy
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q %q' deploy "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
+
+      - name: Verify the public account-deletion API route
+        id: public-api
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --location --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --output /dev/null --write-out '%{http_code}' https://api.stroy.com.kg/api/v1/account/deletion/verify)"
+          if [[ "$status" != "405" ]]; then
+            echo "Account-deletion API route returned HTTP $status; expected 405 for GET." >&2
+            exit 1
+          fi
+          echo "Public API route probe returned the expected 405 for GET." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Roll back after failed public verification
+        if: failure() && steps.deploy.outcome == 'success'
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q %q' rollback "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/api_deploy" "$HOME/.ssh/api_known_hosts"

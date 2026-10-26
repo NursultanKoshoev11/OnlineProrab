@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -249,7 +249,7 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 	}
 
 	if err := removeStoredFile(storagePath); err != nil {
-		log.Printf("request_id=%s failed_to_remove_file=%q error=%v", requestIDFromContext(r.Context()), storagePath, err)
+		slog.Error("stored_file_removal_failed", "request_id", requestIDFromContext(r.Context()), "error", err)
 	}
 	publishProjectEvent(projectID, "file", fileID, "deleted")
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
@@ -258,7 +258,7 @@ func deleteFileMetadata(w http.ResponseWriter, r *http.Request, fileID string) {
 func archivePreviousProjectCovers(ctx context.Context, projectID, currentFileID string) {
 	tx, err := appState.DB.Pool.Begin(ctx)
 	if err != nil {
-		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		slog.Error("previous_project_covers_archive_failed", "request_id", requestIDFromContext(ctx), "project_id", projectID, "error", err)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -273,7 +273,7 @@ func archivePreviousProjectCovers(ctx context.Context, projectID, currentFileID 
 		RETURNING storage_path
 	`, projectID, currentFileID)
 	if err != nil {
-		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		slog.Error("previous_project_covers_archive_failed", "request_id", requestIDFromContext(ctx), "project_id", projectID, "error", err)
 		return
 	}
 
@@ -282,25 +282,25 @@ func archivePreviousProjectCovers(ctx context.Context, projectID, currentFileID 
 		var storagePath string
 		if err := rows.Scan(&storagePath); err != nil {
 			rows.Close()
-			log.Printf("request_id=%s failed_to_read_archived_cover project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+			slog.Error("previous_project_cover_read_failed", "request_id", requestIDFromContext(ctx), "project_id", projectID, "error", err)
 			return
 		}
 		storagePaths = append(storagePaths, storagePath)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		log.Printf("request_id=%s failed_to_archive_previous_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		slog.Error("previous_project_covers_archive_failed", "request_id", requestIDFromContext(ctx), "project_id", projectID, "error", err)
 		return
 	}
 	rows.Close()
 	for _, storagePath := range storagePaths {
 		if err := enqueueStorageDeletion(ctx, tx, storagePath); err != nil {
-			log.Printf("request_id=%s failed_to_queue_archived_cover=%q error=%v", requestIDFromContext(ctx), storagePath, err)
+			slog.Error("previous_project_cover_deletion_queue_failed", "request_id", requestIDFromContext(ctx), "error", err)
 			return
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		log.Printf("request_id=%s failed_to_commit_archived_covers project_id=%q error=%v", requestIDFromContext(ctx), projectID, err)
+		slog.Error("previous_project_covers_archive_commit_failed", "request_id", requestIDFromContext(ctx), "project_id", projectID, "error", err)
 		return
 	}
 }
@@ -324,7 +324,7 @@ func removeStoredFile(storagePath string) error {
 			WHERE storage_path = $1
 		`, storagePath)
 		if markErr != nil {
-			log.Printf("file_storage_delete_succeeded_but_outbox_update_failed storage_path=%q error=%v", storagePath, markErr)
+			slog.Error("file_storage_deleted_outbox_update_failed", "error", markErr)
 		}
 	}
 	return nil

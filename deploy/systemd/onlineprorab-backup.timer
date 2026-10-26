@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily encrypted OnlineProrab backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=onlineprorab-backup.service
+
+[Install]
+WantedBy=timers.target

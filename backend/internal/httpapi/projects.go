@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -354,7 +354,7 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if cleanup {
 			if err := removeStoredFile(stored.relativePath); err != nil {
-				log.Printf("request_id=%s failed_to_remove_uncommitted_project_cover=%q error=%v", requestIDFromContext(r.Context()), stored.relativePath, err)
+				slog.Error("uncommitted_project_cover_cleanup_failed", "request_id", requestIDFromContext(r.Context()), "error", err)
 			}
 		}
 	}()
