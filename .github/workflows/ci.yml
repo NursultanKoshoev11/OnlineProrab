@@ -175,3 +175,147 @@ jobs:
 
       - name: Build debug APK
         run: flutter build apk --debug --dart-define=API_BASE_URL=http://127.0.0.1:8080
+
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit website build dependencies
+        run: npm audit --audit-level=high
+
+      - name: Test account deletion flow
+        run: npm test
+
+      - name: Check formatting and JavaScript syntax
+        run: npm run check
+
+      - name: Build website assets
+        run: npm run build
+
+      - name: Check deployment script syntax
+        run: bash -n deploy-remote.sh
+
+      - name: Test deployment path, archive, and rollback guards
+        run: bash deploy-remote.test.sh
+
+      - name: Verify Compose logging configuration
+        run: |
+          docker compose config --format json | python3 -c 'import json,sys; service=json.load(sys.stdin)["services"]["stroy-website"]; assert service["logging"] == {"driver":"json-file","options":{"max-size":"10m","max-file":"5"}}, service'
+
+      - name: Build website container
+        run: |
+          docker build --pull \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag stroy-website:production .
+          test "$(docker image inspect --format '{{.Config.User}}' stroy-website:production)" = '101:101'
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' stroy-website:production)" = "$GITHUB_SHA"
+
+      - name: Smoke-test website container
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_name="stroy-website-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          host_port=18081
+          page_file="$(mktemp)"
+          headers_file="$(mktemp)"
+          homepage_file="$(mktemp)"
+          homepage_headers_file="$(mktemp)"
+          cleanup() {
+            docker stop "$container_name" >/dev/null 2>&1 || true
+            rm -f "$page_file" "$headers_file" "$homepage_file" "$homepage_headers_file"
+          }
+          trap cleanup EXIT
+
+          docker run --detach --rm --name "$container_name" \
+            --read-only \
+            --tmpfs /tmp:size=64m,mode=1777 \
+            --cap-drop ALL \
+            --cap-add NET_BIND_SERVICE \
+            --security-opt no-new-privileges:true \
+            --publish "127.0.0.1:${host_port}:80" stroy-website:production >/dev/null
+
+          ready=0
+          for attempt in {1..20}; do
+            if curl --fail --silent \
+              --dump-header "$headers_file" \
+              --output "$page_file" \
+              "http://127.0.0.1:${host_port}/account-deletion/"; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+
+          if [[ "$ready" != 1 ]]; then
+            echo "website container did not serve the account deletion page" >&2
+            exit 1
+          fi
+          grep -Fq '<title>Удаление аккаунта — STROY</title>' "$page_file"
+
+          curl --fail --silent --show-error \
+            --dump-header "$homepage_headers_file" \
+            --output "$homepage_file" \
+            "http://127.0.0.1:${host_port}/"
+          grep -Fq '<title>STROY — стройте больше. Управляйте проще.</title>' "$homepage_file"
+
+          for path in /api /api/health; do
+            api_status="$(curl --silent --show-error --output /dev/null \
+              --write-out '%{http_code}' \
+              "http://127.0.0.1:${host_port}${path}")"
+            if [[ "$api_status" != "404" ]]; then
+              echo "website must reject API path ${path}; got HTTP ${api_status}" >&2
+              exit 1
+            fi
+          done
+
+          python3 - "$headers_file" "$homepage_headers_file" <<'PY'
+          import pathlib
+          import sys
+
+          required = {
+              "content-security-policy",
+              "permissions-policy",
+              "strict-transport-security",
+              "x-content-type-options",
+              "x-frame-options",
+              "referrer-policy",
+          }
+          for path in sys.argv[1:]:
+              headers = pathlib.Path(path).read_text(encoding="utf-8").lower()
+              present = {line.split(":", 1)[0] for line in headers.splitlines() if ":" in line}
+              missing = required - present
+              assert not missing, f"{path} is missing headers: {sorted(missing)}"
+          PY
+
+      - name: Save the CI-tested website image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: bash
+        run: docker save stroy-website:production | gzip -1 > "$RUNNER_TEMP/stroy-website-${GITHUB_SHA}.image.tar.gz"
+
+      - name: Upload the CI-tested website image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-website-image-${{ github.sha }}
+          path: ${{ runner.temp }}/stroy-website-${{ github.sha }}.image.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

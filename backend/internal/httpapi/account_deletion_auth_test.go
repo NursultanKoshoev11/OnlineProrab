@@ -150,6 +150,45 @@ func TestScopedDeletionTokenIsAcceptedOnlyByAccountDeletionAuth(t *testing.T) {
 	}
 }
 
+func TestRequireAuthRejectsAccessTokenAfterAccountDeletion(t *testing.T) {
+	db := openSMSAuthTestDB(t)
+	oldState := appState
+	defer func() { appState = oldState }()
+	appState = State{
+		DB:             db,
+		JWTSecret:      "account-deletion-test-signing-key-1234567890",
+		AccessTokenTTL: time.Hour,
+	}
+
+	var userID string
+	if err := db.Pool.QueryRow(context.Background(), `INSERT INTO users (phone) VALUES ('+996700000205') RETURNING id::text`).Scan(&userID); err != nil {
+		t.Fatalf("create account for access token: %v", err)
+	}
+	token, err := signAccessToken(userID)
+	if err != nil {
+		t.Fatalf("sign access token: %v", err)
+	}
+	if _, err := db.Pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, userID); err != nil {
+		t.Fatalf("delete account: %v", err)
+	}
+
+	handlerReached := false
+	protectedHandler := requireAuth(func(w http.ResponseWriter, _ *http.Request) {
+		handlerReached = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	protectedHandler(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("expected a deleted account's token to be rejected, got %d: %s", response.Code, response.Body.String())
+	}
+	if handlerReached {
+		t.Fatal("protected handler ran with a token for a deleted account")
+	}
+}
+
 func TestVerifyAccountDeletionSMSCodeConsumesCodeWithoutCreatingMissingAccount(t *testing.T) {
 	db := openSMSAuthTestDB(t)
 	oldState := appState

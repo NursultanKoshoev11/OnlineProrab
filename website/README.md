@@ -43,7 +43,10 @@ npm run check # Синтаксис JavaScript и форматирование и
 - `src/legal.css` — компоненты страниц документов и поддержки через `@apply`.
 - `index.html` — главная страница, utility-классы сеток, интерактивное демо и FAQ.
 - `script.js` — мобильное меню, доступные вкладки, фильтр объектов и демо-расходы.
-- `privacy/`, `terms/`, `support/` — документы и поддержка.
+- `privacy/`, `terms/`, `support/`, `account-deletion/` — документы,
+  поддержка и самостоятельное удаление аккаунта.
+- `account-deletion.js` — подтверждение номера по SMS и запрос удаления аккаунта.
+- `account-deletion.css` — стили публичной страницы удаления аккаунта.
 - `assets/` — локальные изображения и логотипы.
 - `styles.css` — единый скомпилированный CSS для всех страниц.
 
@@ -65,6 +68,91 @@ docker compose up --build -d
 На этапе сборки Node.js устанавливает зависимости из lockfile и компилирует
 Tailwind. Финальный nginx-образ содержит только статические файлы сайта,
 без Node.js, `node_modules`, исходников стилей и проверочных артефактов.
+Контейнер работает как UID 101 с read-only root filesystem; запись разрешена
+только во временную файловую систему `/tmp`. Compose публикует сайт на
+`127.0.0.1:8090`, чтобы Caddy на том же хосте мог проксировать запросы,
+не открывая порт контейнера напрямую в сеть. Docker JSON logs ограничены пятью
+файлами по 10 МБ для каждого контейнера.
+
+## Production deploy через GitHub Actions и SSH
+
+`Website Production Deploy` запускается после успешного `CI`, запущенного
+push в `main` или вручную из `main`. CI собирает, проверяет и сохраняет образ
+с точным SHA исходного revision; deploy загружает именно этот артефакт,
+передаёт его и matching Compose-конфигурацию на Caddy-хост по SSH, ждёт
+healthcheck контейнера и проверяет публичные страницы и заголовки по HTTPS.
+Старая версия временно сохраняется под отдельным Docker-тегом до завершения
+публичной проверки: при её ошибке workflow восстанавливает старый image и
+Compose-файл, а после успеха удаляет временное состояние rollback.
+Образ хранится как GitHub Actions artifact 30 дней; если approval не завершён
+за это время, повторно запустите CI на том же revision.
+Перед SSH-подключением workflow сверяет SHA с текущим `main` и пропускает
+запоздавший запуск CI. Workflow не меняет Caddy. Публичная проверка
+подтверждает, что proxy отдаёт страницы и security headers. Контейнер
+подключается к существующей Compose-сети `stroy-website_default`, где Caddy
+обращается к нему как `stroy-website:80`; порт `8090` остаётся только на
+loopback.
+
+Создайте GitHub Environment `production-website` и разрешите deployment только
+из `main`. Добавьте Variables:
+
+- `WEBSITE_DEPLOY_HOST` — DNS-имя SSH-сервера.
+- `WEBSITE_DEPLOY_USER` — отдельный пользователь развёртывания.
+- `WEBSITE_DEPLOY_PATH` — выделенный абсолютный каталог, например
+  `/opt/stroy-website`.
+
+Добавьте Environment Secrets:
+
+- `WEBSITE_DEPLOY_SSH_KEY` — отдельный SSH private key пользователя deploy.
+- `WEBSITE_DEPLOY_KNOWN_HOSTS` — проверенная запись `known_hosts` для сервера.
+
+На сервере установите Docker Engine и Docker Compose v2 с поддержкой `up
+--wait`, добавьте deploy-пользователя в группу Docker, создайте каталог deploy
+с его владельцем и проверьте, что Caddy подключён к Compose-сети
+`stroy-website_default` и проксирует на `stroy-website:80`.
+Каталог из `WEBSITE_DEPLOY_PATH` должен уже существовать как обычный каталог;
+deploy-скрипт отклоняет сам каталог и компоненты пути, заданные через symlink.
+Для существующего контейнера `stroy-website` перед первым запуском сохраните
+текущий production Compose-файл как baseline и установите ссылку `current`:
+
+```bash
+DEPLOY_PATH=/opt/stroy-website
+install -d -m 0750 "$DEPLOY_PATH/releases/baseline/website"
+cp /path/to/active/website/docker-compose.yml \
+  "$DEPLOY_PATH/releases/baseline/website/docker-compose.yml"
+ln -s "$DEPLOY_PATH/releases/baseline" "$DEPLOY_PATH/current"
+```
+
+Задайте здесь тот же путь, что и в `WEBSITE_DEPLOY_PATH`. Вместо
+`/path/to/active` укажите путь к конфигурации, с которой запущен текущий
+контейнер. Deploy откажется заменять существующий контейнер, если такой
+baseline не найден, чтобы не терять возможность отката.
+Проверьте, что baseline публикует старый порт сайта только на loopback
+(`127.0.0.1:8090:80`). Если исходный Compose публикует его на всех интерфейсах,
+исправьте привязку в копии до создания ссылки `current`. При откате workflow
+добавляет к baseline явное имя предыдущего Docker image.
+Проверьте fingerprint SSH host key по независимому каналу перед сохранением
+`known_hosts`; workflow не использует `ssh-keyscan` на лету и не отключает
+проверку ключа. Не открывайте порт `8090` во внешнюю сеть.
+
+После слияния изменений в `main` дождитесь зелёного `CI`: затем workflow
+автоматически развернёт проверенный revision. Если контейнер не пройдёт
+healthcheck или внешняя проверка сайта завершится ошибкой, workflow попытается
+вернуть предыдущий Docker image и Compose-конфигурацию. Автоматический rollback
+доступен, если на сервере есть предыдущий image и ссылка `current` указывает на
+его сохранённую конфигурацию; первую установку без рабочего baseline нужно
+сопровождать вручную. После запуска workflow проверит публичные `/` и
+`/account-deletion/`, CSP, Permissions-Policy и HSTS.
+Если публичная проверка завершится ошибкой, проверьте Caddy и DNS вместе с
+логами контейнера:
+
+```bash
+docker compose -p stroy-website -f /opt/stroy-website/current/website/docker-compose.yml logs --tail=200 stroy-website
+```
+
+История Compose-файлов хранится в `WEBSITE_DEPLOY_PATH/releases/<commit>` для
+восстановления конфигурации. Удалять портовую публикацию или ослаблять
+host-key checking нельзя.
 
 ## Демо
 
