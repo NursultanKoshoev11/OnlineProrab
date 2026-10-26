@@ -9,6 +9,7 @@ STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
 APP_ENV="${APP_ENV:-development}"
 S3_BACKUP_BUCKET="${S3_BACKUP_BUCKET:-}"
 BACKUP_AGE_RECIPIENTS_FILE="${BACKUP_AGE_RECIPIENTS_FILE:-}"
+BACKUP_METRIC_NAMESPACE="${BACKUP_METRIC_NAMESPACE:-}"
 
 case "$APP_ENV" in
   staging|production)
@@ -33,6 +34,11 @@ case "$STORAGE_DRIVER" in
       exit 2
     fi
     : "${BACKUP_AGE_RECIPIENTS_FILE:?BACKUP_AGE_RECIPIENTS_FILE is required when STORAGE_DRIVER=s3}"
+    case "$APP_ENV" in
+      staging|production)
+        : "${BACKUP_METRIC_NAMESPACE:?BACKUP_METRIC_NAMESPACE is required for monitored S3 backups}"
+        ;;
+    esac
     command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required when STORAGE_DRIVER=s3" >&2; exit 127; }
     command -v age >/dev/null 2>&1 || { echo "age is required for encrypted S3 backups" >&2; exit 127; }
     if [ ! -f "$BACKUP_AGE_RECIPIENTS_FILE" ] || [ -L "$BACKUP_AGE_RECIPIENTS_FILE" ]; then
@@ -156,6 +162,14 @@ if [ "$STORAGE_DRIVER" = "s3" ]; then
     "$archive_prefix/snapshot.tar.age" --only-show-errors
   aws --region "$S3_REGION" s3 cp "$final_dir/MANIFEST" \
     "$archive_prefix/MANIFEST" --only-show-errors
+  case "$APP_ENV" in
+    staging|production)
+      backup_metric_data="$(printf '{"MetricName":"BackupSucceeded","Dimensions":[{"Name":"Environment","Value":"%s"}],"Value":1,"Unit":"Count"}' "$APP_ENV")"
+      aws --region "$S3_REGION" cloudwatch put-metric-data \
+        --namespace "$BACKUP_METRIC_NAMESPACE" \
+        --metric-data "$backup_metric_data"
+      ;;
+  esac
   backup_reference="$archive_prefix/"
 fi
 

@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"sync"
 	"time"
@@ -30,7 +30,7 @@ type pendingDeletion struct {
 // It returns when ctx is cancelled.
 func RunDeletionWorker(ctx context.Context, pool *pgxpool.Pool, store ObjectStore) {
 	if pool == nil || store == nil {
-		log.Printf("file deletion worker disabled: database or object storage is unavailable")
+		slog.Error("file_deletion_worker_disabled", "reason", "database or object storage is unavailable")
 		return
 	}
 
@@ -56,7 +56,7 @@ func processDeletionBatch(ctx context.Context, pool *pgxpool.Pool, store ObjectS
 	items, err := claimPendingDeletions(ctx, pool)
 	if err != nil {
 		if ctx.Err() == nil {
-			log.Printf("file deletion worker failed to claim objects: %v", err)
+			slog.Error("file_deletion_claim_failed", "error", err)
 		}
 		return false
 	}
@@ -78,15 +78,15 @@ func processDeletionBatch(ctx context.Context, pool *pgxpool.Pool, store ObjectS
 			cancel()
 			if deleteErr == nil {
 				if err := markDeletionComplete(pool, item.id); err != nil {
-					log.Printf("file deletion worker could not mark object complete id=%d: %v", item.id, err)
+					slog.Error("file_deletion_completion_mark_failed", "deletion_id", item.id, "error", err)
 				}
 				return
 			}
 			if retryErr := rescheduleDeletion(pool, item, deleteErr); retryErr != nil {
-				log.Printf("file deletion worker could not schedule retry id=%d: %v (delete: %v)", item.id, retryErr, deleteErr)
+				slog.Error("file_deletion_retry_schedule_failed", "deletion_id", item.id, "schedule_error", retryErr, "delete_error", deleteErr)
 				return
 			}
-			log.Printf("file deletion failed id=%d attempt=%d retry_in=%s error=%v", item.id, item.attempts+1, deletionRetryDelay(item.attempts), deleteErr)
+			slog.Warn("file_deletion_retry_scheduled", "deletion_id", item.id, "attempt", item.attempts+1, "retry_in", deletionRetryDelay(item.attempts), "error", deleteErr)
 		}(item)
 	}
 	workers.Wait()
@@ -105,7 +105,7 @@ func releaseDeletionClaims(pool *pgxpool.Pool, items []pendingDeletion) {
 			SET locked_until = NULL, available_at = LEAST(available_at, now())
 			WHERE id = $1
 		`, item.id); err != nil {
-			log.Printf("file deletion worker could not release object claim id=%d: %v", item.id, err)
+			slog.Error("file_deletion_claim_release_failed", "deletion_id", item.id, "error", err)
 		}
 	}
 }

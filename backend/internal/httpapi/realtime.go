@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -70,7 +70,7 @@ func (h *realtimeHub) publish(projectID string, userIDs map[string]struct{}, pay
 		select {
 		case subscriber.events <- payload:
 		default:
-			log.Printf("realtime subscriber buffer full user_id=%s project_id=%s", subscriber.userID, projectID)
+			slog.Warn("realtime_subscriber_backpressure", "project_id", projectID)
 		}
 	}
 }
@@ -86,7 +86,7 @@ func publishProjectEvent(projectID, entityType, entityID, action string, extraUs
 	rows, err := appState.DB.Pool.Query(ctx,
 		"SELECT user_id::text FROM project_members WHERE project_id = $1", projectID)
 	if err != nil {
-		log.Printf("realtime membership lookup failed project_id=%s error=%v", projectID, err)
+		slog.Error("realtime_membership_lookup_failed", "project_id", projectID, "error", err)
 		return
 	}
 	defer rows.Close()
@@ -99,7 +99,7 @@ func publishProjectEvent(projectID, entityType, entityID, action string, extraUs
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("realtime membership rows failed project_id=%s error=%v", projectID, err)
+		slog.Error("realtime_membership_rows_failed", "project_id", projectID, "error", err)
 		return
 	}
 	for _, userID := range extraUserIDs {
@@ -117,7 +117,7 @@ func publishProjectEvent(projectID, entityType, entityID, action string, extraUs
 	}
 	payload, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("realtime event marshal failed project_id=%s error=%v", projectID, err)
+		slog.Error("realtime_event_marshal_failed", "project_id", projectID, "error", err)
 		return
 	}
 	projectRealtime.publish(projectID, userIDs, payload)

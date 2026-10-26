@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -121,7 +121,7 @@ func runExpenseAIProviders(ctx context.Context, query string, items []CostItemDT
 }
 
 func logExpenseAIProviderFailure(provider string, err error) {
-	log.Printf("expense AI provider=%s failed: %v", provider, err)
+	slog.Error("expense_ai_provider_failed", "provider", provider, "error_type", fmt.Sprintf("%T", err))
 }
 
 func callExpenseAIProvider(ctx context.Context, provider expenseAIProviderConfig, query string, items []CostItemDTO) (expenseAIModelResponse, error) {

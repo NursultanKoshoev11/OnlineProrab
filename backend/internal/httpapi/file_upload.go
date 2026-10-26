@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -87,7 +87,7 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if cleanup {
 			if err := removeStoredFile(stored.relativePath); err != nil {
-				log.Printf("request_id=%s failed_to_remove_uncommitted_upload=%q error=%v", requestIDFromContext(r.Context()), stored.relativePath, err)
+				slog.Error("uncommitted_upload_cleanup_failed", "request_id", requestIDFromContext(r.Context()), "error", err)
 			}
 		}
 	}()
@@ -198,7 +198,7 @@ func storeUploadedFile(ctx context.Context, store storage.ObjectStore, source mu
 		defer cancel()
 		if cleanupErr := store.Delete(cleanupCtx, relativePath); cleanupErr != nil {
 			if queueErr := queueStorageDeletion(relativePath); queueErr != nil {
-				log.Printf("failed_to_queue_partial_upload_removal=%q error=%v", relativePath, queueErr)
+				slog.Error("partial_upload_cleanup_queue_failed", "error", queueErr)
 			}
 			return storedUpload{}, fmt.Errorf("failed to store file and clean up partial object: %w (cleanup: %v)", err, cleanupErr)
 		}
