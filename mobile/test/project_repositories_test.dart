@@ -199,9 +199,9 @@ void main() {
       }),
     );
 
-    final logs = await AuditLogRepository(apiClient: apiClient).list(
-      'project-1',
-    );
+    final logs = await AuditLogRepository(
+      apiClient: apiClient,
+    ).list('project-1');
 
     expect(logs.length, 1);
     expect(logs.first.action, 'create');

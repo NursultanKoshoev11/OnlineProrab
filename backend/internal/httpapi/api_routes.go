@@ -28,10 +28,11 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/support/tickets", requireAuth(SupportTickets))
 	mux.HandleFunc(api+"/auth/sms/request", withSMSRequestRateLimit(RequestSMSCode))
 	mux.HandleFunc(api+"/auth/sms/verify", withSMSVerifyRateLimit(VerifySMSCode))
+	mux.HandleFunc(api+"/account/deletion/verify", withSMSVerifyRateLimit(VerifyAccountDeletionSMSCode))
 	mux.HandleFunc(api+"/auth/session", requireAuth(CreateSession))
 	mux.HandleFunc(api+"/auth/session/refresh", RefreshSession)
 	mux.HandleFunc(api+"/auth/session/logout", LogoutSession)
-	mux.HandleFunc(api+"/account", requireAuth(DeleteAccount))
+	mux.HandleFunc(api+"/account", requireAccountDeletionAuth(DeleteAccount))
 	mux.HandleFunc(api+"/subscriptions/plans", ListPlans)
 	mux.HandleFunc(api+"/subscriptions/status", requireAuth(SubscriptionStatus))
 }

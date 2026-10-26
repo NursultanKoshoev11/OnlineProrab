@@ -16,7 +16,10 @@ import (
 )
 
 func Run() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("load configuration: %v", err)
+	}
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}
@@ -47,8 +50,8 @@ func Run() {
 		}
 		smsSender = sender
 	}
-	if cfg.IsProduction() && smsSender == nil && !cfg.ReviewOnlyMode {
-		log.Fatal("SMS provider is required in production unless review-only mode is enabled")
+	if cfg.IsProductionLike() && smsSender == nil && !cfg.ReviewOnlyMode {
+		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
 	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -65,6 +68,11 @@ func Run() {
 	migrationCancel()
 
 	httpapi.SetState(cfg, db, smsSender)
+	authPrunerDone := make(chan struct{})
+	go func() {
+		defer close(authPrunerDone)
+		httpapi.RunAuthHistoryPruner(rootCtx)
+	}()
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -103,5 +111,6 @@ func Run() {
 		log.Printf("graceful shutdown failed: %v", err)
 		_ = server.Close()
 	}
+	<-authPrunerDone
 	log.Printf("onlineprorab api stopped")
 }
