@@ -49,9 +49,18 @@ func isReviewPhone(phone string) bool {
 		normalizePhone(phone) == appState.ReviewSMSPhone
 }
 
+func isStagingTestPhone(phone string) bool {
+	return appState.IsStaging &&
+		appState.StagingTestSMSPhone != "" &&
+		normalizePhone(phone) == appState.StagingTestSMSPhone
+}
+
 func issueSMSCodeForPhone(phone string) (string, error) {
 	if isReviewPhone(phone) && appState.ReviewSMSCode != "" {
 		return appState.ReviewSMSCode, nil
+	}
+	if isStagingTestPhone(phone) && appState.StagingTestSMSCode != "" {
+		return appState.StagingTestSMSCode, nil
 	}
 	return issueSMSCode()
 }
@@ -78,6 +87,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reviewPhone := isReviewPhone(req.Phone)
+	stagingTestPhone := isStagingTestPhone(req.Phone)
 	code, err := issueSMSCodeForPhone(req.Phone)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to generate code")
@@ -99,7 +109,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if appState.SMSSender != nil && !reviewPhone {
+	if appState.SMSSender != nil && !reviewPhone && !stagingTestPhone {
 		sendCtx, sendCancel := context.WithTimeout(r.Context(), 12*time.Second)
 		err = appState.SMSSender.SendLoginCode(sendCtx, req.Phone, code)
 		sendCancel()
@@ -108,7 +118,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusBadGateway, "failed to deliver login code")
 			return
 		}
-	} else if !reviewPhone && !developmentSMSFallbackEnabled() {
+	} else if !reviewPhone && !stagingTestPhone && !developmentSMSFallbackEnabled() {
 		cleanupSMSCode(codeID)
 		Error(w, http.StatusServiceUnavailable, "SMS service is unavailable")
 		return

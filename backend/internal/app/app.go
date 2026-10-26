@@ -50,7 +50,7 @@ func Run() {
 		}
 		smsSender = sender
 	}
-	if cfg.IsProductionLike() && smsSender == nil && !cfg.ReviewOnlyMode {
+	if cfg.IsProductionLike() && smsSender == nil && !allowsNoSMSProvider(cfg) {
 		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
 	}
 
@@ -113,4 +113,11 @@ func Run() {
 	}
 	<-authPrunerDone
 	log.Printf("onlineprorab api stopped")
+}
+
+func allowsNoSMSProvider(cfg config.Config) bool {
+	if cfg.IsStaging() {
+		return cfg.StagingTestSMSPhone != "" && cfg.StagingTestSMSCode != ""
+	}
+	return cfg.IsProduction() && cfg.ReviewOnlyMode
 }

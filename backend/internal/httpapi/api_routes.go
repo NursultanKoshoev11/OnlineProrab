@@ -35,4 +35,6 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/account", requireAccountDeletionAuth(DeleteAccount))
 	mux.HandleFunc(api+"/subscriptions/plans", ListPlans)
 	mux.HandleFunc(api+"/subscriptions/status", requireAuth(SubscriptionStatus))
+	mux.HandleFunc(api+"/subscriptions/checkout", requireAuth(SubscriptionCheckout))
+	mux.HandleFunc(api+"/payments/obank/result", OBankResult)
 }

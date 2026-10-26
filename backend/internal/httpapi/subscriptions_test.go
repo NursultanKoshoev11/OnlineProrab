@@ -1,9 +1,12 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 )
 
 func TestSubscriptionReadEndpointsRejectMutatingMethods(t *testing.T) {
@@ -49,6 +52,49 @@ func TestSubscriptionAnnualPrices(t *testing.T) {
 	}
 	if got, want := mustPlanPrice(maximum, "year"), 51000; got != want {
 		t.Fatalf("max annual price: got %d, want %d", got, want)
+	}
+}
+
+func TestStagingSandboxPriceOverrideIsDisplayedAndChargedOnlyInStaging(t *testing.T) {
+	originalState := appState
+	defer func() { appState = originalState }()
+	appState = State{
+		IsStaging:                  true,
+		StagingTestPaymentPriceKGS: 10,
+		OBank:                      config.OBankConfig{Enabled: true, Test: true},
+	}
+
+	standard, _ := planByCode("standard")
+	if got, _ := planPrice(standard, "month"); got != 10 {
+		t.Fatalf("staging monthly test price = %d, want 10", got)
+	}
+	if got, _ := planPrice(standard, "year"); got != 10 {
+		t.Fatalf("staging annual test price = %d, want 10", got)
+	}
+	recorder := httptest.NewRecorder()
+	ListPlans(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/subscriptions/plans", nil))
+	var response struct {
+		Plans []map[string]any `json:"plans"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode plans response: %v", err)
+	}
+	foundStandard := false
+	for _, plan := range response.Plans {
+		if plan["id"] == "standard" && (plan["price_kgs"] != float64(10) || plan["annual_price_kgs"] != float64(10) || plan["annual_discount_percent"] != float64(0)) {
+			t.Fatalf("staging plan did not show the 10 KGS test price: %#v", plan)
+		}
+		if plan["id"] == "standard" {
+			foundStandard = true
+		}
+	}
+	if !foundStandard {
+		t.Fatal("staging plans response did not include the standard plan")
+	}
+
+	appState.IsStaging = false
+	if got, _ := planPrice(standard, "month"); got != 3000 {
+		t.Fatalf("non-staging monthly plan price = %d, want 3000", got)
 	}
 }
 

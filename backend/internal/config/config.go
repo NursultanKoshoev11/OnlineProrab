@@ -36,45 +36,62 @@ const (
 )
 
 type Config struct {
-	Env                       string
-	HTTPAddr                  string
-	DatabaseURL               string
-	JWTSecret                 string
-	AccessTokenTTL            time.Duration
-	DevSMSCodeEnabled         bool
-	CORSAllowedOrigins        []string
-	TrustedProxyCIDRs         []string
-	UploadDir                 string
-	MaxUploadBytes            int64
-	SMSProvider               string
-	ReviewOnlyMode            bool
-	ReviewSMSPhone            string
-	ReviewSMSCode             string
-	TwilioAccountSID          string
-	TwilioAPIKeySID           string
-	TwilioAPIKeySecret        string
-	TwilioFrom                string
-	TwilioMessagingServiceSID string
-	NikitaAPIURL              string
-	NikitaLogin               string
-	NikitaPassword            string
-	NikitaSender              string
-	NikitaTestMode            bool
-	SupportTelegramBotToken   string
-	SupportTelegramChatID     string
-	SupportTelegramURL        string
-	SupportWhatsAppToken      string
-	SupportWhatsAppPhoneID    string
-	SupportWhatsAppTo         string
-	SupportWhatsAppURL        string
-	GeminiAPIKey              string
-	GeminiModel               string
-	AIProviderOrder           []string
-	GroqAPIKey                string
-	GroqModel                 string
-	OpenRouterAPIKey          string
-	OpenRouterModel           string
-	OpenRouterFallbackModel   string
+	Env                        string
+	HTTPAddr                   string
+	DatabaseURL                string
+	JWTSecret                  string
+	AccessTokenTTL             time.Duration
+	DevSMSCodeEnabled          bool
+	CORSAllowedOrigins         []string
+	TrustedProxyCIDRs          []string
+	UploadDir                  string
+	MaxUploadBytes             int64
+	SMSProvider                string
+	StagingTestSMSPhone        string
+	StagingTestSMSCode         string
+	StagingTestPaymentPriceKGS int
+	ReviewOnlyMode             bool
+	ReviewSMSPhone             string
+	ReviewSMSCode              string
+	TwilioAccountSID           string
+	TwilioAPIKeySID            string
+	TwilioAPIKeySecret         string
+	TwilioFrom                 string
+	TwilioMessagingServiceSID  string
+	NikitaAPIURL               string
+	NikitaLogin                string
+	NikitaPassword             string
+	NikitaSender               string
+	NikitaTestMode             bool
+	SupportTelegramBotToken    string
+	SupportTelegramChatID      string
+	SupportTelegramURL         string
+	SupportWhatsAppToken       string
+	SupportWhatsAppPhoneID     string
+	SupportWhatsAppTo          string
+	SupportWhatsAppURL         string
+	GeminiAPIKey               string
+	GeminiModel                string
+	AIProviderOrder            []string
+	GroqAPIKey                 string
+	GroqModel                  string
+	OpenRouterAPIKey           string
+	OpenRouterModel            string
+	OpenRouterFallbackModel    string
+	OBank                      OBankConfig
+}
+
+// OBankConfig contains O!Dengi merchant credentials and fixed return URLs.
+// The API password must only be configured on the server.
+type OBankConfig struct {
+	Enabled    bool
+	SID        string
+	Password   string
+	APIURL     string
+	APIVersion int
+	Test       bool
+	ResultURL  string
+	ReturnURL  string
 }
 
 func Load() (Config, error) {
@@ -97,6 +114,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	stagingTestPaymentPriceKGS, err := getEnvInt("STAGING_TEST_PAYMENT_PRICE_KGS", 0)
+	if err != nil {
+		return Config{}, err
+	}
 	reviewOnlyMode, err := getEnvBool("REVIEW_ONLY_MODE", false)
 	if err != nil {
 		return Config{}, err
@@ -104,6 +125,23 @@ func Load() (Config, error) {
 	nikitaTestMode, err := getEnvBool("NIKITA_TEST_MODE", false)
 	if err != nil {
 		return Config{}, err
+	}
+	obankEnabled, err := getEnvBool("OBANK_ENABLED", false)
+	if err != nil {
+		return Config{}, err
+	}
+	envName := getEnv("APP_ENV", "")
+	obankTest, err := getEnvBool("OBANK_TEST", !strings.EqualFold(envName, ProductionEnv))
+	if err != nil {
+		return Config{}, err
+	}
+	obankVersion, err := strconv.Atoi(getEnv("OBANK_API_VERSION", "1005"))
+	if err != nil {
+		return Config{}, errors.New("OBANK_API_VERSION must be an integer")
+	}
+	obankAPIURL := strings.TrimSpace(os.Getenv("OBANK_API_URL"))
+	if obankAPIURL == "" && !strings.EqualFold(envName, ProductionEnv) {
+		obankAPIURL = "https://mw-api-test.dengi.kg/api/json/json.php"
 	}
 
 	cfg := Config{}
@@ -118,6 +156,9 @@ func Load() (Config, error) {
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = maxUploadBytes
 	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
+	cfg.StagingTestSMSPhone = normalizePhone(os.Getenv("STAGING_TEST_SMS_PHONE"))
+	cfg.StagingTestSMSCode = strings.TrimSpace(os.Getenv("STAGING_TEST_SMS_CODE"))
+	cfg.StagingTestPaymentPriceKGS = stagingTestPaymentPriceKGS
 	cfg.ReviewOnlyMode = reviewOnlyMode
 	cfg.ReviewSMSPhone = normalizePhone(os.Getenv("REVIEW_SMS_PHONE"))
 	cfg.ReviewSMSCode = strings.TrimSpace(os.Getenv("REVIEW_SMS_CODE"))
@@ -146,6 +187,16 @@ func Load() (Config, error) {
 	cfg.OpenRouterAPIKey = strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
 	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
+	cfg.OBank = OBankConfig{
+		Enabled:    obankEnabled,
+		SID:        strings.TrimSpace(os.Getenv("OBANK_SID")),
+		Password:   strings.TrimSpace(os.Getenv("OBANK_PASSWORD")),
+		APIURL:     obankAPIURL,
+		APIVersion: obankVersion,
+		Test:       obankTest,
+		ResultURL:  strings.TrimSpace(os.Getenv("OBANK_RESULT_URL")),
+		ReturnURL:  strings.TrimSpace(os.Getenv("OBANK_RETURN_URL")),
+	}
 	return cfg, nil
 }
 
@@ -216,6 +267,7 @@ func (cfg Config) Validate() error {
 	if cfg.NikitaTestMode && !isLoopbackHTTPAddr(cfg.HTTPAddr) {
 		problems = append(problems, "NIKITA_TEST_MODE requires HTTP_ADDR to use a loopback address")
 	}
+	problems = append(problems, validateOBankConfig(cfg)...)
 
 	reviewPhoneSet := cfg.ReviewSMSPhone != ""
 	reviewCodeSet := cfg.ReviewSMSCode != ""
@@ -234,6 +286,30 @@ func (cfg Config) Validate() error {
 
 	if cfg.ReviewOnlyMode && !cfg.IsProduction() {
 		problems = append(problems, "REVIEW_ONLY_MODE is allowed only when APP_ENV=production")
+	}
+
+	stagingTestPhoneSet := cfg.StagingTestSMSPhone != ""
+	stagingTestCodeSet := cfg.StagingTestSMSCode != ""
+	if stagingTestPhoneSet != stagingTestCodeSet {
+		problems = append(problems, "STAGING_TEST_SMS_PHONE and STAGING_TEST_SMS_CODE must be configured together")
+	}
+	if (stagingTestPhoneSet || stagingTestCodeSet) && !cfg.IsStaging() {
+		problems = append(problems, "STAGING_TEST_SMS_PHONE and STAGING_TEST_SMS_CODE are allowed only when APP_ENV=staging")
+	}
+	if stagingTestPhoneSet && !isValidPhone(cfg.StagingTestSMSPhone) {
+		problems = append(problems, "STAGING_TEST_SMS_PHONE must be a valid E.164 phone number")
+	}
+	if stagingTestCodeSet && !isSixDigitCode(cfg.StagingTestSMSCode) {
+		problems = append(problems, "STAGING_TEST_SMS_CODE must be exactly 6 digits")
+	}
+	if cfg.StagingTestPaymentPriceKGS < 0 || cfg.StagingTestPaymentPriceKGS > 100 {
+		problems = append(problems, "STAGING_TEST_PAYMENT_PRICE_KGS must be 0 or between 1 and 100")
+	}
+	if cfg.StagingTestPaymentPriceKGS > 0 && !cfg.IsStaging() {
+		problems = append(problems, "STAGING_TEST_PAYMENT_PRICE_KGS is allowed only when APP_ENV=staging")
+	}
+	if cfg.StagingTestPaymentPriceKGS > 0 && (!cfg.OBank.Enabled || !cfg.OBank.Test) {
+		problems = append(problems, "STAGING_TEST_PAYMENT_PRICE_KGS requires OBANK_ENABLED=true and OBANK_TEST=true")
 	}
 
 	if cfg.IsProductionLike() {
@@ -269,7 +345,7 @@ func (cfg Config) Validate() error {
 				}
 			}
 		}
-		if cfg.IsStaging() && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
+		if cfg.IsStaging() && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita && !(stagingTestPhoneSet && stagingTestCodeSet) {
 			problems = append(problems, "SMS_PROVIDER=twilio or nikita is required in staging")
 		}
 		if cfg.IsProduction() && !cfg.ReviewOnlyMode && cfg.SMSProvider != SMSProviderTwilio && cfg.SMSProvider != SMSProviderNikita {
@@ -284,6 +360,58 @@ func (cfg Config) Validate() error {
 		return errors.New(strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+func validateOBankConfig(cfg Config) []string {
+	if !cfg.OBank.Enabled {
+		return nil
+	}
+
+	var problems []string
+	if cfg.OBank.SID == "" || cfg.OBank.Password == "" {
+		problems = append(problems, "OBANK_SID and OBANK_PASSWORD are required when OBANK_ENABLED=true")
+	}
+	if cfg.OBank.APIVersion <= 0 {
+		problems = append(problems, "OBANK_API_VERSION must be greater than 0")
+	}
+	if cfg.OBank.APIURL == "" || validateOBankURL(cfg.OBank.APIURL, cfg.IsDevelopment()) != nil {
+		problems = append(problems, "OBANK_API_URL must be a valid HTTPS URL")
+	}
+	if cfg.OBank.ResultURL == "" || validateOBankURL(cfg.OBank.ResultURL, cfg.IsDevelopment()) != nil {
+		problems = append(problems, "OBANK_RESULT_URL must be a valid HTTPS callback URL")
+	}
+	if cfg.OBank.ReturnURL == "" || validateOBankURL(cfg.OBank.ReturnURL, cfg.IsDevelopment()) != nil {
+		problems = append(problems, "OBANK_RETURN_URL must be a valid HTTPS billing return URL")
+	}
+	if cfg.IsProduction() && cfg.OBank.Test {
+		problems = append(problems, "OBANK_TEST must be false in production")
+	}
+	if cfg.IsStaging() && !cfg.OBank.Test {
+		problems = append(problems, "OBANK_TEST must be true in staging")
+	}
+	return problems
+}
+
+func validateOBankURL(value string, allowLocalHTTP bool) error {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("invalid URL")
+	}
+	if parsed.Scheme == "https" {
+		return nil
+	}
+	if allowLocalHTTP && parsed.Scheme == "http" && isLoopbackHostname(parsed.Hostname()) {
+		return nil
+	}
+	return errors.New("HTTPS is required")
+}
+
+func isLoopbackHostname(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func parseTrustedProxyCIDR(value string) (netip.Prefix, error) {

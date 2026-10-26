@@ -79,6 +79,12 @@ func planByCode(code string) (subscriptionPlan, error) {
 }
 
 func planPrice(plan subscriptionPlan, billingPeriod string) (int, error) {
+	if stagingTestPriceOverrideEnabled() && plan.ID != "trial" {
+		if billingPeriod != "month" && billingPeriod != "year" {
+			return 0, fmt.Errorf("unknown billing period %q", billingPeriod)
+		}
+		return appState.StagingTestPaymentPriceKGS, nil
+	}
 	switch billingPeriod {
 	case "month":
 		return plan.PriceKGS, nil
@@ -87,6 +93,10 @@ func planPrice(plan subscriptionPlan, billingPeriod string) (int, error) {
 	default:
 		return 0, fmt.Errorf("unknown billing period %q", billingPeriod)
 	}
+}
+
+func stagingTestPriceOverrideEnabled() bool {
+	return appState.IsStaging && appState.OBank.Enabled && appState.OBank.Test && appState.StagingTestPaymentPriceKGS > 0
 }
 
 func ensureSubscription(ctx context.Context, db subscriptionQuerier, userID string, lock bool) (subscriptionState, error) {

@@ -194,7 +194,7 @@ jobs:
         run: flutter test
 
       - name: Build signed production AAB
-        run: flutter build appbundle --release --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
+        run: flutter build appbundle --release --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Upload production AAB
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -209,13 +209,13 @@ jobs:
         run: rm -f "$STROY_KEYSTORE_PATH"
 
   ios-simulator:
-    name: iOS simulator build
+    name: Staging iOS simulator build
     runs-on: macos-26
     defaults:
       run:
         working-directory: mobile
     env:
-      STROY_IOS_BUNDLE_ID: kg.com.stroy.app
+      STROY_IOS_BUNDLE_ID: kg.com.stroy.app.staging
 
     steps:
       - name: Checkout
@@ -262,10 +262,21 @@ jobs:
         run: flutter test
 
       - name: Build iOS simulator app
-        run: flutter build ios --simulator --no-codesign --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
+        run: flutter build ios --simulator --debug --no-codesign --dart-define=API_BASE_URL=https://stroy.com.kg/staging-api --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true --dart-define=OBANK_STAGING_BUILD=true
 
       - name: Validate bundled iOS privacy manifest
         run: python3 tool/validate_privacy_manifest.py --app-bundle build/ios/iphonesimulator/Runner.app
+
+      - name: Package iOS simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphonesimulator/Runner.app "$RUNNER_TEMP/stroy-staging-ios-simulator.zip"
+
+      - name: Upload staging iOS simulator app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-staging-ios-simulator-${{ github.run_number }}
+          path: ${{ runner.temp }}/stroy-staging-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 14
 
   production-ios-ipa:
     name: Signed iOS IPA
@@ -403,7 +414,7 @@ jobs:
         run: flutter test
 
       - name: Prepare iOS release build
-        run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
+        run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Create signed App Store archive
         run: |

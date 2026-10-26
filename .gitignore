@@ -10,6 +10,7 @@ Thumbs.db
 # Go
 backend/bin/
 backend/tmp/
+backend/server.exe
 backend/*.test
 backend/coverage.out
 

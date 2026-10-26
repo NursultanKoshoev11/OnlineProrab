@@ -17,7 +17,7 @@ Screens:
 - Manage subscription
 - Error state
 - Billing period selector with monthly and annual pricing
-- Payment unavailable state until an official bank checkout and webhook are connected
+- Payment unavailable state for store builds unless a supported store purchase is configured
 
 States:
 
@@ -36,5 +36,10 @@ Rules:
 - The owner is not counted in the invited participant limit.
 - Project limits count active, non-deleted projects.
 - Pending invitations count toward the participant limit.
-- The current mobile payment flow is UI-only until official bank access and
-  payment verification endpoints are available.
+- App Store and Google Play release builds do not launch external O!Bank payment
+  links for the digital subscription. An internal sideloaded staging build can
+  open the invoice-specific bank link and check payment status after returning.
+- The STROY billing website also offers the O!Bank app link on mobile browsers,
+  with the bank's hosted web payment as a fallback.
+- App Store and Google Play builds must use their store billing systems unless
+  the applicable alternative-billing program and storefront are confirmed.

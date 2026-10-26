@@ -14,13 +14,19 @@ This checklist tracks the minimum work required before a real public release.
 - `UPLOAD_DIR=/app/uploads`
 - `MAX_UPLOAD_MB=10`
 
+O!Dengi payments remain disabled unless `OBANK_ENABLED=true`. Before enabling the
+checkout, configure the merchant SID/password and test/live API URLs as described in
+[`OBANK.md`](OBANK.md). Production rejects `OBANK_TEST=true`; never put merchant
+credentials in the mobile app or website JavaScript.
+
 Generate `JWT_SECRET` with `openssl rand -hex 32` and store it directly in the host's secret configuration. The API refuses missing secrets, known placeholders, short values, low observed byte entropy, repeated patterns, and long sequential character runs in staging and production.
 
 ## Staging environment
 
 - Set `APP_ENV=staging` explicitly. Staging does not load values from a local `.env` file.
 - Use a `DATABASE_URL` with `sslmode=verify-full` in staging and production; the API rejects connections that do not verify every database host's certificate and hostname.
-- Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable.
+- Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. If staging must be tested without sending SMS, it may instead configure `STAGING_TEST_SMS_PHONE` and `STAGING_TEST_SMS_CODE` together. The fixed code is accepted only for that one normalized phone in `APP_ENV=staging`, is never returned by the API, and is rejected in production. Other phones still require a working SMS provider.
+- Keep the staging database and upload volume separate from production. Do not reuse production data for test-code login.
 - In staging and production, `NIKITA_API_URL` is restricted to `https://smspro.nikita.kg/api/message`; the SMS client does not follow redirects, so provider credentials cannot be replayed to a redirect target.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
@@ -37,6 +43,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 3. Test PostgreSQL and upload-storage backup/restore in staging.
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
+6. Before live O!Dengi payments, obtain merchant credentials and the confirmed live API URL, complete staging payment/callback reconciliation, and approve the refund terms and store-billing approach.
 
 ## Account deletion
 

@@ -13,11 +13,13 @@ Mobile purchases:
 - iOS: App Store Connect products + StoreKit.
 - Android: Google Play Console products + Play Billing.
 
-Local bank UI:
+Bank checkout:
 
-- The mobile UI includes MBANK and Optima Bank choices plus a demo QR preview.
-- No public Flutter SDK or payment-verification API was found in the banks'
-  public developer materials during this implementation.
+- App Store and Google Play release builds do not launch external bank payment
+  links for the digital subscription. An internal staging build can open the
+  invoice-specific O!Bank app link and check payment status after return. The
+  billing website also offers the bank app link on mobile browsers, with its
+  hosted-paylink fallback.
 - Do not unlock a plan from a screenshot or client-side flag. The backend must
   verify a business payment callback or a bank-approved payment reference.
 - The project owner owns the subscription; invited members consume the owner's

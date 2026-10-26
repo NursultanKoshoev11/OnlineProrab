@@ -44,8 +44,9 @@ npm run check # Синтаксис JavaScript и форматирование и
 - `index.html` — главная страница, utility-классы сеток, интерактивное демо и FAQ.
 - `script.js` — мобильное меню, доступные вкладки, фильтр объектов и демо-расходы.
 - `privacy/`, `terms/`, `support/` — документы и поддержка.
+- `billing/` — browser checkout and account access for O!Dengi subscription payments; it has its own local CSS and JavaScript.
 - `assets/` — локальные изображения и логотипы.
-- `styles.css` — единый скомпилированный CSS для всех страниц.
+- `styles.css` — единый скомпилированный CSS для главной и юридических страниц.
 
 Цвета доступны как `bg-paper`, `text-ink`, `bg-lime`, `text-muted` и другие
 utility-классы. Варианты `compact:`, `tablet:` и `mobile:` соответствуют
