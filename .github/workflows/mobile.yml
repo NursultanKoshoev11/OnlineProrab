@@ -387,6 +387,23 @@ jobs:
       - name: Prepare iOS release build
         run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
 
+      - name: Configure signing for the Runner app target
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          values = {
+              "CODE_SIGN_STYLE": "Manual",
+              "CODE_SIGN_IDENTITY": os.environ["STROY_IOS_SIGNING_IDENTITY"],
+              "DEVELOPMENT_TEAM": os.environ["STROY_IOS_TEAM_ID"],
+              "PROVISIONING_PROFILE_SPECIFIER": os.environ["STROY_IOS_PROFILE_UUID"],
+              "PRODUCT_BUNDLE_IDENTIFIER": os.environ["STROY_IOS_BUNDLE_ID"],
+          }
+          lines = [f'{key} = "{value}"' for key, value in values.items()]
+          Path("ios/Flutter/ProductionSigning.xcconfig").write_text("\n".join(lines) + "\n")
+          PY
+
       - name: Create signed App Store archive
         run: |
           set -euo pipefail
@@ -396,12 +413,7 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/STROY.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="$STROY_IOS_SIGNING_IDENTITY" \
-            DEVELOPMENT_TEAM="$STROY_IOS_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$STROY_IOS_PROFILE_UUID" \
-            PRODUCT_BUNDLE_IDENTIFIER="$STROY_IOS_BUNDLE_ID"
+            archive
 
       - name: Validate archived iOS privacy manifest
         run: |
@@ -447,6 +459,10 @@ jobs:
           path: ${{ runner.temp }}/stroy-ipa/*.ipa
           if-no-files-found: error
           retention-days: 14
+
+      - name: Remove temporary signing configuration
+        if: always()
+        run: rm -f ios/Flutter/ProductionSigning.xcconfig
 
       - name: Check live App Store privacy and account-deletion readiness
         id: public_readiness
