@@ -88,8 +88,10 @@ Compose-файл, а после успеха удаляет временное �
 за это время, повторно запустите CI на том же revision.
 Перед SSH-подключением workflow сверяет SHA с текущим `main` и пропускает
 запоздавший запуск CI. Workflow не меняет Caddy. Публичная проверка
-подтверждает, что proxy отдаёт страницы и security headers. Порт `8090`
-остаётся только на loopback.
+подтверждает, что proxy отдаёт страницы и security headers. Контейнер
+подключается к существующей Compose-сети `stroy-website_default`, где Caddy
+обращается к нему как `stroy-website:80`; порт `8090` остаётся только на
+loopback.
 
 Создайте GitHub Environment `production-website` и разрешите deployment только
 из `main`. Добавьте Variables:
@@ -106,7 +108,8 @@ Compose-файл, а после успеха удаляет временное �
 
 На сервере установите Docker Engine и Docker Compose v2 с поддержкой `up
 --wait`, добавьте deploy-пользователя в группу Docker, создайте каталог deploy
-с его владельцем и проверьте, что Caddy уже проксирует на `127.0.0.1:8090`.
+с его владельцем и проверьте, что Caddy подключён к Compose-сети
+`stroy-website_default` и проксирует на `stroy-website:80`.
 Каталог из `WEBSITE_DEPLOY_PATH` должен уже существовать как обычный каталог;
 deploy-скрипт отклоняет сам каталог и компоненты пути, заданные через symlink.
 Для существующего контейнера `stroy-website` перед первым запуском сохраните
@@ -144,7 +147,7 @@ healthcheck или внешняя проверка сайта завершитс
 логами контейнера:
 
 ```bash
-docker compose -p website -f /opt/stroy-website/current/website/docker-compose.yml logs --tail=200 stroy-website
+docker compose -p stroy-website -f /opt/stroy-website/current/website/docker-compose.yml logs --tail=200 stroy-website
 ```
 
 История Compose-файлов хранится в `WEBSITE_DEPLOY_PATH/releases/<commit>` для

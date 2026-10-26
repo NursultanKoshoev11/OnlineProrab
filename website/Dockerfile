@@ -24,4 +24,4 @@ USER 101:101
 ENTRYPOINT ["nginx"]
 CMD ["-g", "daemon off;"]
 
-EXPOSE 8080
+EXPOSE 80

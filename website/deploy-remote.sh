@@ -69,7 +69,7 @@ fi
 
 restore_compose() {
   local compose_file="$1"
-  docker compose -p website \
+  docker compose -p stroy-website \
     -f "$compose_file" \
     -f <(printf 'services:\n  stroy-website:\n    image: stroy-website:production\n') \
     up --detach --no-build --wait --wait-timeout 120
@@ -78,7 +78,7 @@ restore_compose() {
 remove_failed_release_container() {
   local compose_file="${release_dir}/website/docker-compose.yml"
   if [[ -f "$compose_file" && ! -L "$compose_file" ]]; then
-    docker compose -p website -f "$compose_file" rm --stop --force stroy-website
+    docker compose -p stroy-website -f "$compose_file" rm --stop --force stroy-website
   fi
 }
 
@@ -295,7 +295,7 @@ if [[ -n "$previous_image_id" ]]; then
 fi
 deployment_started=1
 docker load --input "$image_archive" >/dev/null
-docker compose -p website -f "$release_dir/website/docker-compose.yml" \
+docker compose -p stroy-website -f "$release_dir/website/docker-compose.yml" \
   up --detach --no-build --wait --wait-timeout 120
 
 rollback_state_tmp="$(mktemp "${rollback_dir}/.${release_sha}.tmp.XXXXXX")"

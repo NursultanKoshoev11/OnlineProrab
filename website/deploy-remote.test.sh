@@ -174,7 +174,7 @@ MOCK_FAIL_FIRST_COMPOSE=0 \
 [[ ! -e "$first_public_rollback_root/current" && ! -L "$first_public_rollback_root/current" ]]
 [[ ! -e "$first_public_rollback_root/.rollback/$sha" ]]
 [[ "$(cat "$calls_file")" == 2 ]]
-grep -Fq "compose -p website -f $first_public_rollback_root/releases/$sha/website/docker-compose.yml rm --stop --force stroy-website" "$mock_log"
+grep -Fq "compose -p stroy-website -f $first_public_rollback_root/releases/$sha/website/docker-compose.yml rm --stop --force stroy-website" "$mock_log"
 
 first_failure_root="$test_root/first-failure"
 mkdir -m 700 "$first_failure_root"
@@ -192,7 +192,7 @@ fi
 [[ ! -e "$first_failure_root/current" && ! -L "$first_failure_root/current" ]]
 [[ ! -e "$first_failure_root/.rollback/$sha" ]]
 [[ "$(cat "$calls_file")" == 2 ]]
-grep -Fq "compose -p website -f $first_failure_root/releases/$sha/website/docker-compose.yml rm --stop --force stroy-website" "$mock_log"
+grep -Fq "compose -p stroy-website -f $first_failure_root/releases/$sha/website/docker-compose.yml rm --stop --force stroy-website" "$mock_log"
 
 rollback_root="$test_root/rollback"
 baseline="$rollback_root/releases/baseline"
