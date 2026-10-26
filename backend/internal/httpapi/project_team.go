@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -194,7 +194,7 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
 			VALUES ($1, $2, 'add_member', 'project_member', $3, jsonb_build_object('phone', $4::text, 'role', $5::text, 'source', 'phone'))
 		`, actorID, req.ProjectID, targetUserID, req.Phone, req.Role); err != nil {
-			log.Printf("add member: failed to write audit log for project %s/user %s: %v", req.ProjectID, targetUserID, err)
+			slog.Error("project_member_audit_log_failed", "project_id", req.ProjectID, "target_user_id", targetUserID, "error", err)
 		}
 		publishProjectEvent(req.ProjectID, "project_member", targetUserID, "added")
 		JSON(w, http.StatusOK, map[string]any{

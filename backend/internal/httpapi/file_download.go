@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"strings"
@@ -74,7 +74,7 @@ func DownloadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer object.Body.Close()
 	if object.Size != storedSize {
-		log.Printf("request_id=%s stored_file_size_mismatch file_id=%q db_size=%d storage_size=%d", requestIDFromContext(r.Context()), fileID, storedSize, object.Size)
+		slog.Error("stored_file_size_mismatch", "request_id", requestIDFromContext(r.Context()), "file_id", fileID, "database_size", storedSize, "storage_size", object.Size)
 		Error(w, http.StatusBadGateway, "stored file is unavailable")
 		return
 	}
@@ -99,7 +99,7 @@ func DownloadFile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Last-Modified", object.ModTime.UTC().Format(http.TimeFormat))
 	}
 	if _, err := io.Copy(w, object.Body); err != nil {
-		log.Printf("request_id=%s failed_to_stream_stored_file file_id=%q error=%v", requestIDFromContext(r.Context()), fileID, err)
+		slog.Warn("stored_file_stream_interrupted", "request_id", requestIDFromContext(r.Context()), "file_id", fileID, "error", err)
 	}
 }
 
