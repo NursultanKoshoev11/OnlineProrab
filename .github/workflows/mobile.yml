@@ -400,7 +400,7 @@ jobs:
               "PROVISIONING_PROFILE_SPECIFIER": os.environ["STROY_IOS_PROFILE_UUID"],
               "PRODUCT_BUNDLE_IDENTIFIER": os.environ["STROY_IOS_BUNDLE_ID"],
           }
-          lines = [f'{key} = "{value}"' for key, value in values.items()]
+          lines = [f"{key} = {value}" for key, value in values.items()]
           Path("ios/Flutter/ProductionSigning.xcconfig").write_text("\n".join(lines) + "\n")
           PY
 
