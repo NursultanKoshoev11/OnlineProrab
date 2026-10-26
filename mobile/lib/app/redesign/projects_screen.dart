@@ -351,6 +351,13 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                 subtitle: 'Текущий аккаунт',
               ),
               const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('Политика конфиденциальности'),
+                trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                onTap: _openPrivacyPolicy,
+              ),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(50),
@@ -385,6 +392,18 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    try {
+      final opened = await launchUrl(
+        Uri.parse(AppConfig.privacyPolicyUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && mounted) _toast(context, 'Не удалось открыть страницу.');
+    } catch (_) {
+      if (mounted) _toast(context, 'Не удалось открыть страницу.');
+    }
   }
 
   Future<void> _deleteAccount() async {
