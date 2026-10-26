@@ -11,13 +11,13 @@ const _obankStagingBuild = bool.fromEnvironment(
 
 class _SubscriptionScreen extends StatefulWidget {
   const _SubscriptionScreen({
-    required this.project,
-    required this.members,
-    required this.canManage,
+    this.project,
+    this.members = const [],
+    this.canManage = true,
     required this.apiClient,
   });
 
-  final RemoteProject project;
+  final RemoteProject? project;
   final List<RemoteProjectMember> members;
   final bool canManage;
   final ApiClient apiClient;
@@ -314,7 +314,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
           Text(
-            widget.project.name.isEmpty ? 'Объект' : widget.project.name,
+            widget.project?.name.trim().isNotEmpty == true
+                ? widget.project!.name
+                : 'Подписка аккаунта',
             style: const TextStyle(
               color: _ink,
               fontSize: 26,
@@ -360,13 +362,14 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
                           ),
                         ),
                       ),
-                      Text(
-                        '$_participantCount/$_currentParticipantLimit',
-                        style: const TextStyle(
-                          color: _brand,
-                          fontWeight: FontWeight.w600,
+                      if (widget.project != null)
+                        Text(
+                          '$_participantCount/$_currentParticipantLimit',
+                          style: const TextStyle(
+                            color: _brand,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 10),

@@ -330,7 +330,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   }
 
   Future<void> _showProfile() async {
-    await showModalBottomSheet<void>(
+    final openSubscription = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -351,6 +351,14 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                 subtitle: 'Текущий аккаунт',
               ),
               const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: const Text('Подписка и оплата'),
+                subtitle: const Text('Тариф и срок действия'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(context).pop(true),
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.privacy_tip_outlined),
@@ -392,6 +400,14 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
         ),
       ),
     );
+
+    if (openSubscription == true && mounted) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => _SubscriptionScreen(apiClient: widget.deps.apiClient),
+        ),
+      );
+    }
   }
 
   Future<void> _openPrivacyPolicy() async {
