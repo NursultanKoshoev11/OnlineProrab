@@ -12,6 +12,10 @@ import (
 )
 
 func TestSecurityHeadersAreApplied(t *testing.T) {
+	previousState := appState
+	appState.IsProductionLike = true
+	t.Cleanup(func() { appState = previousState })
+
 	handler := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -22,15 +26,33 @@ func TestSecurityHeadersAreApplied(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	checks := map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "DENY",
-		"Referrer-Policy":        "no-referrer",
-		"Cache-Control":          "no-store",
+		"X-Content-Type-Options":    "nosniff",
+		"X-Frame-Options":           "DENY",
+		"Referrer-Policy":           "no-referrer",
+		"Permissions-Policy":        "camera=(), microphone=(), geolocation=()",
+		"Cache-Control":             "no-store",
+		"Strict-Transport-Security": "max-age=31536000",
 	}
 	for header, expected := range checks {
 		if got := rec.Header().Get(header); got != expected {
 			t.Fatalf("expected %s=%q, got %q", header, expected, got)
 		}
+	}
+}
+
+func TestSecurityHeadersOmitHSTSInDevelopment(t *testing.T) {
+	previousState := appState
+	appState.IsProductionLike = false
+	t.Cleanup(func() { appState = previousState })
+
+	handler := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("expected no HSTS header in development, got %q", got)
 	}
 }
 
