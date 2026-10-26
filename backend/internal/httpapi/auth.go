@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type requestSMSCodeRequest struct {
@@ -35,10 +38,10 @@ type authResponse struct {
 }
 
 var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}$`)
+var accountIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// developmentSMSCode is intentionally available only when the backend runs
-// outside production without a configured SMS sender. It keeps local/staging
-// smoke tests usable without weakening production authentication.
+// developmentSMSCode is available only when local development explicitly
+// enables it, binds the server to loopback, and has no configured SMS sender.
 const developmentSMSCode = "111111"
 
 func isReviewPhone(phone string) bool {
@@ -106,7 +109,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusBadGateway, "failed to deliver login code")
 			return
 		}
-	} else if appState.IsProduction && !reviewPhone {
+	} else if !reviewPhone && !developmentSMSFallbackEnabled() {
 		cleanupSMSCode(codeID)
 		Error(w, http.StatusServiceUnavailable, "SMS service is unavailable")
 		return
@@ -115,14 +118,18 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 	invalidateOlderSMSCodes(req.Phone, codeID)
 
 	response := map[string]any{"status": "code_requested", "expires_in": 300}
-	if !appState.IsProduction && appState.SMSSender == nil {
+	if developmentSMSFallbackEnabled() {
 		response["dev_code"] = code
 	}
 	JSON(w, http.StatusAccepted, response)
 }
 
+func developmentSMSFallbackEnabled() bool {
+	return appState.IsDevelopment && appState.DevSMSCodeEnabled && appState.SMSSender == nil
+}
+
 func issueSMSCode() (string, error) {
-	if !appState.IsProduction && appState.SMSSender == nil {
+	if developmentSMSFallbackEnabled() {
 		return developmentSMSCode, nil
 	}
 	return generateSMSCode()
@@ -170,19 +177,31 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+		return
+	}
+	defer tx.Rollback(ctx)
 
 	var codeID string
 	var codeHash string
 	var attempts int
-	err := appState.DB.Pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT id::text, code_hash, attempts
 		FROM sms_login_codes
 		WHERE phone = $1 AND consumed_at IS NULL AND expires_at > now()
 		ORDER BY created_at DESC
 		LIMIT 1
+		FOR UPDATE
 	`, req.Phone).Scan(&codeID, &codeHash, &attempts)
 	if err != nil {
-		Error(w, http.StatusUnauthorized, "invalid or expired code")
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(w, http.StatusUnauthorized, "invalid or expired code")
+		} else {
+			log.Printf("verify sms: failed to lock login code: %v", err)
+			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+		}
 		return
 	}
 	if attempts >= 5 {
@@ -190,18 +209,20 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if hashLoginCode(req.Phone, req.Code) != codeHash {
-		_, _ = appState.DB.Pool.Exec(ctx, `UPDATE sms_login_codes SET attempts = attempts + 1 WHERE id = $1`, codeID)
+	if subtle.ConstantTimeCompare([]byte(hashLoginCode(req.Phone, req.Code)), []byte(codeHash)) != 1 {
+		if _, err := tx.Exec(ctx, `UPDATE sms_login_codes SET attempts = attempts + 1 WHERE id = $1`, codeID); err != nil {
+			log.Printf("verify sms: failed to record invalid code attempt: %v", err)
+			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("verify sms: failed to commit invalid code attempt: %v", err)
+			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+			return
+		}
 		Error(w, http.StatusUnauthorized, "invalid or expired code")
 		return
 	}
-
-	tx, err := appState.DB.Pool.Begin(ctx)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to start login transaction")
-		return
-	}
-	defer tx.Rollback(ctx)
 
 	var userID string
 	err = tx.QueryRow(ctx, `
@@ -323,8 +344,37 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			Error(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
+		if !requireActiveAccount(w, r, userID) {
+			return
+		}
 		next(w, r.WithContext(withUserID(r.Context(), userID)))
 	}
+}
+
+func requireActiveAccount(w http.ResponseWriter, r *http.Request, userID string) bool {
+	if !accountIDRe.MatchString(userID) {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+
+	// Access JWTs are stateless, so checking the account row is what makes
+	// account deletion revoke existing tokens before their expiration time.
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	var exists bool
+	if err := appState.DB.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1::uuid)`, userID).Scan(&exists); err != nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+	if !exists {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	return true
 }
 
 func signAccessToken(userID string) (string, error) {
@@ -353,6 +403,9 @@ func parseAccessToken(rawToken string) (string, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return "", fmt.Errorf("invalid claims")
+	}
+	if _, scoped := claims["scope"]; scoped {
+		return "", fmt.Errorf("scoped token is not an access token")
 	}
 	sub, ok := claims["sub"].(string)
 	if !ok || sub == "" {

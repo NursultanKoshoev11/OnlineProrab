@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,12 +39,73 @@ func TestValidateRejectsShortProductionSigningKey(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsPredictableProductionSigningKeys(t *testing.T) {
+	weakKeys := []string{
+		strings.Repeat("a", 32),
+		strings.Repeat("0123456789abcdef", 2),
+		strings.Repeat("a", 16) + strings.Repeat("b", 16),
+		"abcdefghijklmnopqrstuvwxyz123456",
+		"ZYXWVUTSRQPONMLKJIHGFEDCBA987654",
+	}
+
+	for _, key := range weakKeys {
+		t.Run(key[:min(len(key), 16)], func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.JWTSecret = key
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "JWT_SECRET") {
+				t.Fatalf("expected predictable signing key to be rejected, got %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateRejectsLocalhostCORSInProduction(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.CORSAllowedOrigins = []string{"https://app.example.com", "http://localhost:5173"}
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected localhost CORS origin to be rejected in production")
+	}
+}
+
+func TestValidateRejectsUnsafeCORSOriginsInStaging(t *testing.T) {
+	unsafeOrigins := []string{
+		"http://app.example.com",
+		"https://app.example.com/",
+		"https://user@app.example.com",
+		"https://app.example.com?next=https://other.example.com",
+		"https://app.example.com#fragment",
+		"https://*.example.com",
+		"https://localhost:8443",
+		"https://localhost.:8443",
+		"https://staging.localhost.:8443",
+		"https://127.0.0.1:8443",
+		"https://127.0.0.1.:8443",
+		"https://[::1]:8443",
+		"https://0.0.0.0:8443",
+	}
+
+	for _, origin := range unsafeOrigins {
+		t.Run(origin, func(t *testing.T) {
+			cfg := validStagingConfig()
+			cfg.CORSAllowedOrigins = []string{origin}
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "CORS_ALLOWED_ORIGINS") {
+				t.Fatalf("expected staging CORS origin %q to be rejected, got %v", origin, err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsHTTPSCORSOriginWithPortInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.CORSAllowedOrigins = []string{"https://staging.example.com:8443"}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected HTTPS staging origin with explicit port to be accepted, got %v", err)
 	}
 }
 
@@ -115,8 +178,103 @@ func TestValidateAcceptsSafeProductionConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresS3StorageInProductionLikeEnvironments(t *testing.T) {
+	for _, env := range []string{StagingEnv, ProductionEnv} {
+		t.Run(env, func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.Env = env
+			cfg.StorageDriver = "local"
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "STORAGE_DRIVER=s3") {
+				t.Fatalf("expected local file storage to be rejected for %s, got %v", env, err)
+			}
+		})
+	}
+}
+
+func TestValidateRequiresS3BucketAndRegion(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*Config)
+		want   string
+	}{
+		{name: "missing bucket", change: func(cfg *Config) { cfg.S3Bucket = "" }, want: "S3_BUCKET"},
+		{name: "missing region", change: func(cfg *Config) { cfg.S3Region = "" }, want: "S3_REGION"},
+		{name: "missing deletion ledger bucket", change: func(cfg *Config) { cfg.S3DeletionLedgerBucket = "" }, want: "S3_DELETION_LEDGER_BUCKET"},
+		{name: "same storage and ledger bucket", change: func(cfg *Config) { cfg.S3DeletionLedgerBucket = cfg.S3Bucket }, want: "must be different"},
+		{name: "partial AWS credentials", change: func(cfg *Config) { cfg.AWSAccessKeyID = "key" }, want: "AWS_SECRET_ACCESS_KEY"},
+		{name: "session token without credentials", change: func(cfg *Config) { cfg.AWSSessionToken = "token" }, want: "AWS_SESSION_TOKEN"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := validStagingConfig()
+			tc.change(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %s configuration to be rejected, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestValidateAllowsAWSWorkloadIdentity(t *testing.T) {
+	cfg := validStagingConfig()
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected AWS workload identity without static keys to be accepted, got %v", err)
+	}
+}
+
 func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
+	cfg := validNikitaProductionConfig()
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid Nikita production config, got %v", err)
+	}
+}
+
+func TestValidateRejectsUnsafeNikitaEndpointsInProductionLikeEnvironments(t *testing.T) {
+	unsafeURLs := []string{
+		"http://smspro.nikita.kg/api/message",
+		"https://attacker.example/api/message",
+		"https://smspro.nikita.kg/other",
+		"https://user@smspro.nikita.kg/api/message",
+		"https://smspro.nikita.kg:8443/api/message",
+		"https://smspro.nikita.kg/api/message?next=https://attacker.example",
+		"https://smspro.nikita.kg/api/message#fragment",
+	}
+	for _, env := range []string{StagingEnv, ProductionEnv} {
+		for _, endpoint := range unsafeURLs {
+			t.Run(env+"/"+endpoint, func(t *testing.T) {
+				cfg := validNikitaProductionConfig()
+				cfg.Env = env
+				cfg.NikitaAPIURL = endpoint
+				err := cfg.Validate()
+				if err == nil || !strings.Contains(err.Error(), "NIKITA_API_URL") {
+					t.Fatalf("expected unsafe Nikita endpoint %q to be rejected, got %v", endpoint, err)
+				}
+			})
+		}
+	}
+}
+
+func validNikitaProductionConfig() Config {
 	cfg := validProductionConfig()
+	cfg.SMSProvider = SMSProviderNikita
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+	cfg.NikitaAPIURL = "https://smspro.nikita.kg/api/message"
+	cfg.NikitaLogin = "test-login"
+	cfg.NikitaPassword = "test-password"
+	cfg.NikitaSender = "SMSPRO.KG"
+	return cfg
+}
+
+func TestValidateAcceptsNikitaStagingConfig(t *testing.T) {
+	cfg := validStagingConfig()
 	cfg.SMSProvider = SMSProviderNikita
 	cfg.TwilioAccountSID = ""
 	cfg.TwilioAPIKeySID = ""
@@ -128,7 +286,44 @@ func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
 	cfg.NikitaSender = "SMSPRO.KG"
 
 	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected valid Nikita production config, got %v", err)
+		t.Fatalf("expected valid staging Nikita config, got %v", err)
+	}
+}
+
+func TestValidateRejectsUntrustedNikitaProductionEndpoints(t *testing.T) {
+	for _, env := range []string{StagingEnv, ProductionEnv} {
+		t.Run(env, func(t *testing.T) {
+			for _, test := range []struct {
+				name     string
+				endpoint string
+			}{
+				{name: "http transport", endpoint: "http://smspro.nikita.kg/api/message"},
+				{name: "lookalike host", endpoint: "https://smspro.nikita.kg.evil.example/api/message"},
+				{name: "untrusted host", endpoint: "https://evil.example/api/message"},
+				{name: "userinfo", endpoint: "https://user:password@smspro.nikita.kg/api/message"},
+				{name: "unexpected path", endpoint: "https://smspro.nikita.kg/api/other"},
+				{name: "query string", endpoint: "https://smspro.nikita.kg/api/message?redirect=https://evil.example"},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					cfg := validProductionConfig()
+					cfg.Env = env
+					cfg.SMSProvider = SMSProviderNikita
+					cfg.TwilioAccountSID = ""
+					cfg.TwilioAPIKeySID = ""
+					cfg.TwilioAPIKeySecret = ""
+					cfg.TwilioFrom = ""
+					cfg.NikitaAPIURL = test.endpoint
+					cfg.NikitaLogin = "test-login"
+					cfg.NikitaPassword = "test-password"
+					cfg.NikitaSender = "SMSPRO.KG"
+
+					err := cfg.Validate()
+					if err == nil || !strings.Contains(err.Error(), "official HTTPS endpoint") {
+						t.Fatalf("expected untrusted endpoint %q to be rejected, got %v", test.endpoint, err)
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -158,19 +353,58 @@ func TestSplitCSVTrimsEmptyValues(t *testing.T) {
 
 func validProductionConfig() Config {
 	return Config{
-		Env:                ProductionEnv,
-		HTTPAddr:           ":8080",
-		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app",
-		JWTSecret:          "abcdefghijklmnopqrstuvwxyz1234567890",
-		AccessTokenTTL:     15 * time.Minute,
-		CORSAllowedOrigins: []string{"https://app.example.com"},
-		UploadDir:          "/var/lib/onlineprorab/uploads",
-		MaxUploadBytes:     10 * 1024 * 1024,
-		SMSProvider:        SMSProviderTwilio,
-		TwilioAccountSID:   "AC0000000000",
-		TwilioAPIKeySID:    "SK0000000000",
-		TwilioAPIKeySecret: "unit-test-credential-value",
-		TwilioFrom:         "+15550000000",
+		Env:                    ProductionEnv,
+		HTTPAddr:               ":8080",
+		DatabaseURL:            "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
+		JWTSecret:              "Q7vJ3f2xC9kL4s1nR8pW6aZ5mH0dB2yT",
+		AccessTokenTTL:         15 * time.Minute,
+		CORSAllowedOrigins:     []string{"https://app.example.com"},
+		StorageDriver:          "s3",
+		S3Region:               "us-east-1",
+		S3Bucket:               "onlineprorab-test",
+		S3DeletionLedgerBucket: "onlineprorab-deletion-ledger-test",
+		TrustedProxyCIDRs:      []string{"10.20.0.4"},
+		UploadDir:              "/var/lib/onlineprorab/uploads",
+		MaxUploadBytes:         10 * 1024 * 1024,
+		SMSProvider:            SMSProviderTwilio,
+		TwilioAccountSID:       "AC0000000000",
+		TwilioAPIKeySID:        "SK0000000000",
+		TwilioAPIKeySecret:     "unit-test-credential-value",
+		TwilioFrom:             "+15550000000",
+	}
+}
+
+func TestValidateRequiresExplicitTrustedProxyCIDRsInProductionLikeEnvironments(t *testing.T) {
+	tests := []struct {
+		name  string
+		cidrs []string
+	}{
+		{name: "missing"},
+		{name: "all IPv4", cidrs: []string{"0.0.0.0/0"}},
+		{name: "half IPv4 space", cidrs: []string{"128.0.0.0/1"}},
+		{name: "broad IPv4 network", cidrs: []string{"10.0.0.0/8"}},
+		{name: "all IPv6", cidrs: []string{"::/0"}},
+		{name: "half IPv6 space", cidrs: []string{"8000::/1"}},
+		{name: "broad IPv6 network", cidrs: []string{"fd00:abcd::/48"}},
+		{name: "malformed", cidrs: []string{"proxy.internal"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := validStagingConfig()
+			cfg.TrustedProxyCIDRs = test.cidrs
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "TRUSTED_PROXY_CIDRS") {
+				t.Fatalf("expected TRUSTED_PROXY_CIDRS validation error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsTrustedProxyAddressAndCIDR(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.TrustedProxyCIDRs = []string{"10.20.0.4", "10.20.0.0/16", "fd00:abcd::/64"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected explicit trusted proxy addresses to be valid, got %v", err)
 	}
 }
 
@@ -208,5 +442,239 @@ func TestValidateRejectsInvalidReviewCode(t *testing.T) {
 
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected invalid review code to be rejected")
+	}
+}
+
+func TestValidateAcceptsStagingWithVerifiedTLSAndSMSProvider(t *testing.T) {
+	cfg := validStagingConfig()
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid staging config, got %v", err)
+	}
+}
+
+func TestValidateRequiresSMSProviderInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.SMSProvider = ""
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "SMS_PROVIDER") {
+		t.Fatalf("expected missing staging SMS provider to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRequiresVerifiedDatabaseTLSInStaging(t *testing.T) {
+	for _, sslmode := range []string{"disable", "allow", "prefer", "require", "verify-ca"} {
+		t.Run(sslmode, func(t *testing.T) {
+			cfg := validStagingConfig()
+			cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=" + sslmode
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+				t.Fatalf("expected staging sslmode=%s to be rejected, got %v", sslmode, err)
+			}
+		})
+	}
+}
+
+func TestValidateRequiresVerifiedDatabaseTLSInProduction(t *testing.T) {
+	for _, sslmode := range []string{"disable", "allow", "prefer", "require", "verify-ca"} {
+		t.Run(sslmode, func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=" + sslmode
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "DATABASE_URL") {
+				t.Fatalf("expected production sslmode=%s to be rejected, got %v", sslmode, err)
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsProductionDatabaseWithVerifiedTLS(t *testing.T) {
+	cfg := validProductionConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected production sslmode=verify-full to pass, got %v", err)
+	}
+}
+
+func TestValidateRejectsReviewOnlyModeInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.ReviewOnlyMode = true
+	cfg.ReviewSMSPhone = "+996700000001"
+	cfg.ReviewSMSCode = "111111"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "REVIEW_ONLY_MODE") {
+		t.Fatalf("expected staging review-only mode to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRejectsDevelopmentSMSCodeOutsideLoopbackDevelopment(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.DevSMSCodeEnabled = true
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "DEV_SMS_CODE_ENABLED") {
+		t.Fatalf("expected staging development SMS fallback to be rejected, got %v", err)
+	}
+}
+
+func TestValidateAllowsDevelopmentSMSCodeOnlyOnLoopback(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = DevelopmentEnv
+	cfg.DevSMSCodeEnabled = true
+	cfg.HTTPAddr = ":8080"
+
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "DEV_SMS_CODE_ENABLED") {
+		t.Fatalf("expected development SMS fallback on a non-loopback address to be rejected, got %v", err)
+	}
+
+	cfg.HTTPAddr = "127.0.0.1:8080"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected loopback-only development fallback to be valid, got %v", err)
+	}
+}
+
+func validStagingConfig() Config {
+	cfg := validProductionConfig()
+	cfg.Env = StagingEnv
+	cfg.DatabaseURL = "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full"
+	return cfg
+}
+
+func TestLoadDoesNotReadDotEnvForStaging(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("APP_ENV=development\nDEV_SMS_CODE_ENABLED=true\nOPENROUTER_API_KEY=dotenv-secret\n"), 0600); err != nil {
+		t.Fatalf("write staging test dotenv: %v", err)
+	}
+	previousDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("change to staging test directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+	t.Setenv("APP_ENV", StagingEnv)
+	t.Setenv("DEV_SMS_CODE_ENABLED", "false")
+
+	previousAPIKey, hadAPIKey := os.LookupEnv("OPENROUTER_API_KEY")
+	if err := os.Unsetenv("OPENROUTER_API_KEY"); err != nil {
+		t.Fatalf("unset API key for dotenv test: %v", err)
+	}
+	t.Cleanup(func() {
+		if hadAPIKey {
+			_ = os.Setenv("OPENROUTER_API_KEY", previousAPIKey)
+		} else {
+			_ = os.Unsetenv("OPENROUTER_API_KEY")
+		}
+	})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load staging config: %v", err)
+	}
+	if cfg.Env != StagingEnv {
+		t.Fatalf("expected staging environment to remain fixed, got %q", cfg.Env)
+	}
+	if cfg.DevSMSCodeEnabled {
+		t.Fatal("staging must not enable the development SMS fallback from .env")
+	}
+	if cfg.OpenRouterAPIKey != "" {
+		t.Fatal("staging must not load provider credentials from .env")
+	}
+}
+
+func TestLoadDoesNotInferStagingFromDotEnvWhenProcessEnvironmentIsUnset(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("APP_ENV=staging\nDEV_SMS_CODE_ENABLED=true\nOPENROUTER_API_KEY=dotenv-secret\n"), 0600); err != nil {
+		t.Fatalf("write staging test dotenv: %v", err)
+	}
+	previousDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("change to staging test directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	keys := []string{"APP_ENV", "DEV_SMS_CODE_ENABLED", "OPENROUTER_API_KEY"}
+	previousValues := make(map[string]string, len(keys))
+	wasSet := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		previousValues[key], wasSet[key] = os.LookupEnv(key)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("unset %s for dotenv test: %v", key, err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, key := range keys {
+			if wasSet[key] {
+				_ = os.Setenv(key, previousValues[key])
+			} else {
+				_ = os.Unsetenv(key)
+			}
+		}
+	})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config without inferred environment: %v", err)
+	}
+	if cfg.Env != "" {
+		t.Fatalf("expected APP_ENV to remain unset so validation fails closed, got %q", cfg.Env)
+	}
+	if cfg.DevSMSCodeEnabled || cfg.OpenRouterAPIKey != "" {
+		t.Fatal("a non-development .env file must not load flags or credentials")
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "APP_ENV") {
+		t.Fatalf("expected missing process APP_ENV to fail validation, got %v", err)
+	}
+}
+
+func TestLoadRejectsMalformedAndOverflowingEnvironmentValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{name: "invalid boolean", key: "DEV_SMS_CODE_ENABLED", value: "sometimes"},
+		{name: "invalid integer", key: "ACCESS_TOKEN_TTL_MINUTES", value: "fifteen"},
+		{name: "duration overflow", key: "ACCESS_TOKEN_TTL_MINUTES", value: "153722868"},
+		{name: "upload size overflow", key: "MAX_UPLOAD_MB", value: "8796093022208"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("APP_ENV", ProductionEnv)
+			t.Setenv("ACCESS_TOKEN_TTL_MINUTES", "15")
+			t.Setenv("MAX_UPLOAD_MB", "10")
+			t.Setenv("DEV_SMS_CODE_ENABLED", "false")
+			t.Setenv("REVIEW_ONLY_MODE", "false")
+			t.Setenv("NIKITA_TEST_MODE", "false")
+			t.Setenv(tc.key, tc.value)
+
+			_, err := Load()
+			if err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Fatalf("expected a safe load error naming %s, got %v", tc.key, err)
+			}
+			if strings.Contains(err.Error(), tc.value) {
+				t.Fatalf("configuration errors must not echo raw values: %v", err)
+			}
+		})
 	}
 }

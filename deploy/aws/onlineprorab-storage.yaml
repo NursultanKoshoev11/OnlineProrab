@@ -1,0 +1,356 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private Amazon S3 uploads and deletion ledger for OnlineProrab.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - staging
+      - production
+    Description: Deployment environment represented by this storage stack.
+  BucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 uploads bucket name; dots are excluded for TLS-compatible virtual-hosted access.
+  DeletionLedgerBucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 deletion ledger bucket name; it must differ from the uploads bucket.
+  BackupArchiveBucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 backup archive bucket name; it must differ from the uploads and deletion ledger buckets.
+  BackupArchiveRetentionDays:
+    Type: Number
+    Default: 180
+    MinValue: 14
+    MaxValue: 3650
+    Description: Number of days to retain current encrypted backup archives in S3.
+
+Rules:
+  UploadsAndLedgerMustBeSeparate:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BucketName, !Ref DeletionLedgerBucketName]]
+        AssertDescription: The uploads and deletion ledger buckets must be different.
+  AllStorageBucketsMustBeSeparate:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BucketName, !Ref BackupArchiveBucketName]]
+        AssertDescription: The backup archive bucket must differ from the uploads bucket.
+      - Assert: !Not [!Equals [!Ref DeletionLedgerBucketName, !Ref BackupArchiveBucketName]]
+        AssertDescription: The backup archive bucket must differ from the deletion ledger bucket.
+
+Resources:
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+
+  DeletionLedgerBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref DeletionLedgerBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: DeletionLedger
+
+  BackupArchiveBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BackupArchiveBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireBackupArchives
+            Status: Enabled
+            Prefix: snapshots/
+            ExpirationInDays: !Ref BackupArchiveRetentionDays
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupArchive
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub "${UploadsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  DeletionLedgerBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref DeletionLedgerBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt DeletionLedgerBucket.Arn
+              - !Sub "${DeletionLedgerBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  BackupArchiveBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref BackupArchiveBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt BackupArchiveBucket.Arn
+              - !Sub "${BackupArchiveBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ApplicationStoragePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Least-privilege S3 access for the OnlineProrab API.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CheckBucketAvailability
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: CheckDeletionLedgerAvailability
+            Effect: Allow
+            Action: s3:GetBucketLocation
+            Resource: !GetAtt DeletionLedgerBucket.Arn
+          - Sid: ReadWriteApplicationObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:AbortMultipartUpload
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteDeletionTombstones
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
+          - Sid: CheckDeletionLedgerWriteAccess
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/healthchecks/api-readiness.json"
+
+  DeletionJournalReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read-only account and object deletion journal access for a recovery operator.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListDeletionJournal
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt DeletionLedgerBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - tombstones/
+                  - tombstones/*
+          - Sid: ReadDeletionTombstones
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
+
+  BackupWriterPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read uploaded objects and write encrypted snapshots to this environment's S3 backup archive.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListUploadsForSnapshot
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: ReadUploadsForSnapshot
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteEncryptedBackupSnapshots
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+          - Sid: CompleteAndCleanMultipartSnapshotUploads
+            Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+
+  BackupArchiveReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read encrypted snapshots from this environment's S3 backup archive.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ReadBackupSnapshots
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+
+  StorageRecoveryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Restore uploads and write the object tombstones required for safe recovery.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListUploadsBucket
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: RestoreUploadObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:AbortMultipartUpload
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteRecoveryObjectTombstones
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/objects/*"
+
+Outputs:
+  UploadsBucketName:
+    Description: Set this value as S3_BUCKET.
+    Value: !Ref UploadsBucket
+  UploadsBucketRegion:
+    Description: Set this value as S3_REGION.
+    Value: !Ref AWS::Region
+  S3DeletionLedgerBucketName:
+    Description: Set this value as S3_DELETION_LEDGER_BUCKET.
+    Value: !Ref DeletionLedgerBucket
+  S3BackupArchiveBucketName:
+    Description: Set this value as S3_BACKUP_BUCKET for backup and recovery commands.
+    Value: !Ref BackupArchiveBucket
+  S3BackupArchiveRetentionDays:
+    Description: Retention period applied to encrypted snapshots under snapshots/.
+    Value: !Ref BackupArchiveRetentionDays
+  UploadsBucketArn:
+    Description: S3 uploads bucket ARN for operational verification.
+    Value: !GetAtt UploadsBucket.Arn
+  ApplicationStoragePolicyArn:
+    Description: Attach to the API workload role or a dedicated IAM user.
+    Value: !Ref ApplicationStoragePolicy
+  DeletionJournalReadPolicyArn:
+    Description: Attach to a recovery operator that must replay deletion events.
+    Value: !Ref DeletionJournalReadPolicy
+  StorageRecoveryPolicyArn:
+    Description: Attach to a recovery identity that restores uploads and writes object tombstones.
+    Value: !Ref StorageRecoveryPolicy
+  BackupWriterPolicyArn:
+    Description: Attach to a backup runner that reads uploads and writes encrypted snapshots.
+    Value: !Ref BackupWriterPolicy
+  BackupArchiveReadPolicyArn:
+    Description: Attach to a recovery identity that downloads encrypted snapshots.
+    Value: !Ref BackupArchiveReadPolicy

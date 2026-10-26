@@ -6,6 +6,7 @@ import (
 
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/database"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 var appState = State{
@@ -19,11 +20,17 @@ type SMSSender interface {
 
 type State struct {
 	DB                      *database.DB
+	FileStore               storage.ObjectStore
+	DeletionJournal         storage.DeletionJournal
 	JWTSecret               string
 	AccessTokenTTL          time.Duration
 	UploadDir               string
 	MaxUploadBytes          int64
 	IsProduction            bool
+	IsProductionLike        bool
+	IsDevelopment           bool
+	TrustedProxyCIDRs       []string
+	DevSMSCodeEnabled       bool
 	ReviewOnlyMode          bool
 	ReviewSMSPhone          string
 	ReviewSMSCode           string
@@ -45,14 +52,21 @@ type State struct {
 	OpenRouterFallbackModel string
 }
 
-func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
+func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore storage.ObjectStore) {
+	deletionJournal, _ := fileStore.(storage.DeletionJournal)
 	appState = State{
 		DB:                      db,
+		FileStore:               fileStore,
+		DeletionJournal:         deletionJournal,
 		JWTSecret:               cfg.JWTSecret,
 		AccessTokenTTL:          cfg.AccessTokenTTL,
 		UploadDir:               cfg.UploadDir,
 		MaxUploadBytes:          cfg.MaxUploadBytes,
 		IsProduction:            cfg.IsProduction(),
+		IsProductionLike:        cfg.IsProductionLike(),
+		IsDevelopment:           cfg.IsDevelopment(),
+		TrustedProxyCIDRs:       append([]string(nil), cfg.TrustedProxyCIDRs...),
+		DevSMSCodeEnabled:       cfg.DevSMSCodeEnabled,
 		ReviewOnlyMode:          cfg.ReviewOnlyMode,
 		ReviewSMSPhone:          cfg.ReviewSMSPhone,
 		ReviewSMSCode:           cfg.ReviewSMSCode,

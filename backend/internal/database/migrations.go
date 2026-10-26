@@ -15,9 +15,14 @@ var migrationFiles embed.FS
 
 const migrationAdvisoryLock int64 = 748392015
 
+const legacyProductionConstraintsMigrationName = "production_constraints"
+
 func (db *DB) ApplyMigrations(ctx context.Context) error {
 	if db == nil || db.Pool == nil {
 		return fmt.Errorf("database pool is not initialized")
+	}
+	if err := db.reconcileLegacyProductionConstraints(ctx); err != nil {
+		return err
 	}
 
 	entries, err := fs.ReadDir(migrationFiles, "migrations")
@@ -46,6 +51,60 @@ func (db *DB) ApplyMigrations(ctx context.Context) error {
 		if err := db.applyMigration(ctx, version, name, string(sqlBytes)); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// reconcileLegacyProductionConstraints repairs databases created by the old
+// EnsureSchema migrator. That migrator also recorded versions 1 and 2, but its
+// version 2 did not include the deleted_at columns and other hardening now
+// required by migration 11. Apply the current version-2 SQL once before later
+// migrations depend on those schema changes.
+func (db *DB) reconcileLegacyProductionConstraints(ctx context.Context) error {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin legacy migration reconciliation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, migrationAdvisoryLock); err != nil {
+		return fmt.Errorf("lock legacy migration reconciliation: %w", err)
+	}
+
+	var hasMigrationTable bool
+	if err := tx.QueryRow(ctx, `SELECT to_regclass('public.schema_migrations') IS NOT NULL`).Scan(&hasMigrationTable); err != nil {
+		return fmt.Errorf("check migration history for legacy schema: %w", err)
+	}
+	if !hasMigrationTable {
+		return tx.Commit(ctx)
+	}
+
+	var legacyName string
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE((SELECT name FROM schema_migrations WHERE version = 2), '')
+	`).Scan(&legacyName); err != nil {
+		return fmt.Errorf("read legacy production migration history: %w", err)
+	}
+	if legacyName != legacyProductionConstraintsMigrationName {
+		return tx.Commit(ctx)
+	}
+
+	statement, err := migrationFiles.ReadFile("migrations/000002_harden_existing_schema.up.sql")
+	if err != nil {
+		return fmt.Errorf("read legacy schema reconciliation migration: %w", err)
+	}
+	if _, err := tx.Exec(ctx, string(statement)); err != nil {
+		return fmt.Errorf("reconcile legacy production schema: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE schema_migrations
+		SET name = '000002_harden_existing_schema.up.sql'
+		WHERE version = 2 AND name = $1
+	`, legacyProductionConstraintsMigrationName); err != nil {
+		return fmt.Errorf("record legacy schema reconciliation: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit legacy schema reconciliation: %w", err)
 	}
 	return nil
 }

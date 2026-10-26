@@ -127,6 +127,14 @@ CREATE TABLE IF NOT EXISTS refresh_sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Older installations created these tables before schema_migrations existed.
+-- Add the soft-delete columns before the partial indexes below reference them.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE cost_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_active ON projects(owner_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON project_members(user_id);

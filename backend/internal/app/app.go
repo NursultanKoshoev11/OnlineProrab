@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -12,11 +14,19 @@ import (
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/bootstrap"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/httpapi"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/observability"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/sms"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 func Run() {
-	cfg := config.Load()
+	observability.Configure(os.Getenv("APP_ENV"))
+	cfg, cfgErr := config.Load()
+	if cfgErr != nil {
+		slog.Error("configuration_load_failed", "error", cfgErr)
+		os.Exit(1)
+	}
+	observability.Configure(cfg.Env)
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}
@@ -47,8 +57,23 @@ func Run() {
 		}
 		smsSender = sender
 	}
-	if cfg.IsProduction() && smsSender == nil && !cfg.ReviewOnlyMode {
-		log.Fatal("SMS provider is required in production unless review-only mode is enabled")
+	if cfg.IsProductionLike() && smsSender == nil && !cfg.ReviewOnlyMode {
+		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
+	}
+
+	var fileStore storage.ObjectStore
+	var storageErr error
+	if cfg.StorageDriver == "s3" {
+		fileStore, storageErr = storage.NewS3(context.Background(), storage.S3Options{
+			Region:               cfg.S3Region,
+			Bucket:               cfg.S3Bucket,
+			DeletionLedgerBucket: cfg.S3DeletionLedgerBucket,
+		})
+	} else {
+		fileStore, storageErr = storage.NewLocal(cfg.UploadDir)
+	}
+	if storageErr != nil {
+		log.Fatalf("failed to initialize file storage: %v", storageErr)
 	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -64,12 +89,22 @@ func Run() {
 	}
 	migrationCancel()
 
-	httpapi.SetState(cfg, db, smsSender)
+	httpapi.SetState(cfg, db, smsSender, fileStore)
+	go storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
+	authPrunerDone := make(chan struct{})
+	go func() {
+		defer close(authPrunerDone)
+		httpapi.RunAuthHistoryPruner(rootCtx)
+	}()
 	httpapi.SetCORSAllowedOrigins(cfg.CORSAllowedOrigins)
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		return db.Ping(ctx) == nil
+		if db.Ping(ctx) != nil {
+			return false
+		}
+		checker, ok := fileStore.(storage.HealthChecker)
+		return ok && checker.Check(ctx) == nil
 	})
 
 	server := &http.Server{
@@ -83,16 +118,16 @@ func Run() {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("onlineprorab api starting env=%s addr=%s", cfg.Env, cfg.HTTPAddr)
+		slog.Info("api_starting", "environment", cfg.Env, "listen_address", cfg.HTTPAddr)
 		serverErrors <- server.ListenAndServe()
 	}()
 
 	select {
 	case <-rootCtx.Done():
-		log.Printf("shutdown signal received")
+		slog.Info("shutdown_signal_received")
 	case err := <-serverErrors:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("http server stopped unexpectedly: %v", err)
+			slog.Error("http_server_stopped_unexpectedly", "error", err)
 		}
 		stop()
 	}
@@ -100,8 +135,9 @@ func Run() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("graceful shutdown failed: %v", err)
+		slog.Error("graceful_shutdown_failed", "error", err)
 		_ = server.Close()
 	}
-	log.Printf("onlineprorab api stopped")
+	<-authPrunerDone
+	slog.Info("api_stopped")
 }

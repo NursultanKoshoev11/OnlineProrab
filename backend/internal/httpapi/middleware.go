@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"strings"
@@ -22,7 +22,7 @@ func SetCORSAllowedOrigins(origins []string) {
 }
 
 func withMiddleware(next http.Handler) http.Handler {
-	return requestID(recoverer(requestLogger(securityHeaders(cors(limitBody(next))))))
+	return requestID(requestLogger(recoverer(securityHeaders(cors(limitBody(next))))))
 }
 
 func limitBody(next http.Handler) http.Handler {
@@ -95,6 +95,9 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		w.Header().Set("Cache-Control", "no-store")
+		if appState.IsProductionLike {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -173,15 +176,13 @@ func requestLogger(next http.Handler) http.Handler {
 		if status == 0 {
 			status = http.StatusOK
 		}
-		log.Printf(
-			"request_id=%s method=%s path=%s status=%d bytes=%d duration=%s remote=%s",
-			requestIDFromContext(r.Context()),
-			r.Method,
-			r.URL.Path,
-			status,
-			recorder.bytes,
-			time.Since(start),
-			r.RemoteAddr,
+		slog.Info("http_request",
+			"request_id", requestIDFromContext(r.Context()),
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", status,
+			"bytes", recorder.bytes,
+			"duration_ms", time.Since(start).Milliseconds(),
 		)
 	})
 }
@@ -190,7 +191,7 @@ func recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				log.Printf("request_id=%s panic_recovered=%v", requestIDFromContext(r.Context()), recovered)
+				slog.Error("http_panic_recovered", "request_id", requestIDFromContext(r.Context()))
 				Error(w, http.StatusInternalServerError, "internal server error")
 			}
 		}()

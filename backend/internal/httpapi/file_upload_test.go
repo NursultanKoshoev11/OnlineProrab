@@ -2,13 +2,15 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"mime/multipart"
+	"io"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 func TestFileDTODoesNotExposeStoragePath(t *testing.T) {
@@ -62,44 +64,52 @@ func TestProjectCoverAcceptsImagesOnly(t *testing.T) {
 }
 
 func TestStoreUploadedJPEG(t *testing.T) {
-	oldUploadDir := appState.UploadDir
-	appState.UploadDir = t.TempDir()
-	defer func() { appState.UploadDir = oldUploadDir }()
+	store, err := storage.NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatalf("create local storage: %v", err)
+	}
 
 	jpeg := append([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0x00}, bytes.Repeat([]byte{0x01}, 100)...)
 	stored, err := storeUploadedFile(
+		context.Background(),
+		store,
 		&memoryMultipartFile{Reader: bytes.NewReader(jpeg)},
-		&multipart.FileHeader{Filename: "receipt.jpg"},
 		"project-1",
 		1024,
 	)
 	if err != nil {
 		t.Fatalf("storeUploadedFile returned error: %v", err)
 	}
-	defer os.Remove(stored.absolutePath)
-
 	if stored.contentType != "image/jpeg" {
 		t.Fatalf("expected image/jpeg, got %q", stored.contentType)
 	}
 	if stored.sizeBytes != int64(len(jpeg)) {
 		t.Fatalf("expected size %d, got %d", len(jpeg), stored.sizeBytes)
 	}
-	if filepath.Ext(stored.absolutePath) != ".jpg" {
-		t.Fatalf("expected .jpg extension, got %q", stored.absolutePath)
+	if filepath.Ext(stored.relativePath) != ".jpg" {
+		t.Fatalf("expected .jpg extension, got %q", stored.relativePath)
 	}
-	if _, err := os.Stat(stored.absolutePath); err != nil {
+	object, err := store.Get(context.Background(), stored.relativePath)
+	if err != nil {
 		t.Fatalf("stored file does not exist: %v", err)
+	}
+	defer object.Body.Close()
+	actual, err := io.ReadAll(object.Body)
+	if err != nil || !bytes.Equal(actual, jpeg) {
+		t.Fatalf("stored file content mismatch: err=%v", err)
 	}
 }
 
 func TestStoreUploadedFileRejectsUnsupportedType(t *testing.T) {
-	oldUploadDir := appState.UploadDir
-	appState.UploadDir = t.TempDir()
-	defer func() { appState.UploadDir = oldUploadDir }()
+	store, err := storage.NewLocal(t.TempDir())
+	if err != nil {
+		t.Fatalf("create local storage: %v", err)
+	}
 
-	_, err := storeUploadedFile(
+	_, err = storeUploadedFile(
+		context.Background(),
+		store,
 		&memoryMultipartFile{Reader: bytes.NewReader([]byte("plain text"))},
-		&multipart.FileHeader{Filename: "notes.txt"},
 		"project-1",
 		1024,
 	)
