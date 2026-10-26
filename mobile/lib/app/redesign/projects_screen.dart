@@ -333,69 +333,72 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
     final openSubscription = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Профиль',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 14),
-              _InfoRow(
-                icon: Icons.phone_outlined,
-                title: widget.session.phone,
-                subtitle: 'Текущий аккаунт',
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.workspace_premium_outlined),
-                title: const Text('Подписка и оплата'),
-                subtitle: const Text('Тариф и срок действия'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => Navigator.of(context).pop(true),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.privacy_tip_outlined),
-                title: const Text('Политика конфиденциальности'),
-                trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-                onTap: _openPrivacyPolicy,
-              ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  foregroundColor: Colors.redAccent,
-                  side: const BorderSide(color: Color(0xFFFFCDD2)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Профиль',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                 ),
-                onPressed: _deleteAccount,
-                icon: const Icon(Icons.delete_forever_outlined),
-                label: const Text('Удалить аккаунт и данные'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  foregroundColor: Colors.redAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
+                const SizedBox(height: 14),
+                _InfoRow(
+                  icon: Icons.phone_outlined,
+                  title: widget.session.phone,
+                  subtitle: 'Текущий аккаунт',
                 ),
-                onPressed: () async {
-                  Navigator.of(context).pop();
-                  await widget.deps.authRepository.signOut();
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Выйти'),
-              ),
-            ],
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.workspace_premium_outlined),
+                  title: const Text('Подписка и оплата'),
+                  subtitle: const Text('Тариф и срок действия'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).pop(true),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('Политика конфиденциальности'),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: _openPrivacyPolicy,
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    foregroundColor: Colors.redAccent,
+                    side: const BorderSide(color: Color(0xFFFFCDD2)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onPressed: _deleteAccount,
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: const Text('Удалить аккаунт и данные'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    foregroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await widget.deps.authRepository.signOut();
+                  },
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('Выйти'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
