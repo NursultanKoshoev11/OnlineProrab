@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,6 +78,41 @@ func TestRequestIDReplacesUnsafeClientValue(t *testing.T) {
 
 	if got := rec.Header().Get("X-Request-ID"); got == "request id with spaces" || got == "" {
 		t.Fatalf("expected unsafe request id to be replaced, got %q", got)
+	}
+}
+
+func TestRequestLoggerRecordsRecoveredPanicWithoutPanicValue(t *testing.T) {
+	previousLogger := slog.Default()
+	var output bytes.Buffer
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	handler := withMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("sensitive panic value")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500 after panic recovery, got %d", rec.Code)
+	}
+	if strings.Contains(output.String(), "sensitive panic value") {
+		t.Fatalf("panic value should not be written to logs: %q", output.String())
+	}
+
+	foundRequestEvent := false
+	for _, line := range strings.Split(strings.TrimSpace(output.String()), "\n") {
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("expected JSON log record, got %q: %v", line, err)
+		}
+		if event["msg"] == "http_request" && event["status"] == float64(http.StatusInternalServerError) {
+			foundRequestEvent = true
+		}
+	}
+	if !foundRequestEvent {
+		t.Fatalf("expected a request event for the recovered 500 response, got %q", output.String())
 	}
 }
 

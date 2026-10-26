@@ -38,6 +38,7 @@ type authResponse struct {
 }
 
 var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}$`)
+var accountIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // developmentSMSCode is available only when local development explicitly
 // enables it, binds the server to loopback, and has no configured SMS sender.
@@ -343,8 +344,37 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			Error(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
+		if !requireActiveAccount(w, r, userID) {
+			return
+		}
 		next(w, r.WithContext(withUserID(r.Context(), userID)))
 	}
+}
+
+func requireActiveAccount(w http.ResponseWriter, r *http.Request, userID string) bool {
+	if !accountIDRe.MatchString(userID) {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+
+	// Access JWTs are stateless, so checking the account row is what makes
+	// account deletion revoke existing tokens before their expiration time.
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	var exists bool
+	if err := appState.DB.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1::uuid)`, userID).Scan(&exists); err != nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+	if !exists {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	return true
 }
 
 func signAccessToken(userID string) (string, error) {

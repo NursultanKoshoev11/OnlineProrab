@@ -43,7 +43,11 @@
 - [ ] Set production `CORS_ALLOWED_ORIGINS`
 - [ ] Configure HTTPS and domain
 - [ ] Configure PostgreSQL backups
-- [ ] Configure uploaded file storage
+- [ ] Configure a private AWS S3 bucket, Block Public Access, encryption, and least-privilege IAM role or credentials
+- [ ] Back up the active local upload volume and database
+- [ ] Stop API writes and run `storage-migrate -direction=local-to-s3`
+- [ ] Verify existing object sizes/digests and test upload/download/delete against staging
+- [ ] Test S3 backup/restore and `storage-migrate -direction=s3-to-local` rollback
 - [ ] Configure logs and uptime monitoring
 - [ ] Configure SMS provider
 
