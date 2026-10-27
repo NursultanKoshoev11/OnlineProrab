@@ -226,7 +226,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
         final selectedPlan =
             widget.requiredRenewal && status == 'expired' && plan == 'trial'
             ? 'standard'
-            : plan;
+            : plan!;
         setState(() {
           _currentPlan = plan!;
           _selectedPlan = selectedPlan;
