@@ -14,12 +14,16 @@ class _SubscriptionScreen extends StatefulWidget {
     this.project,
     this.members = const [],
     this.canManage = true,
+    this.requiredRenewal = false,
+    this.onSubscriptionRenewed,
     required this.apiClient,
   });
 
   final RemoteProject? project;
   final List<RemoteProjectMember> members;
   final bool canManage;
+  final bool requiredRenewal;
+  final VoidCallback? onSubscriptionRenewed;
   final ApiClient apiClient;
 
   @override
@@ -67,6 +71,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _checkoutOrderID != null) {
       unawaited(_refreshOBankPaymentStatus());
+    }
+    if (state == AppLifecycleState.resumed && widget.requiredRenewal) {
+      unawaited(_loadCurrentSubscription());
     }
   }
 
@@ -216,14 +223,22 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
       final status = data['status']?.toString();
       final endsAt = DateTime.tryParse(data['ends_at']?.toString() ?? '');
       if (plan == 'trial' || plan == 'standard' || plan == 'max') {
+        final selectedPlan =
+            widget.requiredRenewal && status == 'expired' && plan == 'trial'
+            ? 'standard'
+            : plan!;
         setState(() {
           _currentPlan = plan!;
-          _selectedPlan = plan;
+          _selectedPlan = selectedPlan;
           _currentStatus = status ?? 'trialing';
           _currentBillingPeriod = period == 'year' ? 'year' : 'month';
           _selectedBillingPeriod = _currentBillingPeriod;
           _subscriptionEndsAt = endsAt;
         });
+        if (widget.requiredRenewal &&
+            (status == 'active' || status == 'trialing')) {
+          widget.onSubscriptionRenewed?.call();
+        }
       }
     } catch (_) {
       // The trial default keeps the screen useful while offline or before login.
@@ -302,13 +317,15 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Подписка'),
-        actions: [
-          IconButton(
-            tooltip: 'Закрыть',
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close_rounded),
-          ),
-        ],
+        actions: widget.requiredRenewal
+            ? const []
+            : [
+                IconButton(
+                  tooltip: 'Закрыть',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
@@ -329,6 +346,28 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
             'Владелец оплачивает доступ всей команды. Участники отдельно не платят.',
             style: TextStyle(color: _muted, fontSize: 13, height: 1.4),
           ),
+          if (widget.requiredRenewal) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: _warningSoft,
+              child: const Padding(
+                padding: EdgeInsets.all(15),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.lock_clock_outlined, color: _warning),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Срок подписки закончился. Рабочие разделы заблокированы до продления.',
+                        style: TextStyle(fontSize: 13, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Card(
             child: Padding(
@@ -522,30 +561,23 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
           Card(
             child: Padding(
               padding: const EdgeInsets.all(15),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.lock_outline_rounded, color: _brand),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Покупка в приложении недоступна',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Способ покупки цифровой подписки зависит от платформы, через которую установлено приложение. Здесь отображаются тариф и состояние аккаунта.',
-                          style: TextStyle(
-                            color: _muted,
-                            fontSize: 12,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
+                  const Text(
+                    'Оплата через приложение недоступна',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Откройте страницу продления подписки в браузере. После оплаты вернитесь в приложение — доступ восстановится автоматически.',
+                    style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _openWebBilling,
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: const Text('Продлить подписку'),
                   ),
                 ],
               ),
@@ -553,6 +585,18 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
           ),
       ],
     ];
+  }
+
+  Future<void> _openWebBilling() async {
+    final opened = await launchUrl(
+      Uri.parse('https://stroy.com.kg/billing/'),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      setState(() {
+        _checkoutMessage = 'Не удалось открыть страницу продления подписки.';
+      });
+    }
   }
 
   Widget _buildNativeOBankCheckoutControls() {
