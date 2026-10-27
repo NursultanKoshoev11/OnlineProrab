@@ -14,8 +14,11 @@ class ApiClient {
 
   final http.Client _httpClient;
   final Duration _timeout;
+  final StreamController<void> _subscriptionExpiredController =
+      StreamController<void>.broadcast();
 
   http.Client get httpClient => _httpClient;
+  Stream<void> get subscriptionExpired => _subscriptionExpiredController.stream;
 
   String? accessToken;
   String? refreshToken;
@@ -547,7 +550,14 @@ class ApiClient {
       final message = data is Map<String, dynamic>
           ? data['error']?.toString()
           : null;
-      throw ApiException(response.statusCode, message ?? 'Request failed');
+      final error = ApiException(
+        response.statusCode,
+        message ?? 'Request failed',
+      );
+      if (error.isSubscriptionExpired) {
+        _subscriptionExpiredController.add(null);
+      }
+      throw error;
     }
     return data;
   }
@@ -573,7 +583,10 @@ class ApiClient {
     return const <dynamic>[];
   }
 
-  void close() => _httpClient.close();
+  void close() {
+    _subscriptionExpiredController.close();
+    _httpClient.close();
+  }
 }
 
 class ApiException implements Exception {
@@ -584,6 +597,9 @@ class ApiException implements Exception {
 
   bool get isNetworkError => statusCode == 0 || statusCode == 408;
   bool get isUnauthorized => statusCode == 401;
+  bool get isSubscriptionExpired =>
+      statusCode == 403 &&
+      message.toLowerCase().contains('subscription is expired');
 
   @override
   String toString() => 'ApiException($statusCode): $message';

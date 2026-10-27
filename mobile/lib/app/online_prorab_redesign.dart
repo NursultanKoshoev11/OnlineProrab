@@ -343,6 +343,8 @@ class _AuthGate extends StatefulWidget {
 class _AuthGateState extends State<_AuthGate> {
   late Future<SessionData?> _sessionFuture;
   StreamSubscription<void>? _sessionExpiredSubscription;
+  StreamSubscription<void>? _subscriptionExpiredSubscription;
+  bool _subscriptionExpired = false;
 
   _Dependencies get _deps => _Dependencies(
     apiClient: widget.apiClient,
@@ -383,11 +385,20 @@ class _AuthGateState extends State<_AuthGate> {
         _sessionFuture = Future<SessionData?>.value(null);
       });
     });
+    _subscriptionExpiredSubscription = widget.apiClient.subscriptionExpired
+        .listen((_) {
+          if (_subscriptionExpired) return;
+          widget.realtimeService.stop();
+          if (!mounted) return;
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          setState(() => _subscriptionExpired = true);
+        });
   }
 
   @override
   void dispose() {
     _sessionExpiredSubscription?.cancel();
+    _subscriptionExpiredSubscription?.cancel();
     super.dispose();
   }
 
@@ -400,6 +411,15 @@ class _AuthGateState extends State<_AuthGate> {
           return const _LoadingScreen();
         }
         if (snapshot.data case final session?) {
+          if (_subscriptionExpired) {
+            return _SubscriptionScreen(
+              apiClient: widget.apiClient,
+              requiredRenewal: true,
+              onSubscriptionRenewed: () {
+                if (mounted) setState(() => _subscriptionExpired = false);
+              },
+            );
+          }
           return _ProjectsScreen(session: session, deps: _deps);
         }
         return _LoginScreen(
