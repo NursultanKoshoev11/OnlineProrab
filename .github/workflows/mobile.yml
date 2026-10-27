@@ -385,7 +385,7 @@ jobs:
         run: flutter test
 
       - name: Prepare iOS release build
-        run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
+        run: flutter build ios --release --no-codesign --build-name 1.0 --build-number 7 --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false
 
       - name: Configure signing for the Runner app target
         run: |
