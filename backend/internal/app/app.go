@@ -60,7 +60,8 @@ func Run() {
 		smsSender = sender
 	}
 	if cfg.IsProductionLike() && smsSender == nil && !allowsNoSMSProvider(cfg) {
-		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
+		slog.Error("sms_provider_missing")
+		os.Exit(1)
 	}
 
 	var fileStore storage.ObjectStore
