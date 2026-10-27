@@ -7,6 +7,7 @@ This checklist tracks the minimum work required before a real public release.
 - `APP_ENV=production`
 - `HTTP_ADDR=:8080`
 - `DATABASE_URL=postgres://...?sslmode=verify-full`
+- Production PostgreSQL must present a certificate whose SAN matches the database hostname in `DATABASE_URL`; install its trusted CA at `/etc/onlineprorab/postgres-ca.crt` on the API host. The production Compose file mounts this CA read-only into the API container.
 - `JWT_SECRET=<strong random secret>`
 - `ACCESS_TOKEN_TTL_MINUTES=60`
 - `CORS_ALLOWED_ORIGINS=https://stroy.com.kg`
@@ -53,13 +54,14 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 
 ## Current production blockers
 
-1. Deploy the private AWS storage stack per environment with [`deploy/aws/README.md`](../deploy/aws/README.md), attach its least-privilege policies, and configure the API credentials. Back up and migrate existing uploads with the command below; retain the source volume until all active-file counts and checksums are verified.
-2. Configure the Docker daemon's AWS credentials for the `awslogs` driver, attach `ApiLogWriterPolicyArn`, and set `API_LOG_GROUP` from `ApiLogGroupName`. Confirm JSON API logs arrive in CloudWatch and the SNS error alarm reaches the operator. Monitor `/health` and `/ready` externally; CloudWatch Logs cannot detect a host outage that prevents log delivery.
-3. Install and enable the daily encrypted S3 backup timer on the production runner, confirm its CloudWatch/SNS missed-backup alarm, and complete a real PostgreSQL + S3 restore drill in staging with a dedicated recovery uploads bucket and database. Keep the age identity in the separate recovery secret store.
-4. Configure the real SMS provider and complete an auth-to-project smoke test.
-5. Run mobile release builds and test the full flow on real Android and iOS devices.
-6. Keep deletion-ledger read access restricted to recovery operators, then run the S3 restore drill below to verify tombstones remove accounts, file metadata, and queued upload objects before traffic resumes.
-7. Before live O!Dengi payments, obtain merchant credentials and the confirmed live API URL, complete staging payment/callback reconciliation, and approve refund terms and the store-billing approach.
+The private AWS storage stack, EC2 IAM policies, S3 upload migration, and verified PostgreSQL TLS are provisioned. The production Compose configuration connects through the existing `stroy_default` network and mounts the PostgreSQL CA from `/etc/onlineprorab/postgres-ca.crt`. Keep the original upload volume until the restore drill is complete.
+
+1. Verify CloudWatch receives JSON logs from the production API. The log group retains events for 30 days. Confirm the SNS subscription so error and missed-backup alerts reach the operator; monitor `/health` and `/ready` externally because CloudWatch Logs cannot detect a host outage.
+2. Install and enable the daily encrypted S3 backup timer on the production runner, confirm its missed-backup alarm, and complete a PostgreSQL + S3 restore drill in staging with a dedicated recovery uploads bucket and database. Keep the age identity in the separate recovery secret store and use encrypted local backup storage.
+3. Complete an auth-to-project smoke test with the configured production SMS provider.
+4. Run mobile release builds and test the full flow on real Android and iOS devices.
+5. Keep deletion-ledger read access restricted to recovery operators, then run the S3 restore drill below to verify tombstones remove accounts, file metadata, and queued upload objects before traffic resumes.
+6. Before live O!Dengi payments, obtain merchant credentials and the confirmed live API URL, complete staging payment/callback reconciliation, and approve refund terms and the store-billing approach.
 
 ## Application logs
 
