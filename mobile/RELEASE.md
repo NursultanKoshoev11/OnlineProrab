@@ -16,10 +16,16 @@ signing secrets. The iOS simulator artifact continues to build for staging.
 - Environment secrets `STROY_KEYSTORE_BASE64`, `STROY_KEYSTORE_PASSWORD`,
   `STROY_KEY_ALIAS`, and `STROY_KEY_PASSWORD`: the Play upload keystore and
   credentials.
+- Environment variable `GOOGLE_PLAY_PACKAGE_NAME`: the exact Android package
+  registered in Google Play (currently `kg.com.stroy.app`).
+- Environment secret `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`: the Google Cloud
+  service-account JSON key authorized in Play Console to release testing
+  versions.
 
 The workflow validates the release inputs, runs analysis and tests, and saves
-the signed APK and AAB as GitHub Actions artifacts. It does not submit either
-artifact to Google Play. The production signing job runs automatically after
+the signed APK and AAB as GitHub Actions artifacts, and uploads the AAB to the
+Google Play `internal` track. It never publishes the working production track.
+The production signing and internal-track upload job runs automatically after
 the API cutover and signing configuration are complete; `workflow_dispatch`
 remains available for manual builds.
 
