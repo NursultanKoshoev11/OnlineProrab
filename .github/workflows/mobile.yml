@@ -132,11 +132,13 @@ jobs:
           STROY_KEYSTORE_PASSWORD: ${{ secrets.STROY_KEYSTORE_PASSWORD }}
           STROY_KEY_ALIAS: ${{ secrets.STROY_KEY_ALIAS }}
           STROY_KEY_PASSWORD: ${{ secrets.STROY_KEY_PASSWORD }}
+          GOOGLE_PLAY_PACKAGE_NAME: ${{ vars.GOOGLE_PLAY_PACKAGE_NAME }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail
-          if [[ "$API_STORAGE_CUTOVER_COMPLETE" == 'true' && -n "$STROY_APPLICATION_ID" && -n "$STROY_KEYSTORE_BASE64" && -n "$STROY_KEYSTORE_PASSWORD" && -n "$STROY_KEY_ALIAS" && -n "$STROY_KEY_PASSWORD" ]]; then
+          if [[ "$API_STORAGE_CUTOVER_COMPLETE" == 'true' && -n "$STROY_APPLICATION_ID" && -n "$STROY_KEYSTORE_BASE64" && -n "$STROY_KEYSTORE_PASSWORD" && -n "$STROY_KEY_ALIAS" && -n "$STROY_KEY_PASSWORD" && -n "$GOOGLE_PLAY_PACKAGE_NAME" && -n "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" ]]; then
             echo 'ready=true' >> "$GITHUB_OUTPUT"
-            echo 'Production API cutover and Android signing are configured; AAB and APK builds will run.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Production API cutover, Android signing, and Google Play internal-track upload are configured; AAB and APK builds will run.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'ready=false' >> "$GITHUB_OUTPUT"
             if [[ "$API_STORAGE_CUTOVER_COMPLETE" != 'true' ]]; then
@@ -144,6 +146,9 @@ jobs:
             fi
             if [[ -z "$STROY_APPLICATION_ID" || -z "$STROY_KEYSTORE_BASE64" || -z "$STROY_KEYSTORE_PASSWORD" || -z "$STROY_KEY_ALIAS" || -z "$STROY_KEY_PASSWORD" ]]; then
               echo 'Android signed release was skipped because the existing Google Play upload keystore and credentials are not configured in production-mobile.' >> "$GITHUB_STEP_SUMMARY"
+            fi
+            if [[ -z "$GOOGLE_PLAY_PACKAGE_NAME" || -z "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" ]]; then
+              echo 'Android signed release was skipped because the Google Play service account or package variable is not configured in production-mobile.' >> "$GITHUB_STEP_SUMMARY"
             fi
           fi
 
@@ -274,6 +279,15 @@ jobs:
           path: mobile/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload AAB to Google Play internal testing
+        uses: r0adkll/upload-google-play@e738db9ddf8d2476ea806d921b64aacd24f34515a5 # v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ vars.GOOGLE_PLAY_PACKAGE_NAME }}
+          releaseFiles: mobile/build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
 
       - name: Upload production APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
