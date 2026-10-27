@@ -87,10 +87,22 @@ The provider's test host requires the temporary IP allowlist described in the
 bank's instructions. Reopen the supplied allowlist link when the 24-hour window
 expires. Do not store that private link in this repository.
 
-For production, use the live SID/password and have the bank confirm the live API
-URL. Set `OBANK_TEST=false`; the application rejects test transactions in
-production. The callback and return URLs must use HTTPS. `OBANK_ENABLED` defaults
-to false, so the payment API stays closed until the merchant secrets are installed.
+For live production payments, use the live SID/password and have the bank confirm
+the live API URL. Set `OBANK_TEST=false`. The callback and return URLs must use
+HTTPS. `OBANK_ENABLED` defaults to false, so the payment API stays closed until
+the merchant secrets are installed.
+
+For a temporary sandbox verification on the existing production API, production
+accepts `OBANK_TEST=true` only when `OBANK_API_URL` is exactly the sandbox JSON
+endpoint, `OBANK_TEST_ONLY_PHONE` identifies one E.164 test account, and
+`OBANK_TEST_PRICE_KGS` is from 1 to 100. Checkout and status access are blocked
+for other accounts; the test account can purchase only the Standard monthly plan
+at that test price. A successful sandbox callback grants that account a real
+production subscription entitlement, so use a dedicated test account and turn
+`OBANK_ENABLED` off and clear the sandbox credentials/test settings immediately
+after verification. Do not accept customer purchases in this mode. It cannot be
+used for real payments; switch to live merchant credentials and `OBANK_TEST=false`
+for launch.
 
 The database migration for payment orders runs with the existing startup migration
 runner. The API exposes authenticated `POST /api/v1/subscriptions/checkout` and

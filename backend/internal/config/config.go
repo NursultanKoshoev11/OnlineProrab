@@ -91,14 +91,16 @@ type Config struct {
 // OBankConfig contains O!Dengi merchant credentials and fixed return URLs.
 // The API password must only be configured on the server.
 type OBankConfig struct {
-	Enabled    bool
-	SID        string
-	Password   string
-	APIURL     string
-	APIVersion int
-	Test       bool
-	ResultURL  string
-	ReturnURL  string
+	Enabled       bool
+	SID           string
+	Password      string
+	APIURL        string
+	APIVersion    int
+	Test          bool
+	TestOnlyPhone string
+	TestPriceKGS  int
+	ResultURL     string
+	ReturnURL     string
 }
 
 func Load() (Config, error) {
@@ -122,6 +124,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	stagingTestPaymentPriceKGS, err := getEnvInt("STAGING_TEST_PAYMENT_PRICE_KGS", 0)
+	if err != nil {
+		return Config{}, err
+	}
+	obankTestPriceKGS, err := getEnvInt("OBANK_TEST_PRICE_KGS", 0)
 	if err != nil {
 		return Config{}, err
 	}
@@ -202,14 +208,16 @@ func Load() (Config, error) {
 	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
 	cfg.OBank = OBankConfig{
-		Enabled:    obankEnabled,
-		SID:        strings.TrimSpace(os.Getenv("OBANK_SID")),
-		Password:   strings.TrimSpace(os.Getenv("OBANK_PASSWORD")),
-		APIURL:     obankAPIURL,
-		APIVersion: obankVersion,
-		Test:       obankTest,
-		ResultURL:  strings.TrimSpace(os.Getenv("OBANK_RESULT_URL")),
-		ReturnURL:  strings.TrimSpace(os.Getenv("OBANK_RETURN_URL")),
+		Enabled:       obankEnabled,
+		SID:           strings.TrimSpace(os.Getenv("OBANK_SID")),
+		Password:      strings.TrimSpace(os.Getenv("OBANK_PASSWORD")),
+		APIURL:        obankAPIURL,
+		APIVersion:    obankVersion,
+		Test:          obankTest,
+		TestOnlyPhone: normalizePhone(os.Getenv("OBANK_TEST_ONLY_PHONE")),
+		TestPriceKGS:  obankTestPriceKGS,
+		ResultURL:     strings.TrimSpace(os.Getenv("OBANK_RESULT_URL")),
+		ReturnURL:     strings.TrimSpace(os.Getenv("OBANK_RETURN_URL")),
 	}
 	return cfg, nil
 }
@@ -351,6 +359,25 @@ func (cfg Config) Validate() error {
 	if cfg.StagingTestPaymentPriceKGS > 0 && (!cfg.OBank.Enabled || !cfg.OBank.Test) {
 		problems = append(problems, "STAGING_TEST_PAYMENT_PRICE_KGS requires OBANK_ENABLED=true and OBANK_TEST=true")
 	}
+	if cfg.OBank.TestPriceKGS < 0 || cfg.OBank.TestPriceKGS > 100 {
+		problems = append(problems, "OBANK_TEST_PRICE_KGS must be 0 or between 1 and 100")
+	}
+	if cfg.IsProduction() && cfg.OBank.Test {
+		if !cfg.OBank.Enabled {
+			problems = append(problems, "OBANK_ENABLED=true is required for a production sandbox checkout")
+		}
+		if !isValidPhone(cfg.OBank.TestOnlyPhone) {
+			problems = append(problems, "OBANK_TEST_ONLY_PHONE must be a valid E.164 phone number in production sandbox mode")
+		}
+		if cfg.OBank.TestPriceKGS < 1 || cfg.OBank.TestPriceKGS > 100 {
+			problems = append(problems, "OBANK_TEST_PRICE_KGS must be between 1 and 100 in production sandbox mode")
+		}
+		if !isOBankSandboxURL(cfg.OBank.APIURL) {
+			problems = append(problems, "OBANK_API_URL must point to the O!Dengi sandbox in production sandbox mode")
+		}
+	} else if cfg.OBank.TestOnlyPhone != "" || cfg.OBank.TestPriceKGS != 0 {
+		problems = append(problems, "OBANK_TEST_ONLY_PHONE and OBANK_TEST_PRICE_KGS are allowed only in production sandbox mode")
+	}
 
 	if cfg.IsProductionLike() {
 		if cfg.IsStaging() && cfg.ReviewOnlyMode {
@@ -423,13 +450,15 @@ func validateOBankConfig(cfg Config) []string {
 	if cfg.OBank.ReturnURL == "" || validateOBankURL(cfg.OBank.ReturnURL, cfg.IsDevelopment()) != nil {
 		problems = append(problems, "OBANK_RETURN_URL must be a valid HTTPS billing return URL")
 	}
-	if cfg.IsProduction() && cfg.OBank.Test {
-		problems = append(problems, "OBANK_TEST must be false in production")
-	}
 	if cfg.IsStaging() && !cfg.OBank.Test {
 		problems = append(problems, "OBANK_TEST must be true in staging")
 	}
 	return problems
+}
+
+func isOBankSandboxURL(value string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	return err == nil && strings.EqualFold(parsed.Scheme, "https") && strings.EqualFold(parsed.Hostname(), "mw-api-test.dengi.kg") && parsed.Path == "/api/json/json.php" && parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 func validateOBankURL(value string, allowLocalHTTP bool) error {

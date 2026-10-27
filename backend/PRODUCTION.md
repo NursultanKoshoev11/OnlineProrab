@@ -24,7 +24,7 @@ This checklist tracks the minimum work required before a real public release.
 - `UPLOAD_DIR=/data/uploads` (legacy volume used by the migration tool)
 - `MAX_UPLOAD_MB=10`
 
-O!Dengi payments remain disabled unless `OBANK_ENABLED=true`. Before enabling checkout, configure merchant SID/password and test/live API URLs as described in [`OBANK.md`](OBANK.md). Production rejects `OBANK_TEST=true`; never put merchant credentials in the mobile app or website JavaScript.
+O!Dengi payments remain disabled unless `OBANK_ENABLED=true`. Never put merchant credentials in the mobile app or website JavaScript. Live customer payments require live merchant credentials, the bank-confirmed production API URL, and `OBANK_TEST=false`. The documented, account-restricted sandbox verification mode may temporarily run on the production API; follow [`OBANK.md`](OBANK.md) and disable it immediately after testing.
 - `SMS_PROVIDER=twilio` or `nikita`; supply that provider's credentials below.
 - For Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, and exactly one of `TWILIO_FROM` or `TWILIO_MESSAGING_SERVICE_SID`.
 - For Nikita: `NIKITA_LOGIN`, `NIKITA_PASSWORD`, and `NIKITA_SENDER`; `NIKITA_API_URL` must be `https://smspro.nikita.kg/api/message` in staging/production.
