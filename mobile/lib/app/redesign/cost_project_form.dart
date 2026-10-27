@@ -155,6 +155,10 @@ class _CostDetailsState extends State<_CostDetails> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowButtonSpacing: 4,
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
         title: const Text('Удалить расход?'),
         content: Text('«${widget.item.title}» будет удалён из объекта.'),
         actions: [
@@ -590,6 +594,10 @@ class _ProjectFormState extends State<_ProjectForm> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowButtonSpacing: 4,
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
         title: const Text('Архивировать объект?'),
         content: const Text(
           'Объект исчезнет из активного списка, но его данные сохранятся.',

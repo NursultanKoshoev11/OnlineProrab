@@ -368,34 +368,37 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                   trailing: const Icon(Icons.open_in_new_rounded, size: 18),
                   onTap: _openPrivacyPolicy,
                 ),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(50),
-                    foregroundColor: Colors.redAccent,
-                    side: const BorderSide(color: Color(0xFFFFCDD2)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                const Divider(height: 20),
+                OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  spacing: 8,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  overflowSpacing: 4,
+                  children: [
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: _muted,
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        await widget.deps.authRepository.signOut();
+                      },
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: const Text('Выйти'),
                     ),
-                  ),
-                  onPressed: _deleteAccount,
-                  icon: const Icon(Icons.delete_forever_outlined),
-                  label: const Text('Удалить аккаунт и данные'),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(50),
-                    foregroundColor: Colors.redAccent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onPressed: _deleteAccount,
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      label: const Text('Удалить аккаунт'),
                     ),
-                  ),
-                  onPressed: () async {
-                    Navigator.of(context).pop();
-                    await widget.deps.authRepository.signOut();
-                  },
-                  icon: const Icon(Icons.logout_rounded),
-                  label: const Text('Выйти'),
+                  ],
                 ),
               ],
             ),
@@ -429,6 +432,10 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowButtonSpacing: 4,
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
         title: const Text('Удалить аккаунт?'),
         content: const Text(
           'Будут удалены профиль, ваши объекты, расходы, отчёты, сессии и загруженные файлы. Это действие нельзя отменить.',
