@@ -1,6 +1,12 @@
 name: Backend Production Deploy
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'deploy/aws/**'
+      - '.github/workflows/backend-production-deploy.yml'
   workflow_dispatch:
     inputs:
       confirm_production_deploy:
@@ -18,8 +24,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  storage-cutover-required:
+    name: Production API deploy waiting for storage cutover
+    if: github.event_name == 'push' && vars.API_STORAGE_CUTOVER_COMPLETE != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain why deployment did not run
+        run: |
+          echo 'The main-branch API deploy is configured, but production storage cutover is not complete.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Provision production S3, back up PostgreSQL and uploads, migrate uploads, verify checksums and rollback, then set API_STORAGE_CUTOVER_COMPLETE=true.' >> "$GITHUB_STEP_SUMMARY"
+
   deploy:
-    if: github.ref == 'refs/heads/main' && inputs.confirm_production_deploy
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'push' && vars.API_STORAGE_CUTOVER_COMPLETE == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production-api

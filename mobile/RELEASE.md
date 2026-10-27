@@ -2,11 +2,14 @@
 
 ## Android
 
-The signed production AAB is built from the `main` branch by the `Mobile CI`
-workflow when `production_release` is set to `true`. Create a GitHub Environment
-named `production-mobile`, restrict it to `main`, and configure the values below
-as environment variables and secrets. Add required reviewers if signing builds
-must wait for an explicit release approval.
+On each mobile change merged to `main`, `Mobile CI` builds online and offline
+debug APK artifacts. Signed release builds run automatically only after the
+production API storage cutover is complete. Configure the Android upload key
+and application ID in the `production-mobile` GitHub Environment; until then,
+the workflow reports the missing setup and keeps the debug APK artifacts.
+Signed APK and AAB use the same monotonically increasing GitHub Actions build
+number. The signed iOS IPA uses that same readiness gate and the existing Apple
+signing secrets. The iOS simulator artifact continues to build for staging.
 
 - Environment variable `STROY_APPLICATION_ID`: the exact Android package ID registered in
   Google Play.
@@ -15,8 +18,10 @@ must wait for an explicit release approval.
   credentials.
 
 The workflow validates the release inputs, runs analysis and tests, and saves
-the AAB as a GitHub Actions artifact. It does not submit the artifact to Google
-Play.
+the signed APK and AAB as GitHub Actions artifacts. It does not submit either
+artifact to Google Play. The production signing job runs automatically after
+the API cutover and signing configuration are complete; `workflow_dispatch`
+remains available for manual builds.
 
 Since August 31, 2026, Google Play requires new apps and app updates to target
 Android 16 (API 36) or higher. The Android Gradle configuration targets API 36,
@@ -24,11 +29,10 @@ and CI checks that it does not fall below this policy minimum.
 
 ## iOS
 
-The `iOS simulator build` job runs on pull requests and pushes. It compiles the
-real iOS target without Apple signing. The signed App Store IPA is built from
-the `main` branch by `Mobile CI` when `production_ios_release` is set to `true`.
-Use the same `production-mobile` environment and configure the values below
-there:
+The iOS simulator build runs on pull requests and pushes. On mobile changes
+merged to `main`, the workflow builds and signs an App Store IPA after the
+production API cutover. `workflow_dispatch` remains available for manual IPA
+builds. Configure the values below in `production-mobile`:
 
 - Environment variable `STROY_IOS_BUNDLE_ID`: the exact App Store Connect bundle ID. It defaults to `com.koshoev.stroy` from the current App Store Connect app record.
 - Environment variable `STROY_IOS_TEAM_ID`: the Apple Developer Team ID that owns that app.
@@ -53,9 +57,9 @@ support for iOS 14 devices is needed.
 
 ## Release checks
 
-- Increment `version` in `pubspec.yaml` according to the next store build
-  number; Google Play and App Store Connect require monotonically increasing
-  build numbers.
+- Update `version` in `pubspec.yaml` when the user-visible app version changes.
+  CI assigns the monotonically increasing store build number from the GitHub
+  Actions run number.
 - Confirm the configured Android package ID and iOS bundle ID match their
   store records.
 - Complete the app privacy details and provide the public privacy-policy and
