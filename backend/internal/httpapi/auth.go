@@ -361,6 +361,16 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func optionalAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("Authorization")) == "" {
+			next(w, r)
+			return
+		}
+		requireAuth(next)(w, r)
+	}
+}
+
 func requireActiveAccount(w http.ResponseWriter, r *http.Request, userID string) bool {
 	if !accountIDRe.MatchString(userID) {
 		Error(w, http.StatusUnauthorized, "invalid token")

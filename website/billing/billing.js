@@ -22,6 +22,7 @@
     obankAppLink: document.querySelector("#obank-app-link"),
     webPayLink: document.querySelector("#web-pay-link"),
     logout: document.querySelector("#logout"),
+    yearlyPeriod: document.querySelector('input[name="period"][value="year"]'),
   };
 
   let selectedPlan = "standard";
@@ -30,6 +31,7 @@
   let accessToken = sessionStorage.getItem(tokenKey) || "";
   let pollingTimer = null;
   let activeCheckoutID = sessionStorage.getItem("stroy.billing.order_id") || "";
+  let checkoutAllowed = true;
 
   function showNotice(message, kind = "info") {
     elements.notice.textContent = message;
@@ -58,6 +60,12 @@
 
   function clearSession() {
     accessToken = "";
+    checkoutAllowed = true;
+    if (elements.yearlyPeriod) {
+      elements.yearlyPeriod.closest("label")?.removeAttribute("hidden");
+      elements.yearlyPeriod.checked = false;
+    }
+    billingPeriod = "month";
     sessionStorage.removeItem(tokenKey);
     elements.accountPanel.hidden = true;
     elements.loginPanel.hidden = false;
@@ -133,6 +141,8 @@
         request("/api/v1/subscriptions/status"),
         request("/api/v1/subscriptions/plans"),
       ]);
+      const sandboxTestMode = response.sandbox_test_mode === true;
+      checkoutAllowed = response.checkout_allowed !== false;
       plans = Array.isArray(response.plans) ? response.plans.filter((plan) => plan.id !== "trial") : [];
       elements.loginPanel.hidden = true;
       elements.accountPanel.hidden = false;
@@ -143,8 +153,17 @@
       elements.currentSubscription.textContent =
         `Текущий тариф: ${planName(subscription.plan)}. ` +
         (endsAt ? `Действует до ${endsAt}.` : "");
+      if (sandboxTestMode && checkoutAllowed && elements.yearlyPeriod) {
+        billingPeriod = "month";
+        elements.yearlyPeriod.checked = false;
+        elements.yearlyPeriod.closest("label")?.setAttribute("hidden", "");
+      }
       renderPlans();
-      showNotice("Вход выполнен. Выберите тариф и период оплаты.");
+      showNotice(sandboxTestMode
+        ? checkoutAllowed
+          ? `Тестовая оплата Sandbox: ${formatMoney(response.sandbox_test_price_kgs)} за месяц.`
+          : "Тестовая оплата временно доступна только назначенному тестовому аккаунту."
+        : "Вход выполнен. Выберите тариф и период оплаты.", sandboxTestMode && !checkoutAllowed ? "error" : "info");
       await restoreCheckoutFromReturn();
     } catch (error) {
       showNotice(error.message, "error");
@@ -189,12 +208,12 @@
     }
     const selected = plans.find((plan) => plan.id === selectedPlan);
     elements.checkoutPrice.textContent = selected ? formatMoney(planPrice(selected)) : "—";
-    elements.payButton.disabled = !selected;
+    elements.payButton.disabled = !selected || !checkoutAllowed;
   }
 
   async function startCheckout() {
     const selected = plans.find((plan) => plan.id === selectedPlan);
-    if (!selected) return;
+    if (!selected || !checkoutAllowed) return;
     elements.payButton.disabled = true;
     showNotice("Готовим защищённый счёт O!Dengi…");
     try {
