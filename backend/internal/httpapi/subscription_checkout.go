@@ -85,6 +85,11 @@ func SubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
 	}
+	userID := userIDFromContext(r.Context())
+	if !isAllowedProductionOBankTestUser(r.Context(), userID) {
+		denyNonTestOBankAccount(w)
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxCheckoutBodyBytes)
 	var request subscriptionCheckoutRequest
@@ -106,15 +111,22 @@ func SubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "select a paid subscription plan")
 		return
 	}
+	if productionOBankSandboxMode() && (plan.ID != "standard" || request.BillingPeriod != "month") {
+		Error(w, http.StatusBadRequest, "production sandbox checkout is limited to the standard monthly plan")
+		return
+	}
 	priceKGS, err := planPrice(plan, request.BillingPeriod)
 	if err != nil || priceKGS <= 0 || int64(priceKGS) > math.MaxInt64/100 {
 		Error(w, http.StatusBadRequest, "invalid subscription price")
 		return
 	}
+	if productionOBankSandboxMode() {
+		priceKGS = appState.OBank.TestPriceKGS
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	order, err := reserveSubscriptionCheckout(ctx, userIDFromContext(r.Context()), request, priceKGS)
+	order, err := reserveSubscriptionCheckout(ctx, userID, request, priceKGS)
 	if err != nil {
 		switch {
 		case errors.Is(err, errCheckoutExists):
@@ -164,6 +176,10 @@ func getSubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 	if appState.DB == nil || appState.DB.Pool == nil {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
+		return
+	}
+	if !isAllowedProductionOBankTestUser(r.Context(), userIDFromContext(r.Context())) {
+		denyNonTestOBankAccount(w)
 		return
 	}
 	orderID := strings.TrimSpace(r.URL.Query().Get("order_id"))
@@ -480,6 +496,9 @@ func applyOBankResult(ctx context.Context, result obank.Result) error {
 	}
 	if err != nil {
 		return err
+	}
+	if !isAllowedProductionOBankTestUser(ctx, order.UserID) {
+		return errPaymentInvalid
 	}
 	if result.AmountKopecks != order.AmountKopecks || result.Currency != order.Currency ||
 		(result.InvoiceID != "" && order.InvoiceID != "" && result.InvoiceID != order.InvoiceID) {

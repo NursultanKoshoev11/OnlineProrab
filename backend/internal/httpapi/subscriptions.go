@@ -12,16 +12,26 @@ func ListPlans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sandboxMode := productionOBankSandboxMode()
+	checkoutAllowed := !sandboxMode || isAllowedProductionOBankTestUser(r.Context(), userIDFromContext(r.Context()))
 	plans := make([]map[string]any, 0, len(subscriptionPlans))
 	for _, plan := range subscriptionPlans {
+		if sandboxMode && checkoutAllowed && plan.ID != "standard" {
+			continue
+		}
 		annualPrice, _ := planPrice(plan, "year")
 		monthlyPrice := plan.PriceKGS
 		discountPercent := plan.AnnualDiscountPercent
+		if sandboxMode && checkoutAllowed {
+			monthlyPrice = appState.OBank.TestPriceKGS
+			annualPrice = appState.OBank.TestPriceKGS
+			discountPercent = 0
+		}
 		if stagingTestPriceOverrideEnabled() && plan.ID != "trial" {
 			monthlyPrice = appState.StagingTestPaymentPriceKGS
 			discountPercent = 0
 		}
-		plans = append(plans, map[string]any{
+		planResponse := map[string]any{
 			"id":                      plan.ID,
 			"name":                    plan.Name,
 			"price_kgs":               monthlyPrice,
@@ -35,9 +45,21 @@ func ListPlans(w http.ResponseWriter, r *http.Request) {
 			"trial_days":          plan.TrialDays,
 			"max_projects":        plan.MaxProjects,
 			"max_invited_members": plan.MaxInvitedMembers,
-		})
+		}
+		if sandboxMode && checkoutAllowed {
+			planResponse["billing_options"] = []map[string]any{{"period": "month", "price_kgs": appState.OBank.TestPriceKGS, "discount_percent": 0}}
+		}
+		plans = append(plans, planResponse)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"plans": plans})
+	response := map[string]any{"plans": plans}
+	if sandboxMode {
+		response["sandbox_test_mode"] = true
+		response["checkout_allowed"] = checkoutAllowed
+		if checkoutAllowed {
+			response["sandbox_test_price_kgs"] = appState.OBank.TestPriceKGS
+		}
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func SubscriptionStatus(w http.ResponseWriter, r *http.Request) {
