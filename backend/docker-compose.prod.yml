@@ -2,6 +2,9 @@ services:
   api:
     image: ${API_IMAGE:?API_IMAGE is required}
     pull_policy: never
+    container_name: stroy-api
+    networks:
+      - production_proxy
     environment:
       APP_ENV: production
       HTTP_ADDR: :8080
@@ -41,10 +44,11 @@ services:
       OBANK_TEST: ${OBANK_TEST:-false}
       OBANK_RESULT_URL: ${OBANK_RESULT_URL:-}
       OBANK_RETURN_URL: ${OBANK_RETURN_URL:-https://stroy.com.kg/billing/}
-    ports:
-      - "127.0.0.1:${API_PORT:-8080}:8080"
+    expose:
+      - "8080"
     volumes:
       - onlineprorab_uploads:/data/uploads
+      - /etc/onlineprorab/postgres-ca.crt:/etc/onlineprorab/postgres-ca.crt:ro
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -71,3 +75,8 @@ services:
 volumes:
   onlineprorab_uploads:
     name: ${UPLOADS_VOLUME_NAME:-onlineprorab_uploads}
+
+networks:
+  production_proxy:
+    external: true
+    name: stroy_default
