@@ -3,3 +3,13 @@
 .playwright-mcp
 node_modules
 .DS_Store
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+**/secrets/

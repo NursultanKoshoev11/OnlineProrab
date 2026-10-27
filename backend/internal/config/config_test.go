@@ -178,6 +178,54 @@ func TestValidateAcceptsSafeProductionConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresS3StorageInProductionLikeEnvironments(t *testing.T) {
+	for _, env := range []string{StagingEnv, ProductionEnv} {
+		t.Run(env, func(t *testing.T) {
+			cfg := validProductionConfig()
+			cfg.Env = env
+			cfg.StorageDriver = "local"
+
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "STORAGE_DRIVER=s3") {
+				t.Fatalf("expected local file storage to be rejected for %s, got %v", env, err)
+			}
+		})
+	}
+}
+
+func TestValidateRequiresS3BucketAndRegion(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*Config)
+		want   string
+	}{
+		{name: "missing bucket", change: func(cfg *Config) { cfg.S3Bucket = "" }, want: "S3_BUCKET"},
+		{name: "missing region", change: func(cfg *Config) { cfg.S3Region = "" }, want: "S3_REGION"},
+		{name: "missing deletion ledger bucket", change: func(cfg *Config) { cfg.S3DeletionLedgerBucket = "" }, want: "S3_DELETION_LEDGER_BUCKET"},
+		{name: "same storage and ledger bucket", change: func(cfg *Config) { cfg.S3DeletionLedgerBucket = cfg.S3Bucket }, want: "must be different"},
+		{name: "partial AWS credentials", change: func(cfg *Config) { cfg.AWSAccessKeyID = "key" }, want: "AWS_SECRET_ACCESS_KEY"},
+		{name: "session token without credentials", change: func(cfg *Config) { cfg.AWSSessionToken = "token" }, want: "AWS_SESSION_TOKEN"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := validStagingConfig()
+			tc.change(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %s configuration to be rejected, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestValidateAllowsAWSWorkloadIdentity(t *testing.T) {
+	cfg := validStagingConfig()
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected AWS workload identity without static keys to be accepted, got %v", err)
+	}
+}
+
 func TestValidateAcceptsNikitaProductionConfig(t *testing.T) {
 	cfg := validNikitaProductionConfig()
 
@@ -225,6 +273,60 @@ func validNikitaProductionConfig() Config {
 	return cfg
 }
 
+func TestValidateAcceptsNikitaStagingConfig(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.SMSProvider = SMSProviderNikita
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+	cfg.NikitaAPIURL = "https://smspro.nikita.kg/api/message"
+	cfg.NikitaLogin = "test-login"
+	cfg.NikitaPassword = "test-password"
+	cfg.NikitaSender = "SMSPRO.KG"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid staging Nikita config, got %v", err)
+	}
+}
+
+func TestValidateRejectsUntrustedNikitaProductionEndpoints(t *testing.T) {
+	for _, env := range []string{StagingEnv, ProductionEnv} {
+		t.Run(env, func(t *testing.T) {
+			for _, test := range []struct {
+				name     string
+				endpoint string
+			}{
+				{name: "http transport", endpoint: "http://smspro.nikita.kg/api/message"},
+				{name: "lookalike host", endpoint: "https://smspro.nikita.kg.evil.example/api/message"},
+				{name: "untrusted host", endpoint: "https://evil.example/api/message"},
+				{name: "userinfo", endpoint: "https://user:password@smspro.nikita.kg/api/message"},
+				{name: "unexpected path", endpoint: "https://smspro.nikita.kg/api/other"},
+				{name: "query string", endpoint: "https://smspro.nikita.kg/api/message?redirect=https://evil.example"},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					cfg := validProductionConfig()
+					cfg.Env = env
+					cfg.SMSProvider = SMSProviderNikita
+					cfg.TwilioAccountSID = ""
+					cfg.TwilioAPIKeySID = ""
+					cfg.TwilioAPIKeySecret = ""
+					cfg.TwilioFrom = ""
+					cfg.NikitaAPIURL = test.endpoint
+					cfg.NikitaLogin = "test-login"
+					cfg.NikitaPassword = "test-password"
+					cfg.NikitaSender = "SMSPRO.KG"
+
+					err := cfg.Validate()
+					if err == nil || !strings.Contains(err.Error(), "official HTTPS endpoint") {
+						t.Fatalf("expected untrusted endpoint %q to be rejected, got %v", test.endpoint, err)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestValidateRejectsIncompleteNikitaConfig(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.SMSProvider = SMSProviderNikita
@@ -251,20 +353,24 @@ func TestSplitCSVTrimsEmptyValues(t *testing.T) {
 
 func validProductionConfig() Config {
 	return Config{
-		Env:                ProductionEnv,
-		HTTPAddr:           ":8080",
-		DatabaseURL:        "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
-		JWTSecret:          "Q7vJ3f2xC9kL4s1nR8pW6aZ5mH0dB2yT",
-		AccessTokenTTL:     15 * time.Minute,
-		CORSAllowedOrigins: []string{"https://app.example.com"},
-		TrustedProxyCIDRs:  []string{"10.20.0.4"},
-		UploadDir:          "/var/lib/onlineprorab/uploads",
-		MaxUploadBytes:     10 * 1024 * 1024,
-		SMSProvider:        SMSProviderTwilio,
-		TwilioAccountSID:   "AC0000000000",
-		TwilioAPIKeySID:    "SK0000000000",
-		TwilioAPIKeySecret: "unit-test-credential-value",
-		TwilioFrom:         "+15550000000",
+		Env:                    ProductionEnv,
+		HTTPAddr:               ":8080",
+		DatabaseURL:            "postgres://user:pass@db.example.com:5432/app?sslmode=verify-full",
+		JWTSecret:              "Q7vJ3f2xC9kL4s1nR8pW6aZ5mH0dB2yT",
+		AccessTokenTTL:         15 * time.Minute,
+		CORSAllowedOrigins:     []string{"https://app.example.com"},
+		StorageDriver:          "s3",
+		S3Region:               "us-east-1",
+		S3Bucket:               "onlineprorab-test",
+		S3DeletionLedgerBucket: "onlineprorab-deletion-ledger-test",
+		TrustedProxyCIDRs:      []string{"10.20.0.4"},
+		UploadDir:              "/var/lib/onlineprorab/uploads",
+		MaxUploadBytes:         10 * 1024 * 1024,
+		SMSProvider:            SMSProviderTwilio,
+		TwilioAccountSID:       "AC0000000000",
+		TwilioAPIKeySID:        "SK0000000000",
+		TwilioAPIKeySecret:     "unit-test-credential-value",
+		TwilioFrom:             "+15550000000",
 	}
 }
 

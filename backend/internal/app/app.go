@@ -3,8 +3,9 @@ package app
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -12,16 +13,22 @@ import (
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/bootstrap"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/httpapi"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/observability"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/sms"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 func Run() {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("load configuration: %v", err)
+	observability.Configure(os.Getenv("APP_ENV"))
+	cfg, cfgErr := config.Load()
+	if cfgErr != nil {
+		slog.Error("configuration_load_failed", "error", cfgErr)
+		os.Exit(1)
 	}
+	observability.Configure(cfg.Env)
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("invalid configuration: %v", err)
+		slog.Error("invalid_configuration", "error", err)
+		os.Exit(1)
 	}
 
 	var smsSender httpapi.SMSSender
@@ -34,7 +41,8 @@ func Run() {
 			MessagingServiceSID: cfg.TwilioMessagingServiceSID,
 		})
 		if err != nil {
-			log.Fatalf("failed to initialize SMS provider: %v", err)
+			slog.Error("sms_provider_initialization_failed", "provider", cfg.SMSProvider, "error", err)
+			os.Exit(1)
 		}
 		smsSender = sender
 	} else if cfg.SMSProvider == config.SMSProviderNikita {
@@ -46,12 +54,29 @@ func Run() {
 			TestMode: cfg.NikitaTestMode,
 		})
 		if err != nil {
-			log.Fatalf("failed to initialize SMS provider: %v", err)
+			slog.Error("sms_provider_initialization_failed", "provider", cfg.SMSProvider, "error", err)
+			os.Exit(1)
 		}
 		smsSender = sender
 	}
 	if cfg.IsProductionLike() && smsSender == nil && !allowsNoSMSProvider(cfg) {
 		log.Fatal("SMS provider is required in staging and production unless production review-only mode is enabled")
+	}
+
+	var fileStore storage.ObjectStore
+	var storageErr error
+	if cfg.StorageDriver == "s3" {
+		fileStore, storageErr = storage.NewS3(context.Background(), storage.S3Options{
+			Region:               cfg.S3Region,
+			Bucket:               cfg.S3Bucket,
+			DeletionLedgerBucket: cfg.S3DeletionLedgerBucket,
+		})
+	} else {
+		fileStore, storageErr = storage.NewLocal(cfg.UploadDir)
+	}
+	if storageErr != nil {
+		slog.Error("file_storage_initialization_failed", "error", storageErr)
+		os.Exit(1)
 	}
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -63,11 +88,17 @@ func Run() {
 	migrationCtx, migrationCancel := context.WithTimeout(rootCtx, 60*time.Second)
 	if err := db.ApplyMigrations(migrationCtx); err != nil {
 		migrationCancel()
-		log.Fatalf("failed to apply database migrations: %v", err)
+		slog.Error("database_migration_failed", "error", err)
+		os.Exit(1)
 	}
 	migrationCancel()
 
-	httpapi.SetState(cfg, db, smsSender)
+	httpapi.SetState(cfg, db, smsSender, fileStore)
+	deletionWorkerDone := make(chan struct{})
+	go func() {
+		defer close(deletionWorkerDone)
+		storage.RunDeletionWorker(rootCtx, db.Pool, fileStore)
+	}()
 	authPrunerDone := make(chan struct{})
 	go func() {
 		defer close(authPrunerDone)
@@ -77,7 +108,11 @@ func Run() {
 	httpapi.SetReadyCheck(func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		return db.Ping(ctx) == nil
+		if db.Ping(ctx) != nil {
+			return false
+		}
+		checker, ok := fileStore.(storage.HealthChecker)
+		return ok && checker.Check(ctx) == nil
 	})
 
 	server := &http.Server{
@@ -91,16 +126,16 @@ func Run() {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("onlineprorab api starting env=%s addr=%s", cfg.Env, cfg.HTTPAddr)
+		slog.Info("api_starting", "environment", cfg.Env, "listen_address", cfg.HTTPAddr)
 		serverErrors <- server.ListenAndServe()
 	}()
 
 	select {
 	case <-rootCtx.Done():
-		log.Printf("shutdown signal received")
+		slog.Info("shutdown_signal_received")
 	case err := <-serverErrors:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("http server stopped unexpectedly: %v", err)
+			slog.Error("http_server_stopped_unexpectedly", "error", err)
 		}
 		stop()
 	}
@@ -108,11 +143,12 @@ func Run() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("graceful shutdown failed: %v", err)
+		slog.Error("graceful_shutdown_failed", "error", err)
 		_ = server.Close()
 	}
+	<-deletionWorkerDone
 	<-authPrunerDone
-	log.Printf("onlineprorab api stopped")
+	slog.Info("api_stopped")
 }
 
 func allowsNoSMSProvider(cfg config.Config) bool {

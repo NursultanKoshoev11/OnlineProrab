@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -38,6 +38,7 @@ type authResponse struct {
 }
 
 var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}$`)
+var accountIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // developmentSMSCode is available only when local development explicitly
 // enables it, binds the server to loopback, and has no configured SMS sender.
@@ -208,7 +209,7 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(w, http.StatusUnauthorized, "invalid or expired code")
 		} else {
-			log.Printf("verify sms: failed to lock login code: %v", err)
+			slog.Error("sms_login_code_lock_failed", "error", err)
 			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
 		}
 		return
@@ -220,12 +221,12 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 
 	if subtle.ConstantTimeCompare([]byte(hashLoginCode(req.Phone, req.Code)), []byte(codeHash)) != 1 {
 		if _, err := tx.Exec(ctx, `UPDATE sms_login_codes SET attempts = attempts + 1 WHERE id = $1`, codeID); err != nil {
-			log.Printf("verify sms: failed to record invalid code attempt: %v", err)
+			slog.Error("sms_invalid_code_attempt_record_failed", "error", err)
 			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
 			return
 		}
 		if err := tx.Commit(ctx); err != nil {
-			log.Printf("verify sms: failed to commit invalid code attempt: %v", err)
+			slog.Error("sms_invalid_code_attempt_commit_failed", "error", err)
 			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
 			return
 		}
@@ -288,7 +289,7 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 	for _, invite := range pendingInvites {
 		if err := ensureProjectMemberCapacity(ctx, tx, invite.projectID, invite.phone); err != nil {
 			if _, message, ok := subscriptionHTTPError(err); ok {
-				log.Printf("verify sms: invitation %s not applied: %s", invite.id, message)
+				slog.Warn("sms_project_invitation_skipped", "invite_id", invite.id, "reason", message)
 				continue
 			}
 			Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
@@ -312,12 +313,12 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
 			VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3::text, 'source', 'sms_login'))
 		`, userID, invite.projectID, invite.role); auditErr != nil {
-			log.Printf("verify sms: failed to write invite audit log: %v", auditErr)
+			slog.Error("sms_invitation_audit_log_failed", "error", auditErr)
 		}
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE sms_login_codes SET consumed_at = now() WHERE id = $1`, codeID); err != nil {
-		log.Printf("verify sms: failed to complete login code: %v", err)
+		slog.Error("sms_login_code_completion_failed", "error", err)
 		Error(w, http.StatusInternalServerError, "failed to complete login code")
 		return
 	}
@@ -353,8 +354,37 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			Error(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
+		if !requireActiveAccount(w, r, userID) {
+			return
+		}
 		next(w, r.WithContext(withUserID(r.Context(), userID)))
 	}
+}
+
+func requireActiveAccount(w http.ResponseWriter, r *http.Request, userID string) bool {
+	if !accountIDRe.MatchString(userID) {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+
+	// Access JWTs are stateless, so checking the account row is what makes
+	// account deletion revoke existing tokens before their expiration time.
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	var exists bool
+	if err := appState.DB.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1::uuid)`, userID).Scan(&exists); err != nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+	if !exists {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	return true
 }
 
 func signAccessToken(userID string) (string, error) {

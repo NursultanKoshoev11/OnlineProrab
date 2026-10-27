@@ -2,9 +2,12 @@ package httpapi
 
 import (
 	"context"
+	"errors"
+	"io"
+	"io/fs"
+	"log/slog"
 	"mime"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -32,11 +35,12 @@ func DownloadFile(w http.ResponseWriter, r *http.Request) {
 	var originalName string
 	var storagePath string
 	var contentType string
+	var storedSize int64
 	err := appState.DB.Pool.QueryRow(ctx, `
-		SELECT project_id::text, original_name, storage_path, content_type
+		SELECT project_id::text, original_name, storage_path, content_type, size_bytes
 		FROM files
 		WHERE id = $1 AND deleted_at IS NULL
-	`, fileID).Scan(&projectID, &originalName, &storagePath, &contentType)
+	`, fileID).Scan(&projectID, &originalName, &storagePath, &contentType, &storedSize)
 	if err != nil {
 		Error(w, http.StatusNotFound, "file not found")
 		return
@@ -48,26 +52,30 @@ func DownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	absolutePath, ok := resolveStoredFilePath(appState.UploadDir, storagePath)
-	if !ok {
-		Error(w, http.StatusNotFound, "stored file is unavailable")
+	if appState.FileStore == nil {
+		Error(w, http.StatusServiceUnavailable, "file storage is not configured")
 		return
 	}
-
-	file, err := os.Open(absolutePath)
+	object, err := appState.FileStore.Get(ctx, storagePath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			Error(w, http.StatusNotFound, "stored file is unavailable")
 			return
 		}
-		Error(w, http.StatusInternalServerError, "failed to open stored file")
+		Error(w, http.StatusBadGateway, "failed to read stored file")
 		return
 	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
+	if object.Body == nil || object.Size < 0 {
+		if object.Body != nil {
+			_ = object.Body.Close()
+		}
 		Error(w, http.StatusNotFound, "stored file is unavailable")
+		return
+	}
+	defer object.Body.Close()
+	if object.Size != storedSize {
+		slog.Error("stored_file_size_mismatch", "request_id", requestIDFromContext(r.Context()), "file_id", fileID, "database_size", storedSize, "storage_size", object.Size)
+		Error(w, http.StatusBadGateway, "stored file is unavailable")
 		return
 	}
 
@@ -80,9 +88,19 @@ func DownloadFile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Disposition", disposition)
 	}
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Length", formatInt64(info.Size()))
 	w.Header().Set("Cache-Control", "private, no-store")
-	http.ServeContent(w, r, filename, info.ModTime(), file)
+	if seeker, ok := object.Body.(io.ReadSeeker); ok {
+		http.ServeContent(w, r, filename, object.ModTime, seeker)
+		return
+	}
+	w.Header().Set("Accept-Ranges", "none")
+	w.Header().Set("Content-Length", formatInt64(object.Size))
+	if !object.ModTime.IsZero() {
+		w.Header().Set("Last-Modified", object.ModTime.UTC().Format(http.TimeFormat))
+	}
+	if _, err := io.Copy(w, object.Body); err != nil {
+		slog.Warn("stored_file_stream_interrupted", "request_id", requestIDFromContext(r.Context()), "file_id", fileID, "error", err)
+	}
 }
 
 func formatInt64(value int64) string {

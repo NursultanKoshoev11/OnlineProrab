@@ -7,11 +7,25 @@ on:
     paths:
       - 'backend/scripts/backup.sh'
       - 'backend/scripts/restore.sh'
+      - 'backend/scripts/apply-deletion-tombstones.py'
+      - 'backend/scripts/test_apply_deletion_tombstones.py'
+      - 'backend/scripts/safe-path.sh'
+      - 'deploy/aws/onlineprorab-storage.yaml'
+      - 'deploy/systemd/onlineprorab-backup.service'
+      - 'deploy/systemd/onlineprorab-backup.timer'
+      - 'deploy/systemd/backup.env.example'
       - '.github/workflows/backup-restore.yml'
   pull_request:
     paths:
       - 'backend/scripts/backup.sh'
       - 'backend/scripts/restore.sh'
+      - 'backend/scripts/apply-deletion-tombstones.py'
+      - 'backend/scripts/test_apply_deletion_tombstones.py'
+      - 'backend/scripts/safe-path.sh'
+      - 'deploy/aws/onlineprorab-storage.yaml'
+      - 'deploy/systemd/onlineprorab-backup.service'
+      - 'deploy/systemd/onlineprorab-backup.timer'
+      - 'deploy/systemd/backup.env.example'
       - '.github/workflows/backup-restore.yml'
 
 permissions:
@@ -45,10 +59,61 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate systemd backup units
+        run: systemd-analyze verify ../deploy/systemd/onlineprorab-backup.service ../deploy/systemd/onlineprorab-backup.timer
+
+      - name: Check shell syntax
+        run: bash -n deploy-remote.sh scripts/backup.sh scripts/safe-path.sh
+
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client age
+
+      - name: Create ephemeral age keypair for S3 backup verification
+        run: |
+          age-keygen -o "$RUNNER_TEMP/backup-age-identity.txt"
+          age-keygen -y "$RUNNER_TEMP/backup-age-identity.txt" > "$RUNNER_TEMP/backup-age-recipients.txt"
+          age-keygen -o "$RUNNER_TEMP/unrelated-age-identity.txt"
+          chmod 600 "$RUNNER_TEMP/backup-age-identity.txt"
+          chmod 600 "$RUNNER_TEMP/unrelated-age-identity.txt"
+
+      - name: Validate deletion journal replay
+        run: python3 -m unittest scripts/test_apply_deletion_tombstones.py
+
+      - name: Reject unsafe backup and restore paths
+        run: |
+          set -eu
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" BACKUP_DIR=/ sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted BACKUP_DIR=/" >&2
+            exit 1
+          fi
+          if UPLOAD_DIR=/ BACKUP_DIR="$RUNNER_TEMP/onlineprorab-backups" sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted UPLOAD_DIR=/" >&2
+            exit 1
+          fi
+          ln -s / "$RUNNER_TEMP/root-backup-link"
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" BACKUP_DIR="$RUNNER_TEMP/root-backup-link" sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted a symlink to /" >&2
+            exit 1
+          fi
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" BACKUP_DIR="$RUNNER_TEMP/root-backup-link/backups" sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "backup unexpectedly accepted a symlink in its parent path" >&2
+            exit 1
+          fi
+          if CONFIRM_RESTORE=YES UPLOAD_DIR=/ sh scripts/restore.sh "$RUNNER_TEMP/missing-backup" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted UPLOAD_DIR=/" >&2
+            exit 1
+          fi
+          ln -s / "$RUNNER_TEMP/root-upload-link"
+          if CONFIRM_RESTORE=YES UPLOAD_DIR="$RUNNER_TEMP/root-upload-link" sh scripts/restore.sh "$RUNNER_TEMP/missing-backup" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a symlink to /" >&2
+            exit 1
+          fi
+          if CONFIRM_RESTORE=YES UPLOAD_DIR="$RUNNER_TEMP/root-upload-link/uploads" sh scripts/restore.sh "$RUNNER_TEMP/missing-backup" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a symlink in its parent path" >&2
+            exit 1
+          fi
 
       - name: Seed database and uploads
         run: |
@@ -58,6 +123,8 @@ jobs:
           SQL
           mkdir -p "$RUNNER_TEMP/onlineprorab-uploads/nested"
           printf '%s' 'receipt-content' > "$RUNNER_TEMP/onlineprorab-uploads/nested/receipt.txt"
+          long_name="$(printf '%120s' '' | tr ' ' x)"
+          printf '%s' 'long-name-content' > "$RUNNER_TEMP/onlineprorab-uploads/$long_name"
 
       - name: Create backup
         run: |
@@ -84,3 +151,284 @@ jobs:
         run: |
           test "$(psql "$DATABASE_URL" -Atc 'SELECT value FROM backup_probe WHERE id = 1')" = 'backup-ok'
           test "$(cat "$RUNNER_TEMP/onlineprorab-uploads/nested/receipt.txt")" = 'receipt-content'
+          long_name="$(printf '%120s' '' | tr ' ' x)"
+          test "$(cat "$RUNNER_TEMP/onlineprorab-uploads/$long_name")" = 'long-name-content'
+
+      - name: Prepare isolated S3 test bucket and CLI stub
+        run: |
+          mkdir -p "$RUNNER_TEMP/fake-aws-bin" "$RUNNER_TEMP/fake-s3-bucket/project/nested" "$RUNNER_TEMP/fake-s3-ledger/tombstones/accounts" "$RUNNER_TEMP/fake-s3-ledger/tombstones/objects" "$RUNNER_TEMP/fake-s3-archive"
+          cat > "$RUNNER_TEMP/fake-aws-bin/aws" <<'SH'
+          #!/bin/sh
+          set -eu
+          if [ "$#" -eq 8 ] && [ "$1" = "--region" ] && [ "$3" = "cloudwatch" ] && [ "$4" = "put-metric-data" ]; then
+            if [ "$5" != "--namespace" ] || [ "$6" != "OnlineProrab/Backups/production" ] || [ "$7" != "--metric-data" ]; then
+              echo "backup heartbeat must use the configured production namespace" >&2
+              exit 2
+            fi
+            if [ "${FAKE_CLOUDWATCH_FAILURE:-0}" = "1" ]; then
+              echo "simulated CloudWatch failure" >&2
+              exit 1
+            fi
+            python3 - "$8" "$FAKE_CLOUDWATCH_METRIC_FILE" <<'PY'
+          import json
+          import sys
+
+          metric = json.loads(sys.argv[1])
+          if (
+              metric.get("MetricName") != "BackupSucceeded"
+              or metric.get("Dimensions") != [{"Name": "Environment", "Value": "production"}]
+              or metric.get("Value") != 1
+              or metric.get("Unit") != "Count"
+          ):
+              raise SystemExit("backup heartbeat metric did not match the production contract")
+          with open(sys.argv[2], "a", encoding="utf-8") as output:
+              output.write(json.dumps(metric, sort_keys=True) + "\n")
+          PY
+            exit 0
+          fi
+          if [ "$#" -eq 10 ] && [ "$1" = "--region" ] && [ "$3" = "s3api" ] && [ "$4" = "delete-objects" ]; then
+            if [ "$5" != "--bucket" ] || [ "$6" != "$S3_BUCKET" ] || [ "$7" != "--delete" ] || [ "$9" != "--output" ] || [ "${10}" != "json" ]; then
+              echo "restore must delete tombstoned keys from the exact target bucket" >&2
+              exit 2
+            fi
+            python3 - "${8#file://}" "$FAKE_S3_BUCKET_DIR" "$FAKE_S3_LEDGER_DIR" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          with open(sys.argv[1], encoding="utf-8") as manifest_file:
+              manifest = json.load(manifest_file)
+          root = Path(sys.argv[2]).resolve()
+          ledger = Path(sys.argv[3]).resolve()
+          for item in manifest["Objects"]:
+              key = item["Key"]
+              digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+              if not (ledger / "objects" / f"{digest}.json").is_file():
+                  raise SystemExit(f"restore deleted {key} before persisting its object tombstone")
+              target = (root / key).resolve()
+              if not target.is_relative_to(root):
+                  raise SystemExit("unsafe deletion key")
+              target.unlink(missing_ok=True)
+          PY
+            printf '%s' '{"Deleted":[]}'
+            exit 0
+          fi
+          if [ "$#" -eq 7 ] && [ "$1" = "--region" ] && [ "$3" = "s3" ] && [ "$4" = "cp" ]; then
+            source="$5"
+            destination="$6"
+            case "$source" in
+              "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+                object_path="${source#s3://$S3_BACKUP_BUCKET/}"
+                mkdir -p "$(dirname "$destination")"
+                cp "$FAKE_S3_ARCHIVE_DIR/$object_path" "$destination"
+                ;;
+              *)
+                case "$destination" in
+                  "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+                    object_path="${destination#s3://$S3_BACKUP_BUCKET/}"
+                    mkdir -p "$(dirname "$FAKE_S3_ARCHIVE_DIR/$object_path")"
+                    cp "$source" "$FAKE_S3_ARCHIVE_DIR/$object_path"
+                    ;;
+                  *) echo "unexpected S3 copy path" >&2; exit 2 ;;
+                esac
+                ;;
+            esac
+            exit 0
+          fi
+          if [ "$#" -lt 7 ] || [ "$1" != "--region" ] || [ "$3" != "s3" ] || [ "$4" != "sync" ]; then
+            echo "unexpected AWS CLI arguments" >&2
+            exit 2
+          fi
+          source="$5"
+          destination="$6"
+          case "$source" in
+            "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+              snapshot_path="${source#s3://$S3_BACKUP_BUCKET/}"
+              mkdir -p "$destination"
+              cp -a "$FAKE_S3_ARCHIVE_DIR/$snapshot_path". "$destination"/
+              ;;
+            "s3://$S3_BUCKET")
+              mkdir -p "$destination"
+              cp -a "$FAKE_S3_BUCKET_DIR"/. "$destination"/
+              ;;
+            "s3://$S3_DELETION_LEDGER_BUCKET/tombstones/")
+              mkdir -p "$destination"
+              cp -a "$FAKE_S3_LEDGER_DIR"/. "$destination"/
+              ;;
+            *)
+              case "$destination" in
+                "s3://$S3_BACKUP_BUCKET/snapshots/"*)
+                  snapshot_path="${destination#s3://$S3_BACKUP_BUCKET/}"
+                  mkdir -p "$FAKE_S3_ARCHIVE_DIR/$snapshot_path"
+                  cp -a "$source"/. "$FAKE_S3_ARCHIVE_DIR/$snapshot_path".
+                  ;;
+                "s3://$S3_BUCKET")
+                  if [ "$7" != "--delete" ]; then
+                    echo "restore must replace the exact test bucket" >&2
+                    exit 2
+                  fi
+                  rm -rf "$FAKE_S3_BUCKET_DIR"
+                  mkdir -p "$FAKE_S3_BUCKET_DIR"
+                  cp -a "$source"/. "$FAKE_S3_BUCKET_DIR"/
+                  ;;
+                "s3://$S3_DELETION_LEDGER_BUCKET/tombstones/objects/")
+                  mkdir -p "$FAKE_S3_LEDGER_DIR/objects"
+                  cp -a "$source"/. "$FAKE_S3_LEDGER_DIR/objects"/
+                  ;;
+                *) echo "unexpected S3 destination" >&2; exit 2 ;;
+              esac
+              ;;
+          esac
+          SH
+          chmod +x "$RUNNER_TEMP/fake-aws-bin/aws"
+          printf '%s' 's3-object-before-backup' > "$RUNNER_TEMP/fake-s3-bucket/project/nested/object.bin"
+          printf '%s' 'deleted-object-after-snapshot' > "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-after-snapshot.bin"
+          printf '%s' 'account-owned-object-before-snapshot' > "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-account-file.bin"
+
+      - name: Create S3-backed database and object backup
+        run: |
+          export PATH="$RUNNER_TEMP/fake-aws-bin:$PATH"
+          export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
+          export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
+          export BACKUP_AGE_RECIPIENTS_FILE="$RUNNER_TEMP/backup-age-recipients.txt"
+          export FAKE_S3_ARCHIVE_DIR="$RUNNER_TEMP/fake-s3-archive"
+          export BACKUP_METRIC_NAMESPACE=OnlineProrab/Backups/production
+          export FAKE_CLOUDWATCH_METRIC_FILE="$RUNNER_TEMP/cloudwatch-metrics.jsonl"
+          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger S3_BACKUP_BUCKET=onlineprorab-ci-backups
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE s3_backup_probe (id integer PRIMARY KEY, value text NOT NULL);
+          INSERT INTO s3_backup_probe (id, value) VALUES (1, 's3-backup-ok');
+          CREATE TABLE users (id uuid PRIMARY KEY);
+          CREATE TABLE file_storage_deletions (
+            id bigserial PRIMARY KEY,
+            storage_path text NOT NULL UNIQUE
+          );
+          CREATE TABLE files (
+            storage_path text PRIMARY KEY,
+            uploaded_by uuid REFERENCES users(id) ON DELETE SET NULL
+          );
+          CREATE FUNCTION queue_file_storage_deletion() RETURNS trigger
+          LANGUAGE plpgsql
+          AS $$
+          BEGIN
+            IF TG_OP = 'DELETE' THEN
+              INSERT INTO file_storage_deletions (storage_path) VALUES (OLD.storage_path)
+                ON CONFLICT (storage_path) DO NOTHING;
+              RETURN OLD;
+            END IF;
+            IF OLD.uploaded_by IS NOT NULL AND NEW.uploaded_by IS NULL THEN
+              INSERT INTO file_storage_deletions (storage_path) VALUES (OLD.storage_path)
+                ON CONFLICT (storage_path) DO NOTHING;
+            END IF;
+            RETURN NEW;
+          END;
+          $$;
+          CREATE TRIGGER files_storage_deletion_outbox
+          BEFORE DELETE OR UPDATE OF uploaded_by ON files
+          FOR EACH ROW EXECUTE FUNCTION queue_file_storage_deletion();
+          INSERT INTO users (id) VALUES ('7cbcf034-8122-4d2d-92fd-f704dcdf8752');
+          INSERT INTO files (storage_path, uploaded_by) VALUES
+            ('project/nested/deleted-after-snapshot.bin', NULL),
+            ('project/nested/deleted-account-file.bin', '7cbcf034-8122-4d2d-92fd-f704dcdf8752');
+          SQL
+          if env -u BACKUP_METRIC_NAMESPACE \
+            BACKUP_DIR="$RUNNER_TEMP/onlineprorab-s3-missing-metric-config" \
+            UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" \
+            sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "production S3 backup unexpectedly accepted a missing heartbeat namespace" >&2
+            exit 1
+          fi
+          BACKUP_DIR="$RUNNER_TEMP/onlineprorab-s3-backups" \
+          UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" \
+          RETENTION_DAYS=14 \
+          sh scripts/backup.sh > "$RUNNER_TEMP/s3-backup-path.txt"
+          test -s "$RUNNER_TEMP/s3-backup-path.txt"
+          backup_uri="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
+          archive_dir="$FAKE_S3_ARCHIVE_DIR/${backup_uri#s3://$S3_BACKUP_BUCKET/}"
+          test -s "$archive_dir/snapshot.tar.age"
+          test -s "$archive_dir/MANIFEST"
+          test ! -e "$archive_dir/database.dump"
+          test ! -e "$archive_dir/uploads.tar.gz"
+          test "$(wc -l < "$FAKE_CLOUDWATCH_METRIC_FILE")" -eq 1
+          if FAKE_CLOUDWATCH_FAILURE=1 \
+            BACKUP_DIR="$RUNNER_TEMP/onlineprorab-s3-metric-failure" \
+            UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" \
+            RETENTION_DAYS=14 sh scripts/backup.sh >/dev/null 2>&1; then
+            echo "S3 backup unexpectedly succeeded without its CloudWatch heartbeat" >&2
+            exit 1
+          fi
+          test "$(wc -l < "$FAKE_CLOUDWATCH_METRIC_FILE")" -eq 1
+
+      - name: Destroy S3-backed source data
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DROP TABLE s3_backup_probe;
+          DELETE FROM users;
+          DELETE FROM files;
+          SQL
+          user_id=7cbcf034-8122-4d2d-92fd-f704dcdf8752
+          storage_path=project/nested/deleted-after-snapshot.bin
+          object_digest="$(printf '%s' "$storage_path" | sha256sum | cut -d ' ' -f 1)"
+          printf '{"version":1,"kind":"account","user_id":"%s","created_at_utc":"2026-10-14T00:00:00Z"}\n' "$user_id" > "$RUNNER_TEMP/fake-s3-ledger/tombstones/accounts/$user_id.json"
+          printf '{"version":1,"kind":"object","storage_path":"%s","created_at_utc":"2026-10-14T00:00:00Z"}\n' "$storage_path" > "$RUNNER_TEMP/fake-s3-ledger/tombstones/objects/$object_digest.json"
+          rm -rf "$RUNNER_TEMP/fake-s3-bucket"
+          mkdir -p "$RUNNER_TEMP/fake-s3-bucket/extra"
+          printf '%s' 'object-that-must-be-removed' > "$RUNNER_TEMP/fake-s3-bucket/extra/stale.bin"
+
+      - name: Restore S3-backed database and objects
+        run: |
+          export PATH="$RUNNER_TEMP/fake-aws-bin:$PATH"
+          export FAKE_S3_BUCKET_DIR="$RUNNER_TEMP/fake-s3-bucket"
+          export FAKE_S3_LEDGER_DIR="$RUNNER_TEMP/fake-s3-ledger/tombstones"
+          export FAKE_S3_ARCHIVE_DIR="$RUNNER_TEMP/fake-s3-archive"
+          export BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/backup-age-identity.txt"
+          export APP_ENV=production STORAGE_DRIVER=s3 S3_REGION=us-east-1 S3_BUCKET=onlineprorab-ci-test S3_DELETION_LEDGER_BUCKET=onlineprorab-ci-ledger S3_BACKUP_BUCKET=onlineprorab-ci-backups CONFIRM_RESTORE=YES CONFIRM_S3_TARGET_BUCKET=onlineprorab-ci-test
+          backup_uri="$(cat "$RUNNER_TEMP/s3-backup-path.txt")"
+          if env -u CONFIRM_S3_TARGET_BUCKET UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a missing S3 target confirmation" >&2
+            exit 1
+          fi
+          if CONFIRM_S3_TARGET_BUCKET=unintended-bucket UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted a mismatched S3 target confirmation" >&2
+            exit 1
+          fi
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "${backup_uri/onlineprorab-ci-backups/untrusted-backups}" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unconfigured backup bucket" >&2
+            exit 1
+          fi
+          if UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "s3://$S3_BACKUP_BUCKET/snapshots/../outside/" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unsafe backup object prefix" >&2
+            exit 1
+          fi
+          if BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/unrelated-age-identity.txt" UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unrelated age identity" >&2
+            exit 1
+          fi
+          legacy_backup_dir="$(cat "$RUNNER_TEMP/backup-path.txt")"
+          if BACKUP_AGE_IDENTITY_FILE="$RUNNER_TEMP/backup-age-identity.txt" UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$legacy_backup_dir" >/dev/null 2>&1; then
+            echo "restore unexpectedly accepted an unencrypted S3 backup without explicit approval" >&2
+            exit 1
+          fi
+          UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-s3-uploads" sh scripts/restore.sh "$backup_uri"
+
+      - name: Verify S3-backed restore
+        run: |
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT value FROM s3_backup_probe WHERE id = 1')" = 's3-backup-ok'
+          test "$(cat "$RUNNER_TEMP/fake-s3-bucket/project/nested/object.bin")" = 's3-object-before-backup'
+          test ! -e "$RUNNER_TEMP/fake-s3-bucket/extra/stale.bin"
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT COUNT(*) FROM users')" = '0'
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT COUNT(*) FROM files')" = '0'
+          test "$(psql "$DATABASE_URL" -Atc 'SELECT COUNT(*) FROM file_storage_deletions')" = '0'
+          test ! -e "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-after-snapshot.bin"
+          test ! -e "$RUNNER_TEMP/fake-s3-bucket/project/nested/deleted-account-file.bin"
+          account_object_digest="$(printf '%s' 'project/nested/deleted-account-file.bin' | sha256sum | cut -d ' ' -f 1)"
+          test -s "$RUNNER_TEMP/fake-s3-ledger/tombstones/objects/$account_object_digest.json"
+          if find "$RUNNER_TEMP" -maxdepth 1 -name '.onlineprorab-restore-data.*' -print -quit | grep -q .; then
+            echo "restore left decrypted data in its private staging directory" >&2
+            exit 1
+          fi
+          if find "$RUNNER_TEMP" -maxdepth 1 -name '.onlineprorab-backup-download.*' -print -quit | grep -q .; then
+            echo "restore left its downloaded backup staging directory" >&2
+            exit 1
+          fi

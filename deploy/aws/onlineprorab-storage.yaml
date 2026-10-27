@@ -1,0 +1,507 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private storage, API log monitoring, and missed-backup alerts for OnlineProrab.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      - staging
+      - production
+    Description: Deployment environment represented by this storage stack.
+  BucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 uploads bucket name; dots are excluded for TLS-compatible virtual-hosted access.
+  DeletionLedgerBucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 deletion ledger bucket name; it must differ from the uploads bucket.
+  BackupArchiveBucketName:
+    Type: String
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: Use a globally unique name with 3-63 lowercase letters, digits, or hyphens.
+    Description: Globally unique S3 backup archive bucket name; it must differ from the uploads and deletion ledger buckets.
+  BackupArchiveRetentionDays:
+    Type: Number
+    Default: 180
+    MinValue: 14
+    MaxValue: 3650
+    Description: Number of days to retain current encrypted backup archives in S3.
+  BackupAlertEmail:
+    Type: String
+    Default: ""
+    MaxLength: 254
+    Description: Email endpoint for missed-backup alarms; required for production and must confirm the SNS subscription.
+  ApiLogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: Number of days to retain centralized API container logs.
+
+Rules:
+  UploadsAndLedgerMustBeSeparate:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BucketName, !Ref DeletionLedgerBucketName]]
+        AssertDescription: The uploads and deletion ledger buckets must be different.
+  AllStorageBucketsMustBeSeparate:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BucketName, !Ref BackupArchiveBucketName]]
+        AssertDescription: The backup archive bucket must differ from the uploads bucket.
+      - Assert: !Not [!Equals [!Ref DeletionLedgerBucketName, !Ref BackupArchiveBucketName]]
+        AssertDescription: The backup archive bucket must differ from the deletion ledger bucket.
+  ProductionRequiresBackupAlertEmail:
+    RuleCondition: !Equals [!Ref Environment, production]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref BackupAlertEmail, ""]]
+        AssertDescription: Production requires an email endpoint for missed-backup notifications.
+
+Conditions:
+  BackupAlertEmailProvided: !Not [!Equals [!Ref BackupAlertEmail, ""]]
+
+Resources:
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+
+  DeletionLedgerBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref DeletionLedgerBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: DeletionLedger
+
+  BackupArchiveBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BackupArchiveBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireBackupArchives
+            Status: Enabled
+            Prefix: snapshots/
+            ExpirationInDays: !Ref BackupArchiveRetentionDays
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      Tags:
+        - Key: Application
+          Value: OnlineProrab
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: BackupArchive
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub "${UploadsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  DeletionLedgerBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref DeletionLedgerBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt DeletionLedgerBucket.Arn
+              - !Sub "${DeletionLedgerBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  BackupArchiveBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref BackupArchiveBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt BackupArchiveBucket.Arn
+              - !Sub "${BackupArchiveBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ApplicationStoragePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Least-privilege S3 access for the OnlineProrab API.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CheckBucketAvailability
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: CheckDeletionLedgerAvailability
+            Effect: Allow
+            Action: s3:GetBucketLocation
+            Resource: !GetAtt DeletionLedgerBucket.Arn
+          - Sid: ReadWriteApplicationObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:AbortMultipartUpload
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteDeletionTombstones
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
+          - Sid: CheckDeletionLedgerWriteAccess
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/healthchecks/api-readiness.json"
+
+  DeletionJournalReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read-only account and object deletion journal access for a recovery operator.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListDeletionJournal
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt DeletionLedgerBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - tombstones/
+                  - tombstones/*
+          - Sid: ReadDeletionTombstones
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/*"
+
+  BackupWriterPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read uploaded objects and write encrypted snapshots to this environment's S3 backup archive.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListUploadsForSnapshot
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: ReadUploadsForSnapshot
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteEncryptedBackupSnapshots
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+          - Sid: PublishBackupHeartbeat
+            Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: "*"
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: !Sub "OnlineProrab/Backups/${Environment}"
+          - Sid: CompleteAndCleanMultipartSnapshotUploads
+            Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub "/onlineprorab/${Environment}/api"
+      RetentionInDays: !Ref ApiLogRetentionDays
+
+  ApiLogWriterPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allow the API host's Docker daemon to publish logs to this environment's API log group.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: WriteApiContainerLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/onlineprorab/${Environment}/api:*"
+
+  ApiErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ApiLogGroup
+      FilterPattern: '{ $.level = "ERROR" }'
+      MetricTransformations:
+        - MetricName: ApiErrorEvents
+          MetricNamespace: !Sub "OnlineProrab/API/${Environment}"
+          MetricValue: "1"
+          DefaultValue: 0
+
+  BackupAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-backup-alerts"
+      DisplayName: !Sub "${Environment} OnlineProrab backup alerts"
+
+  BackupAlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref BackupAlertTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudWatchAlarmPublish
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref BackupAlertTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn:
+                  - !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-BackupMissing"
+                  - !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-ApiErrors"
+
+  BackupAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: BackupAlertEmailProvided
+    Properties:
+      TopicArn: !Ref BackupAlertTopic
+      Protocol: email
+      Endpoint: !Ref BackupAlertEmail
+
+  BackupMissingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-BackupMissing"
+      AlarmDescription: !Sub "No successful ${Environment} OnlineProrab S3 backup heartbeat was published for two consecutive days."
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref BackupAlertTopic
+      OKActions:
+        - !Ref BackupAlertTopic
+      Namespace: !Sub "OnlineProrab/Backups/${Environment}"
+      MetricName: BackupSucceeded
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+
+  ApiErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-ApiErrors"
+      AlarmDescription: !Sub "One or more ${Environment} OnlineProrab API error-level log records were received during the last five minutes."
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref BackupAlertTopic
+      OKActions:
+        - !Ref BackupAlertTopic
+      Namespace: !Sub "OnlineProrab/API/${Environment}"
+      MetricName: ApiErrorEvents
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  BackupArchiveReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read encrypted snapshots from this environment's S3 backup archive.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ReadBackupSnapshots
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "${BackupArchiveBucket.Arn}/snapshots/*"
+
+  StorageRecoveryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Restore uploads and write the object tombstones required for safe recovery.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ListUploadsBucket
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: RestoreUploadObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:AbortMultipartUpload
+            Resource: !Sub "${UploadsBucket.Arn}/*"
+          - Sid: WriteRecoveryObjectTombstones
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${DeletionLedgerBucket.Arn}/tombstones/objects/*"
+
+Outputs:
+  UploadsBucketName:
+    Description: Set this value as S3_BUCKET.
+    Value: !Ref UploadsBucket
+  UploadsBucketRegion:
+    Description: Set this value as S3_REGION.
+    Value: !Ref AWS::Region
+  S3DeletionLedgerBucketName:
+    Description: Set this value as S3_DELETION_LEDGER_BUCKET.
+    Value: !Ref DeletionLedgerBucket
+  S3BackupArchiveBucketName:
+    Description: Set this value as S3_BACKUP_BUCKET for backup and recovery commands.
+    Value: !Ref BackupArchiveBucket
+  S3BackupArchiveRetentionDays:
+    Description: Retention period applied to encrypted snapshots under snapshots/.
+    Value: !Ref BackupArchiveRetentionDays
+  UploadsBucketArn:
+    Description: S3 uploads bucket ARN for operational verification.
+    Value: !GetAtt UploadsBucket.Arn
+  ApplicationStoragePolicyArn:
+    Description: Attach to the API workload role or a dedicated IAM user.
+    Value: !Ref ApplicationStoragePolicy
+  DeletionJournalReadPolicyArn:
+    Description: Attach to a recovery operator that must replay deletion events.
+    Value: !Ref DeletionJournalReadPolicy
+  StorageRecoveryPolicyArn:
+    Description: Attach to a recovery identity that restores uploads and writes object tombstones.
+    Value: !Ref StorageRecoveryPolicy
+  BackupWriterPolicyArn:
+    Description: Attach to a backup runner that reads uploads and writes encrypted snapshots.
+    Value: !Ref BackupWriterPolicy
+  BackupMetricNamespace:
+    Description: Set this value as BACKUP_METRIC_NAMESPACE in the backup runner environment.
+    Value: !Sub "OnlineProrab/Backups/${Environment}"
+  BackupAlertTopicArn:
+    Description: Subscribe an operator endpoint to this topic for backup alarms.
+    Value: !Ref BackupAlertTopic
+  ApiLogGroupName:
+    Description: Set this value as API_LOG_GROUP in the production API host's Compose environment.
+    Value: !Ref ApiLogGroup
+  ApiLogWriterPolicyArn:
+    Description: Attach to the API host identity used by the Docker daemon's awslogs driver.
+    Value: !Ref ApiLogWriterPolicy
+  BackupArchiveReadPolicyArn:
+    Description: Attach to a recovery identity that downloads encrypted snapshots.
+    Value: !Ref BackupArchiveReadPolicy

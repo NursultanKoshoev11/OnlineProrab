@@ -6,6 +6,7 @@ import (
 
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/database"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
 var appState = State{
@@ -19,6 +20,8 @@ type SMSSender interface {
 
 type State struct {
 	DB                         *database.DB
+	FileStore                  storage.ObjectStore
+	DeletionJournal            storage.DeletionJournal
 	JWTSecret                  string
 	AccessTokenTTL             time.Duration
 	UploadDir                  string
@@ -26,15 +29,14 @@ type State struct {
 	IsProduction               bool
 	IsProductionLike           bool
 	IsDevelopment              bool
-	IsStaging                  bool
 	TrustedProxyCIDRs          []string
 	DevSMSCodeEnabled          bool
-	StagingTestSMSPhone        string
-	StagingTestSMSCode         string
-	StagingTestPaymentPriceKGS int
 	ReviewOnlyMode             bool
 	ReviewSMSPhone             string
 	ReviewSMSCode              string
+	StagingTestSMSPhone        string
+	StagingTestSMSCode         string
+	StagingTestPaymentPriceKGS int
 	SMSSender                  SMSSender
 	SupportTelegramBotToken    string
 	SupportTelegramChatID      string
@@ -51,12 +53,16 @@ type State struct {
 	OpenRouterAPIKey           string
 	OpenRouterModel            string
 	OpenRouterFallbackModel    string
+	IsStaging                  bool
 	OBank                      config.OBankConfig
 }
 
-func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
+func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore storage.ObjectStore) {
+	deletionJournal, _ := fileStore.(storage.DeletionJournal)
 	appState = State{
 		DB:                         db,
+		FileStore:                  fileStore,
+		DeletionJournal:            deletionJournal,
 		JWTSecret:                  cfg.JWTSecret,
 		AccessTokenTTL:             cfg.AccessTokenTTL,
 		UploadDir:                  cfg.UploadDir,
@@ -64,12 +70,8 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		IsProduction:               cfg.IsProduction(),
 		IsProductionLike:           cfg.IsProductionLike(),
 		IsDevelopment:              cfg.IsDevelopment(),
-		IsStaging:                  cfg.IsStaging(),
 		TrustedProxyCIDRs:          append([]string(nil), cfg.TrustedProxyCIDRs...),
 		DevSMSCodeEnabled:          cfg.DevSMSCodeEnabled,
-		StagingTestSMSPhone:        cfg.StagingTestSMSPhone,
-		StagingTestSMSCode:         cfg.StagingTestSMSCode,
-		StagingTestPaymentPriceKGS: cfg.StagingTestPaymentPriceKGS,
 		ReviewOnlyMode:             cfg.ReviewOnlyMode,
 		ReviewSMSPhone:             cfg.ReviewSMSPhone,
 		ReviewSMSCode:              cfg.ReviewSMSCode,
@@ -89,6 +91,10 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender) {
 		OpenRouterAPIKey:           cfg.OpenRouterAPIKey,
 		OpenRouterModel:            cfg.OpenRouterModel,
 		OpenRouterFallbackModel:    cfg.OpenRouterFallbackModel,
+		IsStaging:                  cfg.IsStaging(),
+		StagingTestSMSPhone:        cfg.StagingTestSMSPhone,
+		StagingTestSMSCode:         cfg.StagingTestSMSCode,
+		StagingTestPaymentPriceKGS: cfg.StagingTestPaymentPriceKGS,
 		OBank:                      cfg.OBank,
 	}
 	if appState.JWTSecret == "" {

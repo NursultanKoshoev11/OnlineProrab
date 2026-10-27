@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -118,7 +118,7 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		if callErr != nil {
 			// Keep successful chunks and add deterministic matches. A single
 			// provider/network failure must not erase valid AI selections.
-			log.Printf("all expense AI chunks did not complete: %v", callErr)
+			slog.Warn("expense_ai_chunks_incomplete", "analyzed_count", analyzedCount, "total_count", len(items), "error_type", fmt.Sprintf("%T", callErr))
 			selected = mergeExpenseSelections(
 				items,
 				validExpenseSelection(items, selection.SelectedIDs),
@@ -165,7 +165,7 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 			response.Summary = "Найдены связанные расходы по вашему запросу."
 		}
 	}
-	log.Printf("expense AI result mode=%s total_items=%d analyzed=%d complete=%t matched=%d currencies=%d", response.Mode, response.TotalCount, response.AIAnalyzedCount, response.AIComplete, response.MatchedCount, len(response.Totals))
+	slog.Info("expense_ai_search_completed", "mode", response.Mode, "total_items", response.TotalCount, "analyzed", response.AIAnalyzedCount, "complete", response.AIComplete, "matched", response.MatchedCount, "currencies", len(response.Totals))
 	JSON(w, http.StatusOK, response)
 }
 

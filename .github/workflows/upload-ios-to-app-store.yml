@@ -1,0 +1,137 @@
+name: Upload iOS build to App Store Connect
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: GitHub Actions run ID that created the signed IPA
+        required: true
+        type: string
+      artifact_name:
+        description: Exact name of the signed IPA artifact from that run
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  upload:
+    name: Upload signed IPA
+    runs-on: macos-26
+    environment: production-mobile
+    permissions:
+      actions: read
+    steps:
+      - name: Download signed IPA artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+          path: ${{ runner.temp }}/stroy-ipa
+
+      - name: Verify IPA identity and version
+        env:
+          EXPECTED_BUNDLE_ID: com.koshoev.stroy
+          EXPECTED_VERSION: 1.0.0
+        run: |
+          python3 - <<'PY'
+          import os
+          import plistlib
+          import zipfile
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "stroy-ipa"
+          packages = list(root.rglob("*.ipa"))
+          if len(packages) != 1:
+              raise SystemExit(f"Expected one IPA in the artifact, found {len(packages)}")
+
+          ipa = packages[0]
+          with zipfile.ZipFile(ipa) as package:
+              info_paths = [
+                  item for item in package.namelist()
+                  if item.startswith("Payload/") and item.endswith(".app/Info.plist")
+              ]
+              if len(info_paths) != 1:
+                  raise SystemExit(f"Expected one app Info.plist, found {len(info_paths)}")
+              info = plistlib.loads(package.read(info_paths[0]))
+
+          bundle_id = info.get("CFBundleIdentifier")
+          version = info.get("CFBundleShortVersionString")
+          build = info.get("CFBundleVersion")
+          if bundle_id != os.environ["EXPECTED_BUNDLE_ID"]:
+              raise SystemExit(f"Unexpected bundle ID: {bundle_id}")
+          if version != os.environ["EXPECTED_VERSION"]:
+              raise SystemExit(f"Expected Flutter iOS version 1.0.0 for App Store version 1.0, got {version}")
+          if not build:
+              raise SystemExit("IPA does not contain a build number")
+
+          print(f"Verified {bundle_id}, version {version}, build {build}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"STROY_IPA_PATH={ipa}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"Verified IPA: `{bundle_id}` version `{version}` build `{build}`.\n")
+          PY
+
+      - name: Prepare App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_P8: ${{ secrets.ASC_PRIVATE_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          test -n "$ASC_KEY_ID"
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_PRIVATE_KEY_P8"
+          [[ "$ASC_KEY_ID" =~ ^[A-Z0-9]+$ ]]
+          KEY_DIR="$RUNNER_TEMP/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          key = os.environ["ASC_PRIVATE_KEY_P8"].replace("\r\n", "\n")
+          Path(os.environ["RUNNER_TEMP"], "private_keys", f"AuthKey_{os.environ['ASC_KEY_ID']}.p8").write_text(key, encoding="utf-8")
+          PY
+          openssl pkey -in "$KEY_PATH" -noout
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Validate IPA with Apple
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --validate-app \
+            --type ios \
+            --file "$STROY_IPA_PATH" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            --p8-file-path "$ASC_KEY_PATH"
+
+      - name: Upload IPA to App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$STROY_IPA_PATH" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            --p8-file-path "$ASC_KEY_PATH" \
+            --verbose
+
+      - name: Report successful upload
+        if: success()
+        run: |
+          {
+            echo
+            echo 'IPA upload completed. Apple will process the build before it appears in App Store Connect/TestFlight.'
+            echo 'This workflow uploads the binary only; it does not submit the app for App Review.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/private_keys"

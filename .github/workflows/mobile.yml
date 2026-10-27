@@ -315,24 +315,6 @@ jobs:
           [[ "$STROY_IOS_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]
           python3 tool/configure_ios_bundle_id.py "$STROY_IOS_BUNDLE_ID"
 
-      - name: Verify public privacy and account-deletion pages
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location --max-time 30 \
-            https://stroy.com.kg/privacy/ --output "$RUNNER_TEMP/stroy-privacy.html"
-          grep -Fq 'Политика конфиденциальности' "$RUNNER_TEMP/stroy-privacy.html"
-          grep -Fq 'Google Gemini' "$RUNNER_TEMP/stroy-privacy.html"
-          grep -Fq 'бессрочно храним в закрытом журнале' "$RUNNER_TEMP/stroy-privacy.html"
-          curl --fail --silent --show-error --location --max-time 30 \
-            https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
-          grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
-          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
-            https://api.stroy.com.kg/api/v1/account/deletion/verify)"
-          if [[ "$api_status" != '405' ]]; then
-            echo "Account-deletion API route returned HTTP $api_status; expected 405 for GET." >&2
-            exit 1
-          fi
-
       - name: Create temporary signing keychain
         env:
           STROY_IOS_CERTIFICATE_BASE64: ${{ secrets.STROY_IOS_CERTIFICATE_BASE64 }}
@@ -414,7 +396,24 @@ jobs:
         run: flutter test
 
       - name: Prepare iOS release build
-        run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+        run: flutter build ios --release --no-codesign --build-name 1.0 --build-number 7 --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+
+      - name: Configure signing for the Runner app target
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          values = {
+              "CODE_SIGN_STYLE": "Manual",
+              "CODE_SIGN_IDENTITY": os.environ["STROY_IOS_SIGNING_IDENTITY"],
+              "DEVELOPMENT_TEAM": os.environ["STROY_IOS_TEAM_ID"],
+              "PROVISIONING_PROFILE_SPECIFIER": os.environ["STROY_IOS_PROFILE_UUID"],
+              "PRODUCT_BUNDLE_IDENTIFIER": os.environ["STROY_IOS_BUNDLE_ID"],
+          }
+          lines = [f"{key} = {value}" for key, value in values.items()]
+          Path("ios/Flutter/ProductionSigning.xcconfig").write_text("\n".join(lines) + "\n")
+          PY
 
       - name: Create signed App Store archive
         run: |
@@ -425,12 +424,7 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/STROY.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="$STROY_IOS_SIGNING_IDENTITY" \
-            DEVELOPMENT_TEAM="$STROY_IOS_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$STROY_IOS_PROFILE_UUID" \
-            PRODUCT_BUNDLE_IDENTIFIER="$STROY_IOS_BUNDLE_ID"
+            archive
 
       - name: Validate archived iOS privacy manifest
         run: |
@@ -476,6 +470,42 @@ jobs:
           path: ${{ runner.temp }}/stroy-ipa/*.ipa
           if-no-files-found: error
           retention-days: 14
+
+      - name: Remove temporary signing configuration
+        if: always()
+        run: rm -f ios/Flutter/ProductionSigning.xcconfig
+
+      - name: Check live App Store privacy and account-deletion readiness
+        id: public_readiness
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/privacy/ --output "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Политика конфиденциальности' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'Google Gemini' "$RUNNER_TEMP/stroy-privacy.html"
+          grep -Fq 'бессрочно храним в закрытом журнале' "$RUNNER_TEMP/stroy-privacy.html"
+          curl --fail --silent --show-error --location --max-time 30 \
+            https://stroy.com.kg/account-deletion/ --output "$RUNNER_TEMP/stroy-account-deletion.html"
+          grep -Fq 'Удаление аккаунта' "$RUNNER_TEMP/stroy-account-deletion.html"
+          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
+            https://api.stroy.com.kg/api/v1/account/deletion/verify)"
+          if [[ "$api_status" != '405' ]]; then
+            echo "Account-deletion API route returned HTTP $api_status; expected 405 for GET." >&2
+            exit 1
+          fi
+
+      - name: Report App Store submission readiness
+        if: steps.public_readiness.outcome == 'failure'
+        run: |
+          echo "::warning title=IPA generated, App Store submission blocked::The signed IPA is available, but the live privacy/account-deletion checks failed. Add in-app account deletion and make its completion path work before submitting for review."
+          {
+            echo '## Signed IPA generated; App Store submission is not ready'
+            echo
+            echo '- The IPA artifact is available for inspection or TestFlight.'
+            echo '- The live privacy/account-deletion checks failed. The current app also has no in-app account-deletion entry point.'
+            echo '- Do not submit this build for App Review until account deletion is available from inside the app and its completion path works.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove signing materials
         if: always()

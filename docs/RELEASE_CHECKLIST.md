@@ -15,7 +15,8 @@ go build ./cmd/api
 
 Backend release gates:
 
-- Database setup works on a clean database.
+- Database migrations pass on a clean database and both unversioned and legacy-versioned existing schemas.
+- Before production rollout, rehearse the migration against a recent staging database backup and verify existing data plus the smoke flow.
 - Health endpoint works.
 - Readiness endpoint checks database connectivity.
 - Auth flow works in staging.
@@ -50,6 +51,7 @@ Mobile release gates:
 - File upload and protected download work on a real device.
 - APK is tested on a real Android device.
 - Signed AAB is built with the upload key; release never falls back to debug signing.
+- iOS simulator build passes; create a signed IPA with the App Store signing assets and test it on a real iPhone before release.
 - `targetSdk` and `compileSdk` are both 36.
 
 ## Release decision
@@ -65,5 +67,5 @@ Ship only when:
 
 ## Known gaps
 
-- Local disk uploads are suitable for a single-server beta only; production needs durable object storage.
-- Staging and production runtime settings must be configured before public launch.
+- Production uses private AWS S3 object storage; provision its buckets and IAM roles, migrate existing uploads, and complete a real S3 backup/restore drill before cutover.
+- Configure CloudWatch API log collection and error alerts, independent uptime monitoring for `/health` and `/ready`, live SMS credentials, and staging/production runtime settings before public launch.

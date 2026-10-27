@@ -43,9 +43,16 @@ type Config struct {
 	AccessTokenTTL             time.Duration
 	DevSMSCodeEnabled          bool
 	CORSAllowedOrigins         []string
+	StorageDriver              string
 	TrustedProxyCIDRs          []string
 	UploadDir                  string
 	MaxUploadBytes             int64
+	S3Region                   string
+	S3Bucket                   string
+	S3DeletionLedgerBucket     string
+	AWSAccessKeyID             string
+	AWSSecretAccessKey         string
+	AWSSessionToken            string
 	SMSProvider                string
 	StagingTestSMSPhone        string
 	StagingTestSMSCode         string
@@ -152,9 +159,16 @@ func Load() (Config, error) {
 	cfg.AccessTokenTTL = accessTokenTTL
 	cfg.DevSMSCodeEnabled = devSMSCodeEnabled
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
+	cfg.StorageDriver = strings.ToLower(getEnv("STORAGE_DRIVER", "local"))
 	cfg.TrustedProxyCIDRs = splitCSV(os.Getenv("TRUSTED_PROXY_CIDRS"))
 	cfg.UploadDir = getEnv("UPLOAD_DIR", "./uploads")
 	cfg.MaxUploadBytes = maxUploadBytes
+	cfg.S3Region = strings.TrimSpace(os.Getenv("S3_REGION"))
+	cfg.S3Bucket = strings.TrimSpace(os.Getenv("S3_BUCKET"))
+	cfg.S3DeletionLedgerBucket = strings.TrimSpace(os.Getenv("S3_DELETION_LEDGER_BUCKET"))
+	cfg.AWSAccessKeyID = strings.TrimSpace(os.Getenv("AWS_ACCESS_KEY_ID"))
+	cfg.AWSSecretAccessKey = strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY"))
+	cfg.AWSSessionToken = strings.TrimSpace(os.Getenv("AWS_SESSION_TOKEN"))
 	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
 	cfg.StagingTestSMSPhone = normalizePhone(os.Getenv("STAGING_TEST_SMS_PHONE"))
 	cfg.StagingTestSMSCode = strings.TrimSpace(os.Getenv("STAGING_TEST_SMS_CODE"))
@@ -239,6 +253,32 @@ func (cfg Config) Validate() error {
 	}
 	if strings.TrimSpace(cfg.UploadDir) == "" {
 		problems = append(problems, "UPLOAD_DIR is required")
+	}
+	if cfg.StorageDriver != "local" && cfg.StorageDriver != "s3" {
+		problems = append(problems, "STORAGE_DRIVER must be local or s3")
+	}
+	if cfg.IsProductionLike() && cfg.StorageDriver != "s3" {
+		problems = append(problems, "STORAGE_DRIVER=s3 is required in staging and production")
+	}
+	if cfg.StorageDriver == "s3" {
+		if cfg.S3Region == "" {
+			problems = append(problems, "S3_REGION is required when STORAGE_DRIVER=s3")
+		}
+		if cfg.S3Bucket == "" {
+			problems = append(problems, "S3_BUCKET is required when STORAGE_DRIVER=s3")
+		}
+		if cfg.S3DeletionLedgerBucket == "" {
+			problems = append(problems, "S3_DELETION_LEDGER_BUCKET is required when STORAGE_DRIVER=s3")
+		}
+		if cfg.S3Bucket != "" && cfg.S3Bucket == cfg.S3DeletionLedgerBucket {
+			problems = append(problems, "S3_BUCKET and S3_DELETION_LEDGER_BUCKET must be different")
+		}
+		if (cfg.AWSAccessKeyID == "") != (cfg.AWSSecretAccessKey == "") {
+			problems = append(problems, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be configured together")
+		}
+		if cfg.AWSSessionToken != "" && cfg.AWSAccessKeyID == "" {
+			problems = append(problems, "AWS_SESSION_TOKEN requires AWS access key credentials")
+		}
 	}
 	if cfg.AccessTokenTTL <= 0 {
 		problems = append(problems, "ACCESS_TOKEN_TTL_MINUTES must be greater than 0")
@@ -494,11 +534,16 @@ func validateTwilioConfig(cfg Config) []string {
 
 func validateNikitaConfig(cfg Config) []string {
 	var problems []string
-	apiURL, err := url.Parse(strings.TrimSpace(cfg.NikitaAPIURL))
-	if err != nil || strings.TrimSpace(cfg.NikitaAPIURL) == "" {
-		problems = append(problems, "NIKITA_API_URL must be a valid URL")
-	} else if cfg.IsProductionLike() && !isOfficialNikitaAPIURL(apiURL) {
-		problems = append(problems, "NIKITA_API_URL must use the official HTTPS SMS endpoint in staging and production")
+	endpoint := strings.TrimSpace(cfg.NikitaAPIURL)
+	if endpoint == "" {
+		problems = append(problems, "NIKITA_API_URL is required")
+	} else {
+		apiURL, err := url.Parse(endpoint)
+		if err != nil || apiURL.Scheme == "" || apiURL.Host == "" {
+			problems = append(problems, "NIKITA_API_URL must be a valid absolute URL")
+		} else if cfg.IsProductionLike() && !isOfficialNikitaAPIURL(apiURL) {
+			problems = append(problems, "NIKITA_API_URL must be the official HTTPS endpoint https://smspro.nikita.kg/api/message in staging and production")
+		}
 	}
 	if strings.TrimSpace(cfg.NikitaLogin) == "" {
 		problems = append(problems, "NIKITA_LOGIN is required")
@@ -513,7 +558,7 @@ func validateNikitaConfig(cfg Config) []string {
 }
 
 func isOfficialNikitaAPIURL(apiURL *url.URL) bool {
-	if apiURL == nil || apiURL.Scheme != "https" || apiURL.User != nil || apiURL.Opaque != "" {
+	if apiURL == nil || !strings.EqualFold(apiURL.Scheme, "https") || apiURL.User != nil || apiURL.Opaque != "" {
 		return false
 	}
 	if !strings.EqualFold(apiURL.Hostname(), "smspro.nikita.kg") || (apiURL.Port() != "" && apiURL.Port() != "443") {

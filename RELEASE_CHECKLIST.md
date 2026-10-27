@@ -1,6 +1,10 @@
 # OnlineProrab Release Checklist
 
-## Backend readiness
+Use the [detailed release checklist](docs/RELEASE_CHECKLIST.md) for backend, Android, and iOS checks. Use the [backend production runbook](backend/PRODUCTION.md) for environment configuration, AWS S3 migration, encrypted backup/restore, account deletion, and rollback.
+
+Do not release based on green CI alone. The staging auth-to-project flow, real-device Android and iOS checks, AWS storage migration, and a real PostgreSQL/S3 restore drill must pass before public launch. Configure live SMS credentials, the CloudWatch log and alert stack, independent uptime monitoring for `/health` and `/ready`, HTTPS, and the SSH website deployment secrets as described in the runbooks.
+
+## Backend smoke test
 
 - [ ] `cd backend && go mod tidy`
 - [ ] `cd backend && go test ./...`
@@ -43,7 +47,11 @@
 - [ ] Set production `CORS_ALLOWED_ORIGINS`
 - [ ] Configure HTTPS and domain
 - [ ] Configure PostgreSQL backups
-- [ ] Configure uploaded file storage
+- [ ] Configure a private AWS S3 bucket, Block Public Access, encryption, and least-privilege IAM role or credentials
+- [ ] Back up the active local upload volume and database
+- [ ] Stop API writes and run `storage-migrate -direction=local-to-s3`
+- [ ] Verify existing object sizes/digests and test upload/download/delete against staging
+- [ ] Test S3 backup/restore and `storage-migrate -direction=s3-to-local` rollback
 - [ ] Configure logs and uptime monitoring
 - [ ] Configure SMS provider
 
