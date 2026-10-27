@@ -351,23 +351,6 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     );
     if (mayProcessVoice != true || !mounted) return;
 
-    bool available;
-    try {
-      available = await widget.speechToText.initialize(
-        options: [stt.SpeechToText.androidNoBluetooth],
-      );
-    } catch (_) {
-      available = false;
-    }
-    if (!mounted) return;
-    if (!available) {
-      _toast(
-        context,
-        'Распознавание речи недоступно. Проверьте разрешение микрофона и системный сервис речи.',
-      );
-      return;
-    }
-
     final value = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -622,8 +605,10 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
   String _words = '';
   String _committedWords = '';
   String _activeWords = '';
+  String? _localeId;
   String? _error;
   bool _starting = true;
+  bool _initialized = false;
   bool _keepListening = true;
   Timer? _restartTimer;
 
@@ -636,7 +621,9 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
       const Duration(milliseconds: 600),
       (_) => _ensureListening(),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startListening());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _initializeAndStartListening(),
+    );
   }
 
   @override
@@ -648,7 +635,13 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
   }
 
   void _ensureListening() {
-    if (!mounted || !_keepListening || _starting || _listening) return;
+    if (!mounted ||
+        !_initialized ||
+        !_keepListening ||
+        _starting ||
+        _listening) {
+      return;
+    }
     if (_activeWords.trim().isNotEmpty) {
       _committedWords = [
         _committedWords,
@@ -659,8 +652,82 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
     _startListening();
   }
 
-  Future<void> _startListening() async {
+  Future<void> _initializeAndStartListening() async {
     if (!mounted) return;
+    setState(() {
+      _starting = true;
+      _error = null;
+    });
+
+    try {
+      final options = <stt.SpeechConfigOption>[
+        if (Platform.isAndroid) stt.SpeechToText.androidNoBluetooth,
+        if (Platform.isIOS) stt.SpeechToText.iosNoBluetooth,
+      ];
+      final available = await widget.speechToText.initialize(
+        options: options,
+        onError: _handleSpeechError,
+      );
+      if (!mounted) return;
+      if (!available) {
+        setState(() {
+          _starting = false;
+          _keepListening = false;
+          _error =
+              'Распознавание речи недоступно. Разрешите микрофон и распознавание речи в настройках iPhone.';
+        });
+        return;
+      }
+
+      _initialized = true;
+      try {
+        final locales = await widget.speechToText.locales();
+        for (final locale in locales) {
+          final normalized = locale.localeId.toLowerCase().replaceAll('_', '-');
+          if (normalized == 'ru' || normalized.startsWith('ru-')) {
+            _localeId = locale.localeId;
+            break;
+          }
+        }
+      } catch (_) {
+        // The system locale remains the fallback when the locale list is unavailable.
+      }
+      await _startListening();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _starting = false;
+        _keepListening = false;
+        _error = 'Не удалось запустить распознавание речи.';
+      });
+    }
+  }
+
+  void _handleSpeechError(dynamic error) {
+    if (!mounted) return;
+    setState(() {
+      _starting = false;
+      _error = _speechErrorText(error.errorMsg);
+      if (error.permanent) _keepListening = false;
+    });
+  }
+
+  String _speechErrorText(String value) {
+    final error = value.toLowerCase();
+    if (error.contains('permission')) {
+      return 'Разрешите микрофон и распознавание речи для STROY в настройках iPhone.';
+    }
+    if (error.contains('network')) {
+      return 'Apple Speech не отвечает. Проверьте интернет и повторите попытку.';
+    }
+    if (error.contains('no_match')) {
+      return 'Речь не распознана. Говорите чуть громче и повторите.';
+    }
+    return 'Распознавание речи прервано. Нажмите на микрофон и повторите.';
+  }
+
+  Future<void> _startListening() async {
+    if (!mounted || !_initialized) return;
     _keepListening = true;
     setState(() {
       _starting = true;
@@ -692,6 +759,19 @@ class _VoiceExpenseSearchSheetState extends State<_VoiceExpenseSearchSheet> {
           cancelOnError: false,
           partialResults: true,
           listenMode: stt.ListenMode.dictation,
+          localeId: _localeId,
+          contextualPhrases: const [
+            'расходы',
+            'расход',
+            'материалы',
+            'цемент',
+            'арматура',
+            'окна',
+            'двери',
+            'зарплата',
+            'стройка',
+            'объект',
+          ],
         ),
       );
       if (mounted) setState(() => _starting = false);
