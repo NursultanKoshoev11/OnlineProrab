@@ -480,7 +480,7 @@ jobs:
         run: flutter test
 
       - name: Prepare iOS release build
-        run: flutter build ios --release --no-codesign --build-number ${{ github.run_number }} --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+        run: flutter build ios --release --no-codesign --build-name 1.0.0 --build-number ${{ github.run_number }} --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Configure signing for the Runner app target
         run: |
