@@ -1,17 +1,70 @@
 services:
+  billing:
+    build:
+      context: ../website
+      dockerfile: Dockerfile.billing
+    container_name: stroy-obank-billing
+    restart: unless-stopped
+    networks:
+      - staging_proxy
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/billing/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  database:
+    image: postgres:16-alpine
+    container_name: stroy-obank-staging-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:-onlineprorab_staging}
+      POSTGRES_USER: ${STAGING_POSTGRES_USER:?STAGING_POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD:?STAGING_POSTGRES_PASSWORD is required}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=trust
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/etc/postgresql/tls/server.crt
+      - -c
+      - ssl_key_file=/etc/postgresql/tls/server.key
+    networks:
+      - staging_database
+    volumes:
+      - stroy_obank_staging_postgres:/var/lib/postgresql/data
+      - ./staging-tls/server.crt:/etc/postgresql/tls/server.crt:ro
+      - ./staging-tls/server.key:/etc/postgresql/tls/server.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+
   api:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    container_name: stroy-api
+    container_name: stroy-obank-staging-api
     restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "5"
     networks:
-      - stroy_default
+      - staging_proxy
+      - staging_database
     environment:
       APP_ENV: staging
       HTTP_ADDR: :8080
@@ -31,8 +84,11 @@ services:
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       SUPPORT_TELEGRAM_BOT_TOKEN: ${SUPPORT_TELEGRAM_BOT_TOKEN:-}
       SUPPORT_TELEGRAM_CHAT_ID: ${SUPPORT_TELEGRAM_CHAT_ID:-}
-      SMS_PROVIDER: ${SMS_PROVIDER:?SMS_PROVIDER is required}
+      SMS_PROVIDER: ${SMS_PROVIDER:-}
       DEV_SMS_CODE_ENABLED: "false"
+      STAGING_TEST_SMS_PHONE: ${STAGING_TEST_SMS_PHONE:-}
+      STAGING_TEST_SMS_CODE: ${STAGING_TEST_SMS_CODE:-}
+      STAGING_TEST_PAYMENT_PRICE_KGS: ${STAGING_TEST_PAYMENT_PRICE_KGS:-0}
       REVIEW_ONLY_MODE: "false"
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_API_KEY_SID: ${TWILIO_API_KEY_SID:-}
@@ -44,6 +100,14 @@ services:
       NIKITA_PASSWORD: ${NIKITA_PASSWORD:-}
       NIKITA_SENDER: ${NIKITA_SENDER:-}
       NIKITA_TEST_MODE: "false"
+      OBANK_ENABLED: ${OBANK_ENABLED:-false}
+      OBANK_SID: ${OBANK_SID:-}
+      OBANK_PASSWORD: ${OBANK_PASSWORD:-}
+      OBANK_API_URL: ${OBANK_API_URL:-https://mw-api-test.dengi.kg/api/json/json.php}
+      OBANK_API_VERSION: ${OBANK_API_VERSION:-1005}
+      OBANK_TEST: "true"
+      OBANK_RESULT_URL: ${OBANK_RESULT_URL:-}
+      OBANK_RETURN_URL: ${OBANK_RETURN_URL:-https://stroy.com.kg/billing/}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
       AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-gemini,groq,openrouter,openrouter-fallback}
@@ -52,10 +116,11 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/free}
       OPENROUTER_FALLBACK_MODEL: ${OPENROUTER_FALLBACK_MODEL:-nex-agi/nex-n2.5-pro:free}
-    ports:
-      - "127.0.0.1:${STROY_API_PORT:-8081}:8080"
+    expose:
+      - "8080"
     volumes:
-      - stroy_uploads:/data/uploads
+      - stroy_obank_staging_uploads:/data/uploads
+      - ./staging-tls/ca.crt:/etc/staging-tls/ca.crt:ro
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -71,11 +136,14 @@ services:
       start_period: 15s
 
 volumes:
-  stroy_uploads:
-    external: true
-    name: stroy_uploads
+  stroy_obank_staging_postgres:
+    name: stroy_obank_staging_postgres
+  stroy_obank_staging_uploads:
+    name: stroy_obank_staging_uploads
 
 networks:
-  stroy_default:
+  staging_proxy:
     external: true
     name: stroy_default
+  staging_database:
+    internal: true

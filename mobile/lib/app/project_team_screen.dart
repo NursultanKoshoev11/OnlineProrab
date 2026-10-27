@@ -186,6 +186,10 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
+          actionsAlignment: MainAxisAlignment.end,
+          actionsOverflowButtonSpacing: 4,
+          actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
           title: Text(
             addedImmediately ? 'Участник добавлен' : 'Доступ подготовлен',
           ),
@@ -235,6 +239,10 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowButtonSpacing: 4,
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
         title: const Text('Удалить участника?'),
         content: Text('$name будет удалён из команды этого объекта.'),
         actions: [
@@ -292,6 +300,10 @@ class _ProjectInviteDialogState extends State<ProjectInviteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      actionsAlignment: MainAxisAlignment.end,
+      actionsOverflowButtonSpacing: 4,
+      actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
       title: const Text('Добавить участника'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -371,6 +383,10 @@ class _RoleSelectionDialogState extends State<RoleSelectionDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      actionsAlignment: MainAxisAlignment.end,
+      actionsOverflowButtonSpacing: 4,
+      actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
       title: const Text('Изменить роль'),
       content: DropdownButtonFormField<String>(
         initialValue: role,

@@ -15,16 +15,22 @@ func ListPlans(w http.ResponseWriter, r *http.Request) {
 	plans := make([]map[string]any, 0, len(subscriptionPlans))
 	for _, plan := range subscriptionPlans {
 		annualPrice, _ := planPrice(plan, "year")
+		monthlyPrice := plan.PriceKGS
+		discountPercent := plan.AnnualDiscountPercent
+		if stagingTestPriceOverrideEnabled() && plan.ID != "trial" {
+			monthlyPrice = appState.StagingTestPaymentPriceKGS
+			discountPercent = 0
+		}
 		plans = append(plans, map[string]any{
 			"id":                      plan.ID,
 			"name":                    plan.Name,
-			"price_kgs":               plan.PriceKGS,
+			"price_kgs":               monthlyPrice,
 			"billing_period":          "month",
 			"annual_price_kgs":        annualPrice,
-			"annual_discount_percent": plan.AnnualDiscountPercent,
+			"annual_discount_percent": discountPercent,
 			"billing_options": []map[string]any{
-				{"period": "month", "price_kgs": plan.PriceKGS, "discount_percent": 0},
-				{"period": "year", "price_kgs": annualPrice, "discount_percent": plan.AnnualDiscountPercent},
+				{"period": "month", "price_kgs": monthlyPrice, "discount_percent": 0},
+				{"period": "year", "price_kgs": annualPrice, "discount_percent": discountPercent},
 			},
 			"trial_days":          plan.TrialDays,
 			"max_projects":        plan.MaxProjects,
@@ -62,6 +68,9 @@ func SubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 	discountPercent := 0
 	if state.BillingPeriod == "year" {
 		discountPercent = state.Plan.AnnualDiscountPercent
+	}
+	if stagingTestPriceOverrideEnabled() && state.Plan.ID != "trial" {
+		discountPercent = 0
 	}
 
 	response := map[string]any{

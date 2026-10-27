@@ -323,6 +323,10 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     final mayProcessVoice = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowButtonSpacing: 4,
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
         title: const Text('Обработка голосового поиска'),
         content: const Text(
           'Аудио передаётся системному сервису распознавания речи '
@@ -387,6 +391,10 @@ class _ExpensesTabState extends State<_ExpensesTab> {
       final mayProcess = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
+          actionsAlignment: MainAxisAlignment.end,
+          actionsOverflowButtonSpacing: 4,
+          actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
           title: const Text('AI-поиск расходов'),
           content: const Text(
             'Сервер STROY передаст ваш запрос и сведения о расходах этого '

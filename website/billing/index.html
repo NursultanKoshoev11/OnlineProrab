@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f7f2" />
+    <meta
+      name="description"
+      content="Выберите подписку STROY и оплатите её через O!Dengi. Разовый платёж без автоматического продления."
+    />
+    <title>Вход и подписка — STROY</title>
+    <link rel="icon" type="image/png" href="../assets/stroy-favicon-user.png" />
+    <link rel="stylesheet" href="billing.css" />
+    <script src="billing.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="STROY — на главную">
+        <img src="../assets/stroy-brand.png" width="40" height="40" alt="" />
+        <span>STROY<span class="brand-dot">.</span></span>
+      </a>
+      <nav aria-label="Навигация">
+        <a href="/">Главная</a>
+        <a href="/terms/">Условия</a>
+        <a href="/support/">Поддержка</a>
+      </nav>
+    </header>
+
+    <main class="page-shell">
+      <section class="intro">
+        <p class="eyebrow">STROY / ЛИЧНЫЙ КАБИНЕТ</p>
+        <h1>Подписка для вашего проекта</h1>
+        <p class="lead">
+          STROY помогает владельцу вести расходы, документы и команду строительного
+          или ремонтного объекта. Вы оплачиваете доступ к цифровому сервису; работы,
+          материалы и услуги подрядчиков через STROY не продаются.
+        </p>
+      </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="login-panel" class="panel" aria-labelledby="login-title">
+        <div class="panel-heading">
+          <span class="step">01</span>
+          <div>
+            <h2 id="login-title">Войдите по номеру телефона</h2>
+            <p>Это тот же номер, который вы используете в приложении STROY.</p>
+          </div>
+        </div>
+        <form id="phone-form" class="form-row">
+          <label for="phone">Номер телефона</label>
+          <div class="input-row">
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+              placeholder="+996 555 123 456"
+              required
+            />
+            <button class="button" type="submit">Получить код</button>
+          </div>
+        </form>
+        <form id="code-form" class="form-row" hidden>
+          <label for="code">Код из SMS</label>
+          <div class="input-row">
+            <input
+              id="code"
+              name="code"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              placeholder="000000"
+              required
+            />
+            <button class="button" type="submit">Войти</button>
+          </div>
+          <button id="change-phone" class="text-button" type="button">Изменить номер</button>
+        </form>
+      </section>
+
+      <section id="account-panel" class="panel" aria-labelledby="plans-title" hidden>
+        <div class="account-row">
+          <div>
+            <p class="eyebrow">ВАШ АККАУНТ</p>
+            <h2 id="account-title">Подписка</h2>
+            <p id="current-subscription" class="muted"></p>
+          </div>
+          <button id="logout" class="text-button" type="button">Выйти</button>
+        </div>
+
+        <h2 id="plans-title" class="section-title">Выберите тариф</h2>
+        <div id="plans" class="plan-grid" aria-live="polite"></div>
+
+        <fieldset class="billing-period">
+          <legend>Период оплаты</legend>
+          <label><input type="radio" name="period" value="month" checked /> Ежемесячно</label>
+          <label><input type="radio" name="period" value="year" /> За год</label>
+        </fieldset>
+
+        <div class="checkout-summary">
+          <div>
+            <span>К оплате</span>
+            <strong id="checkout-price">—</strong>
+          </div>
+          <p>Разовый платёж. Автоматического продления нет.</p>
+          <button id="pay-button" class="button button-wide" type="button" disabled>
+            Перейти к оплате O!Dengi
+          </button>
+          <div id="payment-options" class="payment-options" hidden>
+            <p>Счёт создан. Откройте его в O!Bank или перейдите к оплате в браузере.</p>
+            <a id="obank-app-link" class="button button-wide">Открыть счёт в приложении O!Bank</a>
+            <a id="web-pay-link" class="payment-fallback">Оплатить через веб-страницу банка</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="info-grid" aria-label="Информация об оплате">
+        <article class="info-card">
+          <span class="info-icon" aria-hidden="true">↗</span>
+          <h2>Оплата через O!Dengi</h2>
+          <p>
+            На телефоне счёт можно открыть в приложении O!Bank или на защищённой
+            веб-странице банка. STROY не получает и не хранит данные банковской карты.
+          </p>
+        </article>
+        <article class="info-card">
+          <span class="info-icon" aria-hidden="true">✓</span>
+          <h2>Тариф включится автоматически</h2>
+          <p>
+            Банк подтверждает платёж серверу STROY. После подтверждения владелец
+            аккаунта и команда получают доступ на выбранный срок.
+          </p>
+        </article>
+      </section>
+
+      <footer class="page-footer">
+        <p>
+          Вопрос по оплате? Напишите на
+          <a href="mailto:nursultankosoev2@gmail.com">nursultankosoev2@gmail.com</a>.
+        </p>
+        <p>
+          <a href="/terms/">Условия использования</a>
+          <span aria-hidden="true">·</span>
+          <a href="/privacy/">Конфиденциальность</a>
+          <span aria-hidden="true">·</span>
+          <a href="/support/">Поддержка</a>
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

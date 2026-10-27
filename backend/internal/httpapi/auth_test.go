@@ -86,6 +86,41 @@ func TestIssueSMSCodeDoesNotUseFixedCodeInStaging(t *testing.T) {
 	}
 }
 
+func TestStagingTestCodeIsRestrictedToConfiguredPhoneAndEnvironment(t *testing.T) {
+	oldState := appState
+	defer func() { appState = oldState }()
+
+	appState.IsProduction = false
+	appState.IsProductionLike = true
+	appState.IsDevelopment = false
+	appState.IsStaging = true
+	appState.StagingTestSMSPhone = "+996700000001"
+	appState.StagingTestSMSCode = "111111"
+	appState.SMSSender = nil
+
+	if !isStagingTestPhone("+996 700 000 001") {
+		t.Fatal("expected normalized allowlisted staging phone to match")
+	}
+	if isStagingTestPhone("+996700000002") {
+		t.Fatal("staging test code must not be enabled for a different phone")
+	}
+
+	code, err := issueSMSCodeForPhone("+996700000001")
+	if err != nil || code != "111111" {
+		t.Fatalf("expected fixed code only for allowlisted phone, got %q, %v", code, err)
+	}
+
+	appState.IsStaging = false
+	appState.IsProduction = true
+	if isStagingTestPhone("+996700000001") {
+		t.Fatal("staging test code must not be enabled in production")
+	}
+	code, err = issueSMSCodeForPhone("+996700000001")
+	if err != nil || code == "111111" {
+		t.Fatalf("production must issue a random code, got %q, %v", code, err)
+	}
+}
+
 func TestAccessTokenRoundTrip(t *testing.T) {
 	oldState := appState
 	appState.JWTSecret = "unit-test-signing-key-1234567890"

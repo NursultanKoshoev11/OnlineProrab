@@ -47,8 +47,9 @@ npm run check # Синтаксис JavaScript и форматирование и
   поддержка и самостоятельное удаление аккаунта.
 - `account-deletion.js` — подтверждение номера по SMS и запрос удаления аккаунта.
 - `account-deletion.css` — стили публичной страницы удаления аккаунта.
+- `billing/` — browser checkout and account access for O!Dengi subscription payments; it has its own local CSS and JavaScript.
 - `assets/` — локальные изображения и логотипы.
-- `styles.css` — единый скомпилированный CSS для всех страниц.
+- `styles.css` — единый скомпилированный CSS для главной и юридических страниц.
 
 Цвета доступны как `bg-paper`, `text-ink`, `bg-lime`, `text-muted` и другие
 utility-классы. Варианты `compact:`, `tablet:` и `mobile:` соответствуют

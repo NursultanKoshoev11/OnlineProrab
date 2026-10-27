@@ -28,6 +28,14 @@ services:
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: 10
+      OBANK_ENABLED: ${OBANK_ENABLED:-false}
+      OBANK_SID: ${OBANK_SID:-}
+      OBANK_PASSWORD: ${OBANK_PASSWORD:-}
+      OBANK_API_URL: ${OBANK_API_URL:-https://mw-api-test.dengi.kg/api/json/json.php}
+      OBANK_API_VERSION: ${OBANK_API_VERSION:-1005}
+      OBANK_TEST: ${OBANK_TEST:-true}
+      OBANK_RESULT_URL: ${OBANK_RESULT_URL:-}
+      OBANK_RETURN_URL: ${OBANK_RETURN_URL:-http://localhost:8090/billing/}
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_BUCKET: ${S3_BUCKET:-}
       S3_DELETION_LEDGER_BUCKET: ${S3_DELETION_LEDGER_BUCKET:-}

@@ -330,68 +330,90 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   }
 
   Future<void> _showProfile() async {
-    await showModalBottomSheet<void>(
+    final openSubscription = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Профиль',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 14),
-              _InfoRow(
-                icon: Icons.phone_outlined,
-                title: widget.session.phone,
-                subtitle: 'Текущий аккаунт',
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.privacy_tip_outlined),
-                title: const Text('Политика конфиденциальности'),
-                trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-                onTap: _openPrivacyPolicy,
-              ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  foregroundColor: Colors.redAccent,
-                  side: const BorderSide(color: Color(0xFFFFCDD2)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Профиль',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                 ),
-                onPressed: _deleteAccount,
-                icon: const Icon(Icons.delete_forever_outlined),
-                label: const Text('Удалить аккаунт и данные'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  foregroundColor: Colors.redAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
+                const SizedBox(height: 14),
+                _InfoRow(
+                  icon: Icons.phone_outlined,
+                  title: widget.session.phone,
+                  subtitle: 'Текущий аккаунт',
                 ),
-                onPressed: () async {
-                  Navigator.of(context).pop();
-                  await widget.deps.authRepository.signOut();
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: const Text('Выйти'),
-              ),
-            ],
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.workspace_premium_outlined),
+                  title: const Text('Подписка и оплата'),
+                  subtitle: const Text('Тариф и срок действия'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).pop(true),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('Политика конфиденциальности'),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onTap: _openPrivacyPolicy,
+                ),
+                const Divider(height: 20),
+                OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  spacing: 8,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  overflowSpacing: 4,
+                  children: [
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: _muted,
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        await widget.deps.authRepository.signOut();
+                      },
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: const Text('Выйти'),
+                    ),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onPressed: _deleteAccount,
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      label: const Text('Удалить аккаунт'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+
+    if (openSubscription == true && mounted) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => _SubscriptionScreen(apiClient: widget.deps.apiClient),
+        ),
+      );
+    }
   }
 
   Future<void> _openPrivacyPolicy() async {
@@ -410,6 +432,10 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowButtonSpacing: 4,
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
         title: const Text('Удалить аккаунт?'),
         content: const Text(
           'Будут удалены профиль, ваши объекты, расходы, отчёты, сессии и загруженные файлы. Это действие нельзя отменить.',

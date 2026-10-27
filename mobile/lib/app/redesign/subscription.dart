@@ -1,14 +1,23 @@
 part of '../online_prorab_redesign.dart';
 
+const _nativeOBankCheckoutRequested = bool.fromEnvironment(
+  'OBANK_NATIVE_CHECKOUT_ENABLED',
+  defaultValue: false,
+);
+const _obankStagingBuild = bool.fromEnvironment(
+  'OBANK_STAGING_BUILD',
+  defaultValue: false,
+);
+
 class _SubscriptionScreen extends StatefulWidget {
   const _SubscriptionScreen({
-    required this.project,
-    required this.members,
-    required this.canManage,
+    this.project,
+    this.members = const [],
+    this.canManage = true,
     required this.apiClient,
   });
 
-  final RemoteProject project;
+  final RemoteProject? project;
   final List<RemoteProjectMember> members;
   final bool canManage;
   final ApiClient apiClient;
@@ -17,18 +26,183 @@ class _SubscriptionScreen extends StatefulWidget {
   State<_SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
-class _SubscriptionScreenState extends State<_SubscriptionScreen> {
+class _SubscriptionScreenState extends State<_SubscriptionScreen>
+    with WidgetsBindingObserver {
   String _selectedPlan = 'trial';
   String _currentPlan = 'trial';
   String _currentStatus = 'trialing';
   String _selectedBillingPeriod = 'month';
   String _currentBillingPeriod = 'month';
   DateTime? _subscriptionEndsAt;
+  bool _checkoutBusy = false;
+  bool _statusBusy = false;
+  String? _checkoutOrderID;
+  String? _checkoutMessage;
+
+  bool get _nativeOBankCheckoutEnabled {
+    final apiBase = Uri.tryParse(ApiConfig.baseUrl);
+    return _nativeOBankCheckoutRequested &&
+        _obankStagingBuild &&
+        kDebugMode &&
+        apiBase != null &&
+        apiBase.scheme == 'https' &&
+        apiBase.host.isNotEmpty &&
+        apiBase.host != 'api.stroy.com.kg';
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_loadCurrentSubscription());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _checkoutOrderID != null) {
+      unawaited(_refreshOBankPaymentStatus());
+    }
+  }
+
+  Future<void> _startOBankCheckout() async {
+    if (!_nativeOBankCheckoutEnabled ||
+        _selectedPlan == 'trial' ||
+        _checkoutBusy) {
+      return;
+    }
+    setState(() {
+      _checkoutBusy = true;
+      _checkoutMessage = 'Создаём защищённый счёт O!Bank…';
+    });
+
+    try {
+      final checkout = await widget.apiClient
+          .postJson('/api/v1/subscriptions/checkout', {
+            'plan_id': _selectedPlan,
+            'billing_period': _selectedBillingPeriod,
+            'idempotency_key': _newPaymentIdempotencyKey(),
+          });
+      if (!mounted) return;
+      final orderID = checkout['order_id']?.toString() ?? '';
+      final status = checkout['status']?.toString() ?? '';
+      if (orderID.isEmpty) {
+        throw const FormatException('Сервер не вернул номер счёта.');
+      }
+
+      if (status == 'paid') {
+        await _loadCurrentSubscription();
+        if (mounted) {
+          setState(() {
+            _checkoutOrderID = null;
+            _checkoutMessage = 'Платёж уже подтверждён. Тариф обновлён.';
+          });
+        }
+        return;
+      }
+
+      final appLink = checkout['app_link']?.toString() ?? '';
+      if (!_isValidOBankAppLink(appLink)) {
+        throw const FormatException(
+          'O!Bank не вернул ссылку на счёт в приложении. Повтори попытку или обратись в поддержку.',
+        );
+      }
+
+      setState(() {
+        _checkoutOrderID = orderID;
+        _checkoutMessage = 'Открываем счёт в O!Bank…';
+      });
+      final opened = await launchUrl(
+        Uri.parse(appLink),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && mounted) {
+        setState(() {
+          _checkoutMessage =
+              'Не удалось открыть O!Bank. Установи тестовое приложение банка и попробуй ещё раз.';
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _checkoutMessage = error.message);
+    } on FormatException catch (error) {
+      if (mounted) setState(() => _checkoutMessage = error.message.toString());
+    } catch (error) {
+      if (mounted) setState(() => _checkoutMessage = error.toString());
+    } finally {
+      if (mounted) setState(() => _checkoutBusy = false);
+    }
+  }
+
+  Future<void> _refreshOBankPaymentStatus() async {
+    final orderID = _checkoutOrderID;
+    if (orderID == null || _statusBusy) return;
+    setState(() => _statusBusy = true);
+    try {
+      final response = await widget.apiClient.getJson(
+        '/api/v1/subscriptions/checkout',
+        {'order_id': orderID},
+      );
+      final status = response is Map
+          ? response['status']?.toString() ?? ''
+          : '';
+      if (status == 'paid') {
+        await _loadCurrentSubscription();
+        if (mounted) {
+          setState(() {
+            _checkoutOrderID = null;
+            _checkoutMessage = 'Оплата подтверждена. Тариф активирован.';
+          });
+        }
+      } else if (status == 'canceled') {
+        if (mounted) {
+          setState(() {
+            _checkoutOrderID = null;
+            _checkoutMessage = 'Счёт отменён или истёк. Можно создать новый.';
+          });
+        }
+      } else if (mounted) {
+        setState(() {
+          _checkoutMessage =
+              'Банк ещё обрабатывает платёж. Проверь статус через несколько секунд.';
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _checkoutMessage = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _checkoutMessage = 'Не удалось проверить статус платежа.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _statusBusy = false);
+    }
+  }
+
+  bool _isValidOBankAppLink(String value) {
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+        uri.scheme == 'https' &&
+        uri.host == 'o.kg' &&
+        uri.authority == 'o.kg' &&
+        uri.path == '/l/a' &&
+        uri.queryParameters['t'] == 'wl_unpbill' &&
+        (uri.queryParameters['id']?.isNotEmpty ?? false) &&
+        uri.userInfo.isEmpty &&
+        uri.fragment.isEmpty;
+  }
+
+  String _newPaymentIdempotencyKey() {
+    final random = Random.secure();
+    return List<int>.generate(
+      24,
+      (_) => random.nextInt(256),
+    ).map((value) => value.toRadixString(16).padLeft(2, '0')).join();
   }
 
   Future<void> _loadCurrentSubscription() async {
@@ -140,7 +314,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
           Text(
-            widget.project.name.isEmpty ? 'Объект' : widget.project.name,
+            widget.project?.name.trim().isNotEmpty == true
+                ? widget.project!.name
+                : 'Подписка аккаунта',
             style: const TextStyle(
               color: _ink,
               fontSize: 26,
@@ -186,13 +362,14 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
                           ),
                         ),
                       ),
-                      Text(
-                        '$_participantCount/$_currentParticipantLimit',
-                        style: const TextStyle(
-                          color: _brand,
-                          fontWeight: FontWeight.w600,
+                      if (widget.project != null)
+                        Text(
+                          '$_participantCount/$_currentParticipantLimit',
+                          style: const TextStyle(
+                            color: _brand,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -339,40 +516,92 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen> {
           discountPercent: _discountFor(_selectedPlan),
         ),
         const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(15),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.lock_outline_rounded, color: _brand),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Оплата пока недоступна',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Годовая цена и скидка рассчитаны. Реальное списание и активация тарифа появятся после подключения официального банковского API и webhook проверки платежа.',
-                        style: TextStyle(
-                          color: _muted,
-                          fontSize: 12,
-                          height: 1.4,
+        if (_nativeOBankCheckoutEnabled)
+          _buildNativeOBankCheckoutControls()
+        else
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(15),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.lock_outline_rounded, color: _brand),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Покупка в приложении недоступна',
+                          style: TextStyle(fontWeight: FontWeight.w600),
                         ),
-                      ),
-                    ],
+                        SizedBox(height: 4),
+                        Text(
+                          'Способ покупки цифровой подписки зависит от платформы, через которую установлено приложение. Здесь отображаются тариф и состояние аккаунта.',
+                          style: TextStyle(
+                            color: _muted,
+                            fontSize: 12,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            ),
+          ),
+      ],
+    ];
+  }
+
+  Widget _buildNativeOBankCheckoutControls() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _checkoutBusy ? null : _startOBankCheckout,
+            icon: _checkoutBusy
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.account_balance_rounded),
+            label: Text(
+              _checkoutBusy ? 'Готовим оплату…' : 'Оплатить через O!Bank',
             ),
           ),
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'Тестовый сценарий: нужен staging-сервер и тестовое приложение O!Bank.',
+          style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+        ),
+        if (_checkoutMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _checkoutMessage!,
+            style: const TextStyle(color: _muted, fontSize: 12, height: 1.4),
+          ),
+        ],
+        if (_checkoutOrderID != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _statusBusy ? null : _refreshOBankPaymentStatus,
+              icon: _statusBusy
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              label: const Text('Проверить статус платежа'),
+            ),
+          ),
       ],
-    ];
+    );
   }
 }
 

@@ -30,7 +30,7 @@ the `main` branch by `Mobile CI` when `production_ios_release` is set to `true`.
 Use the same `production-mobile` environment and configure the values below
 there:
 
-- Environment variable `STROY_IOS_BUNDLE_ID`: the exact App Store Connect bundle ID.
+- Environment variable `STROY_IOS_BUNDLE_ID`: the exact App Store Connect bundle ID. It defaults to `com.koshoev.stroy` from the current App Store Connect app record.
 - Environment variable `STROY_IOS_TEAM_ID`: the Apple Developer Team ID that owns that app.
 - Environment secret `STROY_IOS_CERTIFICATE_BASE64`: base64-encoded Apple Distribution
   `.p12` certificate.

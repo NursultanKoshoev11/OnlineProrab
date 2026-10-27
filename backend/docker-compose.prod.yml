@@ -30,6 +30,14 @@ services:
       NIKITA_PASSWORD: ${NIKITA_PASSWORD:-}
       NIKITA_SENDER: ${NIKITA_SENDER:-}
       NIKITA_TEST_MODE: ${NIKITA_TEST_MODE:-false}
+      OBANK_ENABLED: ${OBANK_ENABLED:-false}
+      OBANK_SID: ${OBANK_SID:-}
+      OBANK_PASSWORD: ${OBANK_PASSWORD:-}
+      OBANK_API_URL: ${OBANK_API_URL:-}
+      OBANK_API_VERSION: ${OBANK_API_VERSION:-1005}
+      OBANK_TEST: ${OBANK_TEST:-false}
+      OBANK_RESULT_URL: ${OBANK_RESULT_URL:-}
+      OBANK_RETURN_URL: ${OBANK_RETURN_URL:-https://stroy.com.kg/billing/}
     ports:
       - "127.0.0.1:${API_PORT:-8080}:8080"
     volumes:

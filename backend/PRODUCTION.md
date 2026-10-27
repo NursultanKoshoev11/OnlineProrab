@@ -22,6 +22,8 @@ This checklist tracks the minimum work required before a real public release.
 - AWS credentials from an IAM workload role, or `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (plus `AWS_SESSION_TOKEN` for temporary credentials)
 - `UPLOAD_DIR=/data/uploads` (legacy volume used by the migration tool)
 - `MAX_UPLOAD_MB=10`
+
+O!Dengi payments remain disabled unless `OBANK_ENABLED=true`. Before enabling checkout, configure merchant SID/password and test/live API URLs as described in [`OBANK.md`](OBANK.md). Production rejects `OBANK_TEST=true`; never put merchant credentials in the mobile app or website JavaScript.
 - `SMS_PROVIDER=twilio` or `nikita`; supply that provider's credentials below.
 - For Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, and exactly one of `TWILIO_FROM` or `TWILIO_MESSAGING_SERVICE_SID`.
 - For Nikita: `NIKITA_LOGIN`, `NIKITA_PASSWORD`, and `NIKITA_SENDER`; `NIKITA_API_URL` must be `https://smspro.nikita.kg/api/message` in staging/production.
@@ -38,6 +40,8 @@ Malformed boolean/integer settings and values that overflow duration or upload-s
 - The API serves objects only after its existing project authorization check and never publishes object URLs or public ACLs. If using SSE-KMS instead of the template's SSE-S3 default, the KMS key policy must also allow the workload principal to use the key.
 - Leave S3 versioning disabled until account deletion permanently removes every noncurrent version within the applicable deletion window. S3 delete markers alone do not erase old versions. If versioning is enabled later, configure and verify a lifecycle rule that permanently expires noncurrent versions.
 - Configure `SMS_PROVIDER=twilio` or `SMS_PROVIDER=nikita` with valid provider credentials. Staging startup fails closed if SMS is unavailable. In staging and production, `NIKITA_API_URL` is restricted to `https://smspro.nikita.kg/api/message`; SMS clients refuse redirects so provider secrets or login codes cannot be replayed to another host.
+- If staging must be tested without sending SMS, configure `STAGING_TEST_SMS_PHONE` and `STAGING_TEST_SMS_CODE` together. The fixed code is accepted only for that normalized phone in `APP_ENV=staging`, is never returned by the API, and is rejected in production. Other phones still require a working SMS provider.
+- Keep the staging database and upload volume separate from production. Do not reuse production data for test-code login.
 - Keep `DEV_SMS_CODE_ENABLED`, `REVIEW_ONLY_MODE`, and `NIKITA_TEST_MODE` disabled. The staging Compose file pins them off even if the host environment tries to enable them.
 - Set `CORS_ALLOWED_ORIGINS` to the exact HTTPS origins used by the staging client.
 - The API adds `Strict-Transport-Security: max-age=31536000` in staging and production. The HTTPS-terminating proxy must preserve this response header so browsers receive it over TLS.
@@ -55,6 +59,7 @@ For local development, the fixed `dev_code` response is disabled by default. To 
 4. Configure the real SMS provider and complete an auth-to-project smoke test.
 5. Run mobile release builds and test the full flow on real Android and iOS devices.
 6. Keep deletion-ledger read access restricted to recovery operators, then run the S3 restore drill below to verify tombstones remove accounts, file metadata, and queued upload objects before traffic resumes.
+7. Before live O!Dengi payments, obtain merchant credentials and the confirmed live API URL, complete staging payment/callback reconciliation, and approve refund terms and the store-billing approach.
 
 ## Application logs
 

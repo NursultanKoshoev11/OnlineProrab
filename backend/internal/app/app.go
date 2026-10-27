@@ -59,7 +59,7 @@ func Run() {
 		}
 		smsSender = sender
 	}
-	if cfg.IsProductionLike() && smsSender == nil && !cfg.ReviewOnlyMode {
+	if cfg.IsProductionLike() && smsSender == nil && !allowsNoSMSProvider(cfg) {
 		slog.Error("sms_provider_missing")
 		os.Exit(1)
 	}
@@ -150,4 +150,11 @@ func Run() {
 	<-deletionWorkerDone
 	<-authPrunerDone
 	slog.Info("api_stopped")
+}
+
+func allowsNoSMSProvider(cfg config.Config) bool {
+	if cfg.IsStaging() {
+		return cfg.StagingTestSMSPhone != "" && cfg.StagingTestSMSCode != ""
+	}
+	return cfg.IsProduction() && cfg.ReviewOnlyMode
 }

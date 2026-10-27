@@ -524,6 +524,85 @@ func TestValidateRejectsDevelopmentSMSCodeOutsideLoopbackDevelopment(t *testing.
 	}
 }
 
+func TestValidateAllowsStagingTestCodeForOnePhoneWithoutSMSProvider(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.SMSProvider = ""
+	cfg.TwilioAccountSID = ""
+	cfg.TwilioAPIKeySID = ""
+	cfg.TwilioAPIKeySecret = ""
+	cfg.TwilioFrom = ""
+	cfg.StagingTestSMSPhone = "+996700000001"
+	cfg.StagingTestSMSCode = "111111"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected one-phone staging test-code config to be valid, got %v", err)
+	}
+}
+
+func TestValidateAllowsLowStagingPaymentPriceOnlyWithSandboxOBank(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.StagingTestPaymentPriceKGS = 10
+	cfg.OBank = OBankConfig{
+		Enabled:    true,
+		SID:        "test-sid",
+		Password:   "test-password",
+		APIURL:     "https://mw-api-test.dengi.kg/api/json/json.php",
+		APIVersion: 1005,
+		Test:       true,
+		ResultURL:  "https://stroy.com.kg/staging-api/api/v1/payments/obank/result",
+		ReturnURL:  "https://stroy.com.kg/billing/",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid staging price override, got %v", err)
+	}
+}
+
+func TestValidateRejectsStagingPaymentPriceOutsideStaging(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.StagingTestPaymentPriceKGS = 10
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "only when APP_ENV=staging") {
+		t.Fatalf("expected non-staging price override to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRejectsStagingPaymentPriceWithoutSandboxOBank(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.StagingTestPaymentPriceKGS = 10
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "requires OBANK_ENABLED=true and OBANK_TEST=true") {
+		t.Fatalf("expected price override without sandbox payments to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRejectsStagingPaymentPriceAboveSafeTestLimit(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.StagingTestPaymentPriceKGS = 101
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "between 1 and 100") {
+		t.Fatalf("expected price override above 100 KGS to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRejectsStagingTestCodeInProduction(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.StagingTestSMSPhone = "+996700000001"
+	cfg.StagingTestSMSCode = "111111"
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APP_ENV=staging") {
+		t.Fatalf("expected production staging-code config to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRequiresStagingTestPhoneAndCodeTogether(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.StagingTestSMSPhone = "+996700000001"
+	cfg.StagingTestSMSCode = ""
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "must be configured together") {
+		t.Fatalf("expected incomplete staging test-code config to be rejected, got %v", err)
+	}
+}
+
 func TestValidateAllowsDevelopmentSMSCodeOnlyOnLoopback(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.Env = DevelopmentEnv
