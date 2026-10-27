@@ -165,7 +165,7 @@ func subscriptionHTTPError(err error) (int, string, bool) {
 	case errors.Is(err, errSubscriptionExpired):
 		return http.StatusForbidden, "subscription is expired; choose a paid plan", true
 	case errors.Is(err, errProjectPlanLimit):
-		return http.StatusForbidden, "project limit reached for the current plan", true
+		return http.StatusForbidden, "Достигнут лимит активных объектов тарифа. Архивируйте другой объект или смените тариф.", true
 	case errors.Is(err, errMemberPlanLimit):
 		return http.StatusForbidden, "participant limit reached for the current plan", true
 	default:

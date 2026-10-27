@@ -439,8 +439,41 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		return
 	}
 
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to start transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var ownerID string
+	var currentStatus string
+	if err := tx.QueryRow(ctx, `
+		SELECT owner_id::text, status
+		FROM projects
+		WHERE id = $1 AND deleted_at IS NULL
+		FOR UPDATE
+	`, projectID).Scan(&ownerID, &currentStatus); err != nil {
+		Error(w, http.StatusNotFound, "project not found")
+		return
+	}
+
+	if req.Status == "active" && currentStatus == "archived" {
+		// Restoring an archived project consumes an active-project slot owned by
+		// the project owner. Check inside this transaction so concurrent creates
+		// and restores cannot push the account over its plan limit.
+		if err := ensureProjectCreationAllowed(ctx, tx, ownerID); err != nil {
+			if status, message, ok := subscriptionHTTPError(err); ok {
+				Error(w, status, message)
+				return
+			}
+			Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
+			return
+		}
+	}
+
 	var item ProjectDTO
-	err = appState.DB.Pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		UPDATE projects
 		SET name = $2,
 		    address = NULLIF($3, ''),
@@ -458,12 +491,12 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		return
 	}
 
-	_ = appState.DB.Pool.QueryRow(ctx, `
+	_ = tx.QueryRow(ctx, `
 		SELECT role
 		FROM project_members
 		WHERE project_id = $1 AND user_id = $2
 	`, projectID, userID).Scan(&item.Role)
-	_ = appState.DB.Pool.QueryRow(ctx, `
+	_ = tx.QueryRow(ctx, `
 		SELECT COALESCE((
 			SELECT f.id::text FROM files f
 			WHERE f.project_id = $1 AND f.deleted_at IS NULL
@@ -472,10 +505,14 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		), '')
 	`, projectID).Scan(&item.CoverFileID)
 
-	_, _ = appState.DB.Pool.Exec(ctx, `
+	_, _ = tx.Exec(ctx, `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
 		VALUES ($1, $2, 'update', 'project', $2)
 	`, userID, projectID)
+	if err := tx.Commit(ctx); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to save project")
+		return
+	}
 
 	publishProjectEvent(projectID, "project", projectID, "updated")
 	JSON(w, http.StatusOK, item)
