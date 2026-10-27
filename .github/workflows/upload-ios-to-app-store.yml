@@ -34,7 +34,7 @@ jobs:
       - name: Verify IPA identity and version
         env:
           EXPECTED_BUNDLE_ID: com.koshoev.stroy
-          EXPECTED_VERSION: 1.0
+          EXPECTED_VERSION: 1.0.0
         run: |
           python3 - <<'PY'
           import os
@@ -63,7 +63,7 @@ jobs:
           if bundle_id != os.environ["EXPECTED_BUNDLE_ID"]:
               raise SystemExit(f"Unexpected bundle ID: {bundle_id}")
           if version != os.environ["EXPECTED_VERSION"]:
-              raise SystemExit(f"Expected App Store version 1.0, got {version}")
+              raise SystemExit(f"Expected Flutter iOS version 1.0.0 for App Store version 1.0, got {version}")
           if not build:
               raise SystemExit("IPA does not contain a build number")
 
