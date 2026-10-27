@@ -213,7 +213,7 @@ jobs:
         run: npm run build
 
       - name: Check deployment script syntax
-        run: bash -n deploy-remote.sh
+        run: bash -n deploy-remote.sh deploy-billing-remote.sh
 
       - name: Test deployment path, archive, and rollback guards
         run: bash deploy-remote.test.sh
@@ -221,6 +221,9 @@ jobs:
       - name: Verify Compose logging configuration
         run: |
           docker compose config --format json | python3 -c 'import json,sys; service=json.load(sys.stdin)["services"]["stroy-website"]; assert service["logging"] == {"driver":"json-file","options":{"max-size":"10m","max-file":"5"}}, service'
+
+      - name: Verify billing Compose configuration
+        run: docker compose -f docker-compose.billing.yml config --quiet
 
       - name: Build website container
         run: |
@@ -307,10 +310,64 @@ jobs:
               assert not missing, f"{path} is missing headers: {sorted(missing)}"
           PY
 
+      - name: Build the billing container
+        run: |
+          docker build --pull \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag stroy-obank-billing:production \
+            --file Dockerfile.billing .
+          test "$(docker image inspect --format '{{.Config.User}}' stroy-obank-billing:production)" = '101:101'
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' stroy-obank-billing:production)" = "$GITHUB_SHA"
+
+      - name: Smoke-test billing container
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_name="stroy-billing-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          host_port=18082
+          page_file="$(mktemp)"
+          script_file="$(mktemp)"
+          cleanup() {
+            docker stop "$container_name" >/dev/null 2>&1 || true
+            rm -f "$page_file" "$script_file"
+          }
+          trap cleanup EXIT
+
+          docker run --detach --rm --name "$container_name" \
+            --read-only \
+            --tmpfs /tmp:size=64m,mode=1777 \
+            --tmpfs /var/cache/nginx:size=64m,uid=101,gid=101,mode=0700 \
+            --tmpfs /run:size=16m,uid=101,gid=101,mode=0700 \
+            --cap-drop ALL \
+            --cap-add NET_BIND_SERVICE \
+            --security-opt no-new-privileges:true \
+            --publish "127.0.0.1:${host_port}:80" stroy-obank-billing:production >/dev/null
+
+          ready=0
+          for attempt in {1..20}; do
+            if curl --fail --silent \
+              --output "$page_file" \
+              "http://127.0.0.1:${host_port}/billing/"; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+
+          if [[ "$ready" != 1 ]]; then
+            echo "billing container did not serve its account page" >&2
+            exit 1
+          fi
+          grep -Fq '<title>Вход и подписка — STROY</title>' "$page_file"
+          curl --fail --silent --show-error \
+            --output "$script_file" \
+            "http://127.0.0.1:${host_port}/billing/billing.js"
+          grep -Fq 'sandbox_test_mode' "$script_file"
+
       - name: Save the CI-tested website image
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         shell: bash
-        run: docker save stroy-website:production | gzip -1 > "$RUNNER_TEMP/stroy-website-${GITHUB_SHA}.image.tar.gz"
+        run: docker save stroy-website:production stroy-obank-billing:production | gzip -1 > "$RUNNER_TEMP/stroy-website-${GITHUB_SHA}.image.tar.gz"
 
       - name: Upload the CI-tested website image
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

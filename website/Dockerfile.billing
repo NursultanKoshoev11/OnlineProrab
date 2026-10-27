@@ -1,5 +1,10 @@
-FROM nginx:1.27-alpine
+FROM nginx:1.30-alpine3.24
 
 COPY billing /usr/share/nginx/html/billing
+COPY nginx-billing.conf /etc/nginx/conf.d/default.conf
+
+RUN chmod -R a+rX /usr/share/nginx/html/billing
+
+USER 101:101
 
 EXPOSE 80
