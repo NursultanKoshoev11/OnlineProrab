@@ -2,7 +2,7 @@
 
 ## Production API deployment
 
-The Backend Production Deploy workflow is a manual release from the current main revision. It runs backend checks, builds a revision-tagged Docker image, transfers it over SSH with strict host-key verification, waits for the API readiness check, and probes the public account-deletion route. A failed container health check or public route probe restores the previous managed release.
+The Backend Production Deploy workflow runs automatically for backend changes merged to main after the production storage cutover is complete. It runs backend checks, builds a revision-tagged Docker image, transfers it over SSH with strict host-key verification, waits for the API readiness check, and probes the public account-deletion route. A failed container health check or public route probe restores the previous managed release. A push before cutover reports the blocker and leaves the active API unchanged. A confirmed `workflow_dispatch` remains available for recovery.
 
 Prepare the API host after provisioning the private AWS S3 buckets, CloudWatch log group, and IAM policies; backing up PostgreSQL and uploaded files; migrating existing files to S3; and verifying their checksums. The API Compose project must publish port 8080 only on loopback and Caddy must proxy api.stroy.com.kg to 127.0.0.1:8080.
 
@@ -16,16 +16,17 @@ Variables:
 - API_DEPLOY_USER — dedicated deployment account with Docker access.
 - API_DEPLOY_PATH — existing canonical path containing .env.
 - API_DEPLOY_COMPOSE_PROJECT — exact Compose project name of the API service.
-- API_STORAGE_CUTOVER_COMPLETE=true — set only after S3 provisioning, upload migration, and checksum verification are complete.
 
 Secrets:
 
 - API_DEPLOY_SSH_KEY — dedicated SSH private key.
 - API_DEPLOY_KNOWN_HOSTS — independently verified host-key entries.
 
+Set the repository Actions variable `API_STORAGE_CUTOVER_COMPLETE=false`. Change it to `true` only after S3 provisioning, database/upload backups, upload migration, checksum verification, and rollback rehearsal are complete.
+
 Install Docker Engine, Docker Compose v2 with support for --wait and --pull never, and Python 3 on the host. The deployment account must own the deployment root and .env; .env must have no group or other permissions. The current Compose project must have exactly one API container and use the same S3 region, uploads bucket, deletion-ledger bucket, and CloudWatch log group as .env. The Compose log driver uses non-blocking delivery with a 4 MB buffer; it can drop new log messages if CloudWatch is unreachable long enough to fill the buffer, so retain an independent public health check.
 
-In GitHub Actions, select Backend Production Deploy, select main, and check the confirmation input. The workflow refuses stale revisions, unconfigured environments, and releases before S3 cutover confirmation. It does not deploy on pull requests or automatically on merge.
+The workflow refuses stale revisions, unconfigured environments, and releases before S3 cutover confirmation. It does not deploy on pull requests. Backend pushes to main deploy automatically only after the production storage cutover is marked complete.
 
 ## Backend checks
 

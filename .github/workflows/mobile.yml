@@ -110,8 +110,76 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  android-release-gate:
+    name: Check Android release signing configuration
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.production_release == 'true'))
+    runs-on: ubuntu-latest
+    environment: production-mobile
+    permissions:
+      contents: read
+    outputs:
+      ready: ${{ steps.signing.outputs.ready }}
+    steps:
+      - name: Check for the existing Play upload key
+        id: signing
+        env:
+          API_STORAGE_CUTOVER_COMPLETE: ${{ vars.API_STORAGE_CUTOVER_COMPLETE }}
+          STROY_APPLICATION_ID: ${{ vars.STROY_APPLICATION_ID }}
+          STROY_KEYSTORE_BASE64: ${{ secrets.STROY_KEYSTORE_BASE64 }}
+          STROY_KEYSTORE_PASSWORD: ${{ secrets.STROY_KEYSTORE_PASSWORD }}
+          STROY_KEY_ALIAS: ${{ secrets.STROY_KEY_ALIAS }}
+          STROY_KEY_PASSWORD: ${{ secrets.STROY_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ "$API_STORAGE_CUTOVER_COMPLETE" == 'true' && -n "$STROY_APPLICATION_ID" && -n "$STROY_KEYSTORE_BASE64" && -n "$STROY_KEYSTORE_PASSWORD" && -n "$STROY_KEY_ALIAS" && -n "$STROY_KEY_PASSWORD" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo 'Production API cutover and Android signing are configured; AAB and APK builds will run.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            if [[ "$API_STORAGE_CUTOVER_COMPLETE" != 'true' ]]; then
+              echo 'Android signed release was skipped because the production API still serves staging data. Debug APK artifacts were still built.' >> "$GITHUB_STEP_SUMMARY"
+            fi
+            if [[ -z "$STROY_APPLICATION_ID" || -z "$STROY_KEYSTORE_BASE64" || -z "$STROY_KEYSTORE_PASSWORD" || -z "$STROY_KEY_ALIAS" || -z "$STROY_KEY_PASSWORD" ]]; then
+              echo 'Android signed release was skipped because the existing Google Play upload keystore and credentials are not configured in production-mobile.' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+  ios-release-gate:
+    name: Check production API readiness for iOS release
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.production_ios_release == 'true'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ready: ${{ steps.readiness.outputs.ready }}
+    steps:
+      - name: Keep signed store builds on production data
+        id: readiness
+        env:
+          API_STORAGE_CUTOVER_COMPLETE: ${{ vars.API_STORAGE_CUTOVER_COMPLETE }}
+        run: |
+          set -euo pipefail
+          if [[ "$API_STORAGE_CUTOVER_COMPLETE" == 'true' ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo 'Production API cutover is complete; the signed iOS release build will run.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'Signed iOS release was skipped because the production API still serves staging data. The iOS simulator artifact is still built.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   production-bundle:
-    if: github.event_name == 'workflow_dispatch' && inputs.production_release == 'true' && github.ref == 'refs/heads/main'
+    needs: android-release-gate
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.production_release == 'true')) &&
+      needs.android-release-gate.outputs.ready == 'true'
     runs-on: ubuntu-latest
     environment: production-mobile
     permissions:
@@ -194,13 +262,24 @@ jobs:
         run: flutter test
 
       - name: Build signed production AAB
-        run: flutter build appbundle --release --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+        run: flutter build appbundle --release --build-number "${{ github.run_number }}" --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+
+      - name: Build signed production APK
+        run: flutter build apk --release --build-number "${{ github.run_number }}" --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Upload production AAB
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: stroy-production-aab-${{ github.run_number }}
           path: mobile/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload production APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-production-apk-${{ github.run_number }}
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -280,7 +359,12 @@ jobs:
 
   production-ios-ipa:
     name: Signed iOS IPA
-    if: github.event_name == 'workflow_dispatch' && inputs.production_ios_release == 'true' && github.ref == 'refs/heads/main'
+    needs: ios-release-gate
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.production_ios_release == 'true')) &&
+      needs.ios-release-gate.outputs.ready == 'true'
     runs-on: macos-26
     environment: production-mobile
     permissions:
@@ -396,7 +480,7 @@ jobs:
         run: flutter test
 
       - name: Prepare iOS release build
-        run: flutter build ios --release --no-codesign --build-name 1.0 --build-number ${{ github.run_number }} --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+        run: flutter build ios --release --no-codesign --build-number ${{ github.run_number }} --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Configure signing for the Runner app target
         run: |

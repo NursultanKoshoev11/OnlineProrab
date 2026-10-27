@@ -207,7 +207,7 @@ The placeholder above is not a usable code. Keep the actual review phone and cod
 
 ## GitHub Actions API deployment
 
-Backend Production Deploy is a manual workflow. It only runs from the current main revision after an explicit confirmation, backend vet/race checks, production Compose validation, and a revision-tagged image build. SSH uses a pinned known_hosts file. The deployment waits for the API container readiness check, probes the public account-deletion endpoint, and restores the prior managed release if either check fails.
+Backend Production Deploy runs automatically for backend changes merged to main after the production storage cutover is complete. It performs backend vet/race checks, production Compose validation, and a revision-tagged image build. SSH uses a pinned known_hosts file. The deployment waits for the API container readiness check, probes the public account-deletion endpoint, and restores the prior managed release if either check fails. A push before cutover reports that the deploy is waiting and leaves the active API unchanged. A confirmed manual dispatch remains available for recovery.
 
 Create the production-api GitHub Environment, restrict it to main, and add these variables:
 
@@ -215,12 +215,13 @@ Create the production-api GitHub Environment, restrict it to main, and add these
 - API_DEPLOY_USER
 - API_DEPLOY_PATH
 - API_DEPLOY_COMPOSE_PROJECT
-- API_STORAGE_CUTOVER_COMPLETE=true, only after provisioning S3, migrating uploads, and verifying object checksums
 
 Add Environment secrets API_DEPLOY_SSH_KEY and API_DEPLOY_KNOWN_HOSTS. Never add application runtime secrets to GitHub; the workflow reads the API .env file already on the host. The .env file must be a regular file owned by the deployment account with mode 0600 or stricter. The deploy root must already exist as a canonical directory.
 
+Configure the repository Actions variable `API_STORAGE_CUTOVER_COMPLETE=false`. Set it to `true` only after production S3 is provisioned, PostgreSQL and uploads are backed up, uploads are migrated and checksum-verified, and rollback has been rehearsed.
+
 The deployment account needs Docker Engine, Docker Compose v2 with support for --wait and --pull never, and Python 3 for private configuration comparison. Set API_DEPLOY_COMPOSE_PROJECT to the current API service project so Compose replaces only that service. Keep the API port bound to 127.0.0.1 behind the HTTPS reverse proxy.
 
-Set API_STORAGE_CUTOVER_COMPLETE only after the storage deployment instructions above are complete, including database/upload backups, S3 migration, checksum verification, and a rollback procedure rehearsed in staging. The workflow does not deploy automatically on merge. In GitHub Actions, select Backend Production Deploy on main and check confirm_production_deploy.
+Set the repository Actions variable API_STORAGE_CUTOVER_COMPLETE only after the storage deployment instructions above are complete, including database/upload backups, S3 migration, checksum verification, and a rollback procedure rehearsed in staging. After it is set, backend changes merged to main deploy automatically and signed mobile store builds can run. Use the confirmed manual dispatch only for a recovery deployment.
 
 For an existing S3-ready API container that predates the workflow, the first deployment adopts its running image as the rollback baseline. The running container must be the sole api service in the configured Compose project, and its STORAGE_DRIVER, S3_REGION, S3_BUCKET, and S3_DELETION_LEDGER_BUCKET must match the host .env settings. The deploy directory is managed by the workflow under releases/<revision> with a current symlink. Do not set the cutover variable while the active API still uses local storage.
