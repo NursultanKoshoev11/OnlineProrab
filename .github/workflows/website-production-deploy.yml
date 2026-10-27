@@ -82,11 +82,18 @@ jobs:
           docker load --input "$image_archive"
           test "$(docker image inspect --format '{{.Config.User}}' stroy-website:production)" = '101:101'
           test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' stroy-website:production)" = "$DEPLOY_SHA"
+          test "$(docker image inspect --format '{{.Config.User}}' stroy-obank-billing:production)" = '101:101'
+          test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' stroy-obank-billing:production)" = "$DEPLOY_SHA"
 
       - name: Package the matching Compose configuration
         if: steps.revision.outputs.deploy == 'true'
         shell: bash
         run: tar -czf "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.source.tar.gz" website/docker-compose.yml
+
+      - name: Package the production billing Compose configuration
+        if: steps.revision.outputs.deploy == 'true'
+        shell: bash
+        run: tar -czf "$RUNNER_TEMP/stroy-obank-billing-$DEPLOY_SHA.source.tar.gz" website/docker-compose.billing.yml
 
       - name: Install SSH credentials
         if: steps.revision.outputs.deploy == 'true'
@@ -111,6 +118,7 @@ jobs:
           scp "${ssh_options[@]}" \
             "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.image.tar.gz" \
             "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.source.tar.gz" \
+            "$RUNNER_TEMP/stroy-obank-billing-$DEPLOY_SHA.source.tar.gz" \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
 
       - name: Deploy and wait for container health
@@ -123,6 +131,16 @@ jobs:
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" deploy
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
 
+      - name: Deploy the production O!Dengi billing page
+        id: billing_deployment
+        if: steps.revision.outputs.deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" deploy
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-billing-remote.sh
+
       - name: Verify the public HTTPS site
         id: public_site
         if: steps.revision.outputs.deploy == 'true'
@@ -131,8 +149,10 @@ jobs:
           set -euo pipefail
           homepage="$(mktemp)"
           deletion_page="$(mktemp)"
+          billing_page="$(mktemp)"
+          billing_script="$(mktemp)"
           headers="$(mktemp)"
-          trap 'rm -f "$homepage" "$deletion_page" "$headers"' EXIT
+          trap 'rm -f "$homepage" "$deletion_page" "$billing_page" "$billing_script" "$headers"' EXIT
 
           curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
             --output "$homepage" https://stroy.com.kg/
@@ -141,6 +161,13 @@ jobs:
           curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
             --output "$deletion_page" https://stroy.com.kg/account-deletion/
           grep -Fq '<title>Удаление аккаунта — STROY</title>' "$deletion_page"
+
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
+            --output "$billing_page" https://stroy.com.kg/billing/
+          grep -Fq '<title>Вход и подписка — STROY</title>' "$billing_page"
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 --retry-connrefused --max-time 30 \
+            --output "$billing_script" https://stroy.com.kg/billing/billing.js
+          grep -Fq 'sandbox_test_mode' "$billing_script"
 
           api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 \
             https://api.stroy.com.kg/api/v1/account/deletion/verify)"
@@ -168,15 +195,31 @@ jobs:
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" rollback
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
 
+      - name: Roll back billing if public verification fails
+        if: >-
+          always() &&
+          steps.revision.outputs.deploy == 'true' &&
+          steps.billing_deployment.outcome == 'success' &&
+          steps.public_site.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" rollback
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-billing-remote.sh
+
       - name: Finalize deployment after public verification
         if: >-
           steps.revision.outputs.deploy == 'true' &&
           steps.deployment.outcome == 'success' &&
+          steps.billing_deployment.outcome == 'success' &&
           steps.public_site.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" finalize
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-billing-remote.sh
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" finalize
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
 
