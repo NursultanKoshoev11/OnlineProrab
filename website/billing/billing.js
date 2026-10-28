@@ -24,7 +24,6 @@
     logout: document.querySelector("#logout"),
     billingNavCurrent: document.querySelector("#billing-nav-current"),
     billingNavCurrentMobile: document.querySelector("#billing-nav-current-mobile"),
-    billingNavAction: document.querySelector("#billing-nav-action"),
     menuButton: document.querySelector(".menu-button"),
     mobileNav: document.querySelector("#mobile-nav"),
     yearlyPeriod: document.querySelector('input[name="period"][value="year"]'),
@@ -42,10 +41,6 @@
     const destination = accessToken ? "#account-panel" : "#login-panel";
     if (elements.billingNavCurrent) elements.billingNavCurrent.href = destination;
     if (elements.billingNavCurrentMobile) elements.billingNavCurrentMobile.href = destination;
-    if (elements.billingNavAction) {
-      elements.billingNavAction.href = destination;
-      elements.billingNavAction.textContent = accessToken ? "Мой аккаунт" : "Войти";
-    }
   }
 
   function setMobileMenuOpen(open) {
