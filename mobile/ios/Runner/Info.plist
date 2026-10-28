@@ -6,6 +6,9 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<!-- STROY uses only Apple-provided TLS/HTTPS encryption; no non-exempt cryptography. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDisplayName</key>
 	<string>STROY</string>
 	<key>CFBundleExecutable</key>
