@@ -22,6 +22,11 @@
     obankAppLink: document.querySelector("#obank-app-link"),
     webPayLink: document.querySelector("#web-pay-link"),
     logout: document.querySelector("#logout"),
+    billingNavCurrent: document.querySelector("#billing-nav-current"),
+    billingNavCurrentMobile: document.querySelector("#billing-nav-current-mobile"),
+    billingNavAction: document.querySelector("#billing-nav-action"),
+    menuButton: document.querySelector(".menu-button"),
+    mobileNav: document.querySelector("#mobile-nav"),
     yearlyPeriod: document.querySelector('input[name="period"][value="year"]'),
   };
 
@@ -32,6 +37,36 @@
   let pollingTimer = null;
   let activeCheckoutID = sessionStorage.getItem("stroy.billing.order_id") || "";
   let checkoutAllowed = true;
+
+  function updateNavigationTargets() {
+    const destination = accessToken ? "#account-panel" : "#login-panel";
+    if (elements.billingNavCurrent) elements.billingNavCurrent.href = destination;
+    if (elements.billingNavCurrentMobile) elements.billingNavCurrentMobile.href = destination;
+    if (elements.billingNavAction) {
+      elements.billingNavAction.href = destination;
+      elements.billingNavAction.textContent = accessToken ? "Мой аккаунт" : "Войти";
+    }
+  }
+
+  function setMobileMenuOpen(open) {
+    if (!elements.mobileNav || !elements.menuButton) return;
+    elements.mobileNav.hidden = !open;
+    elements.menuButton.setAttribute("aria-expanded", String(open));
+    elements.menuButton.setAttribute("aria-label", open ? "Закрыть меню" : "Открыть меню");
+  }
+
+  elements.menuButton?.addEventListener("click", () => {
+    setMobileMenuOpen(elements.mobileNav.hidden);
+  });
+  elements.mobileNav?.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("a")) {
+      setMobileMenuOpen(false);
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setMobileMenuOpen(false);
+  });
+  updateNavigationTargets();
 
   function showNotice(message, kind = "info") {
     elements.notice.textContent = message;
@@ -60,6 +95,7 @@
 
   function clearSession() {
     accessToken = "";
+    updateNavigationTargets();
     checkoutAllowed = true;
     if (elements.yearlyPeriod) {
       elements.yearlyPeriod.closest("label")?.removeAttribute("hidden");
@@ -127,6 +163,7 @@
       accessToken = result.access_token || "";
       if (!accessToken) throw new Error("Сервер не выдал токен входа. Попробуйте ещё раз.");
       sessionStorage.setItem(tokenKey, accessToken);
+      updateNavigationTargets();
       await loadAccount();
     } catch (error) {
       showNotice(error.message, "error");

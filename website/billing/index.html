@@ -10,23 +10,44 @@
     />
     <title>Вход и подписка — STROY</title>
     <link rel="icon" type="image/png" href="../assets/stroy-favicon-user.png?v=20261028" />
-    <link rel="stylesheet" href="billing.css" />
+    <link rel="stylesheet" href="../styles.css?v=20261028-logo48" />
+    <link rel="stylesheet" href="billing.css?v=20261028-shared-style" />
     <script src="billing.js" defer></script>
   </head>
-  <body>
+  <body class="billing-page">
+    <a class="skip-link" href="#main">Перейти к содержимому</a>
     <header class="topbar">
-      <a class="brand" href="/" aria-label="STROY — на главную">
-        <img src="../assets/stroy_icon.png?v=20261028" width="48" height="48" alt="" />
-        <span>STROY<span class="brand-dot">.</span></span>
-      </a>
-      <nav aria-label="Навигация">
+      <div class="site-container nav-wrap">
+        <a class="brand" href="/" aria-label="STROY — на главную">
+          <img src="../assets/stroy_icon.png?v=20261028" width="48" height="48" alt="" />
+          <span>STROY<span class="text-[#648b43]">.</span></span>
+        </a>
+        <nav class="desktop-nav" aria-label="Основная навигация">
+          <a href="/">Главная</a>
+          <a href="/terms/">Условия</a>
+          <a href="/support/">Поддержка</a>
+          <a id="billing-nav-current" href="#login-panel" aria-current="page">Подписка</a>
+        </nav>
+        <a id="billing-nav-action" class="button button-small nav-cta" href="#login-panel">Войти</a>
+        <button
+          class="menu-button"
+          type="button"
+          aria-label="Открыть меню"
+          aria-controls="mobile-nav"
+          aria-expanded="false"
+        >
+          <span></span><span></span>
+        </button>
+      </div>
+      <nav class="mobile-nav" id="mobile-nav" aria-label="Мобильная навигация" hidden>
         <a href="/">Главная</a>
         <a href="/terms/">Условия</a>
         <a href="/support/">Поддержка</a>
+        <a id="billing-nav-current-mobile" href="#login-panel" aria-current="page">Подписка</a>
       </nav>
     </header>
 
-    <main class="page-shell">
+    <main id="main" class="page-shell site-container">
       <section class="intro">
         <p class="eyebrow">STROY / ЛИЧНЫЙ КАБИНЕТ</p>
         <h1>Подписка для вашего проекта</h1>
@@ -137,19 +158,30 @@
         </article>
       </section>
 
-      <footer class="page-footer">
-        <p>
-          Вопрос по оплате? Напишите на
-          <a href="mailto:nursultankosoev2@gmail.com">nursultankosoev2@gmail.com</a>.
-        </p>
-        <p>
-          <a href="/terms/">Условия использования</a>
-          <span aria-hidden="true">·</span>
-          <a href="/privacy/">Конфиденциальность</a>
-          <span aria-hidden="true">·</span>
-          <a href="/support/">Поддержка</a>
-        </p>
-      </footer>
     </main>
+
+    <footer class="footer page-footer site-container">
+      <div class="footer-top">
+        <a class="brand" href="/" aria-label="STROY — на главную">
+          <img src="../assets/stroy_icon.png?v=20261028" width="48" height="48" alt="" />
+          <span>STROY.</span>
+        </a>
+        <p>Цифровой порядок.<br />Реальные результаты.</p>
+        <nav aria-label="Навигация в подвале">
+          <a href="/">Главная</a>
+          <a href="/terms/">Условия</a>
+          <a href="/support/">Поддержка ↗</a>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 STROY · ФИО: Кошоев Нурсултан Кенжебекович</span>
+        <div>
+          <a href="/privacy/">Конфиденциальность</a>
+          <a href="/terms/">Условия</a>
+          <a href="/account-deletion/">Удаление аккаунта</a>
+        </div>
+        <span><a href="mailto:nursultankosoev2@gmail.com">Помощь по оплате</a></span>
+      </div>
+    </footer>
   </body>
 </html>
