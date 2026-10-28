@@ -58,6 +58,12 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.requiredRenewal) {
+      // Keep the expired flow focused on renewal while the current status
+      // request is loading. The server response can still select the exact
+      // paid plan the account used before it expired.
+      _selectedPlan = 'standard';
+    }
     unawaited(_loadCurrentSubscription());
   }
 
