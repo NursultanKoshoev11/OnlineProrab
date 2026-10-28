@@ -316,7 +316,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Подписка'),
+        title: Text(widget.requiredRenewal ? 'Продлить подписку' : 'Подписка'),
         actions: widget.requiredRenewal
             ? const []
             : [
@@ -342,113 +342,100 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
             ),
           ),
           const SizedBox(height: 7),
-          const Text(
-            'Владелец оплачивает доступ всей команды. Участники отдельно не платят.',
-            style: TextStyle(color: _muted, fontSize: 13, height: 1.4),
+          Text(
+            widget.requiredRenewal
+                ? 'Выберите тариф и оплатите его, чтобы восстановить доступ к рабочему пространству.'
+                : 'Владелец оплачивает доступ всей команды. Участники отдельно не платят.',
+            style: const TextStyle(color: _muted, fontSize: 13, height: 1.4),
           ),
           if (widget.requiredRenewal) ...[
-            const SizedBox(height: 12),
-            Card(
-              color: _warningSoft,
-              child: const Padding(
-                padding: EdgeInsets.all(15),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.lock_clock_outlined, color: _warning),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Срок подписки закончился. Рабочие разделы заблокированы до продления.',
-                        style: TextStyle(fontSize: 13, height: 1.4),
-                      ),
+            const SizedBox(height: 18),
+            ..._buildPaymentSection(),
+            const SizedBox(height: 20),
+            _buildCurrentSubscriptionCard(),
+          ] else ...[
+            const SizedBox(height: 18),
+            _buildCurrentSubscriptionCard(),
+            ..._buildPaymentSection(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentSubscriptionCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _brandSoft,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(
+                    Icons.workspace_premium_outlined,
+                    color: _brand,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    _currentPlan == 'trial'
+                        ? '30 дней бесплатно'
+                        : _planTitle(_currentPlan),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
+                  ),
+                ),
+                if (widget.project != null)
+                  Text(
+                    '$_participantCount/$_currentParticipantLimit',
+                    style: const TextStyle(
+                      color: _brand,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _currentPlan == 'trial'
+                  ? 'Пробный период: 1 объект, только владелец.'
+                  : 'Доступ команды включён в план «${_planTitle(_currentPlan)}».',
+              style: const TextStyle(color: _muted, fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: 6),
+            if (_subscriptionEndsAt != null)
+              Text(
+                _currentStatus == 'expired'
+                    ? 'Подписка закончилась ${_formatDate(_subscriptionEndsAt!)}'
+                    : 'Действует до ${_formatDate(_subscriptionEndsAt!)}',
+                style: TextStyle(
+                  color: _currentStatus == 'expired'
+                      ? Colors.redAccent
+                      : _brand,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(15),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: _brandSoft,
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: const Icon(
-                          Icons.workspace_premium_outlined,
-                          color: _brand,
-                        ),
-                      ),
-                      const SizedBox(width: 11),
-                      Expanded(
-                        child: Text(
-                          _currentPlan == 'trial'
-                              ? '30 дней бесплатно'
-                              : _planTitle(_currentPlan),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      if (widget.project != null)
-                        Text(
-                          '$_participantCount/$_currentParticipantLimit',
-                          style: const TextStyle(
-                            color: _brand,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _currentPlan == 'trial'
-                        ? 'Пробный период: 1 объект, только владелец.'
-                        : 'Доступ команды включён в план «${_planTitle(_currentPlan)}».',
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 12,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  if (_subscriptionEndsAt != null)
-                    Text(
-                      _currentStatus == 'expired'
-                          ? 'Подписка закончилась ${_formatDate(_subscriptionEndsAt!)}'
-                          : 'Действует до ${_formatDate(_subscriptionEndsAt!)}',
-                      style: TextStyle(
-                        color: _currentStatus == 'expired'
-                            ? Colors.redAccent
-                            : _brand,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  if (_daysRemaining != null && _currentStatus != 'expired')
-                    Text(
-                      _daysRemaining == 0
-                          ? 'Срок заканчивается сегодня'
-                          : 'Осталось $_daysRemaining дн.',
-                      style: const TextStyle(color: _muted, fontSize: 11),
-                    ),
-                ],
+            if (_daysRemaining != null && _currentStatus != 'expired')
+              Text(
+                _daysRemaining == 0
+                    ? 'Срок заканчивается сегодня'
+                    : 'Осталось $_daysRemaining дн.',
+                style: const TextStyle(color: _muted, fontSize: 11),
               ),
-            ),
-          ),
-          ..._buildPaymentSection(),
-        ],
+          ],
+        ),
       ),
     );
   }
