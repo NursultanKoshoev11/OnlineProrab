@@ -561,7 +561,59 @@ jobs:
           test -n "$IPA_PATH"
           test -s "$IPA_PATH"
 
-      - name: Upload signed IPA
+      - name: Prepare App Store Connect API key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_P8: ${{ secrets.ASC_PRIVATE_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          test -n "$ASC_KEY_ID"
+          test -n "$ASC_ISSUER_ID"
+          test -n "$ASC_PRIVATE_KEY_P8"
+          [[ "$ASC_KEY_ID" =~ ^[A-Z0-9]+$ ]]
+          KEY_DIR="$RUNNER_TEMP/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          key = os.environ["ASC_PRIVATE_KEY_P8"].replace("\r\n", "\n")
+          Path(os.environ["RUNNER_TEMP"], "private_keys", f"AuthKey_{os.environ['ASC_KEY_ID']}.p8").write_text(key, encoding="utf-8")
+          PY
+          openssl pkey -in "$KEY_PATH" -noout
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Validate IPA with Apple
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --validate-app \
+            --type ios \
+            --file "$(find "$RUNNER_TEMP/stroy-ipa" -maxdepth 1 -name '*.ipa' -print -quit)" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            --p8-file-path "$ASC_KEY_PATH"
+
+      - name: Upload IPA to App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA_PATH="$(find "$RUNNER_TEMP/stroy-ipa" -maxdepth 1 -name '*.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" \
+            --p8-file-path "$ASC_KEY_PATH" \
+            --verbose
+
+      - name: Upload signed IPA artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: stroy-production-ios-ipa-${{ github.run_number }}
@@ -571,7 +623,7 @@ jobs:
 
       - name: Remove temporary signing configuration
         if: always()
-        run: rm -f ios/Flutter/ProductionSigning.xcconfig
+        run: rm -f ios/Flutter/ProductionSigning.xcconfig && rm -rf "$RUNNER_TEMP/private_keys"
 
       - name: Check live App Store privacy and account-deletion readiness
         id: public_readiness
