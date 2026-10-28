@@ -235,7 +235,10 @@
   color: var(--color-ink);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.18s, background 0.18s, transform 0.18s;
+  transition:
+    border-color 0.18s,
+    background 0.18s,
+    transform 0.18s;
 }
 
 .billing-page .plan-card:hover {
@@ -385,8 +388,29 @@
   border-radius: 14px;
   background: var(--color-lime);
   color: var(--color-ink);
-  font-size: 18px;
-  font-weight: 700;
+}
+
+.billing-page .info-icon-svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.billing-page .external-link-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 5px;
+  vertical-align: -2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .billing-page .info-card h2 {
