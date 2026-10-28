@@ -19,8 +19,6 @@
     checkoutPrice: document.querySelector("#checkout-price"),
     payButton: document.querySelector("#pay-button"),
     paymentOptions: document.querySelector("#payment-options"),
-    obankAppLink: document.querySelector("#obank-app-link"),
-    webPayLink: document.querySelector("#web-pay-link"),
     logout: document.querySelector("#logout"),
     billingNavCurrent: document.querySelector("#billing-nav-current"),
     billingNavCurrentMobile: document.querySelector("#billing-nav-current-mobile"),
@@ -263,14 +261,8 @@
       activeCheckoutID = checkout.order_id || "";
       if (activeCheckoutID) sessionStorage.setItem("stroy.billing.order_id", activeCheckoutID);
       if (isMobileBrowser() && isValidBankAppURL(checkout.app_link)) {
-        elements.obankAppLink.href = checkout.app_link;
-        elements.webPayLink.href = checkout.payment_url;
-        elements.paymentOptions.hidden = false;
-        elements.payButton.hidden = true;
-        showNotice("Счёт готов. Выберите O!Bank или веб-оплату.");
-        if (activeCheckoutID) {
-          pollingTimer = window.setTimeout(() => refreshCheckoutStatus(activeCheckoutID), 8000);
-        }
+        showNotice("Перенаправляем в O!Bank…");
+        window.location.assign(checkout.app_link);
         return;
       }
       window.location.assign(checkout.payment_url);
