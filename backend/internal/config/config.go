@@ -57,35 +57,38 @@ type Config struct {
 	StagingTestSMSPhone        string
 	StagingTestSMSCode         string
 	StagingTestPaymentPriceKGS int
-	ReviewOnlyMode             bool
-	ReviewSMSPhone             string
-	ReviewSMSCode              string
-	TwilioAccountSID           string
-	TwilioAPIKeySID            string
-	TwilioAPIKeySecret         string
-	TwilioFrom                 string
-	TwilioMessagingServiceSID  string
-	NikitaAPIURL               string
-	NikitaLogin                string
-	NikitaPassword             string
-	NikitaSender               string
-	NikitaTestMode             bool
-	SupportTelegramBotToken    string
-	SupportTelegramChatID      string
-	SupportTelegramURL         string
-	SupportWhatsAppToken       string
-	SupportWhatsAppPhoneID     string
-	SupportWhatsAppTo          string
-	SupportWhatsAppURL         string
-	GeminiAPIKey               string
-	GeminiModel                string
-	AIProviderOrder            []string
-	GroqAPIKey                 string
-	GroqModel                  string
-	OpenRouterAPIKey           string
-	OpenRouterModel            string
-	OpenRouterFallbackModel    string
-	OBank                      OBankConfig
+	// SubscriptionPriceOverrideKGS is a temporary operator-controlled price
+	// override for paid plans. Zero keeps the catalog prices.
+	SubscriptionPriceOverrideKGS int
+	ReviewOnlyMode               bool
+	ReviewSMSPhone               string
+	ReviewSMSCode                string
+	TwilioAccountSID             string
+	TwilioAPIKeySID              string
+	TwilioAPIKeySecret           string
+	TwilioFrom                   string
+	TwilioMessagingServiceSID    string
+	NikitaAPIURL                 string
+	NikitaLogin                  string
+	NikitaPassword               string
+	NikitaSender                 string
+	NikitaTestMode               bool
+	SupportTelegramBotToken      string
+	SupportTelegramChatID        string
+	SupportTelegramURL           string
+	SupportWhatsAppToken         string
+	SupportWhatsAppPhoneID       string
+	SupportWhatsAppTo            string
+	SupportWhatsAppURL           string
+	GeminiAPIKey                 string
+	GeminiModel                  string
+	AIProviderOrder              []string
+	GroqAPIKey                   string
+	GroqModel                    string
+	OpenRouterAPIKey             string
+	OpenRouterModel              string
+	OpenRouterFallbackModel      string
+	OBank                        OBankConfig
 }
 
 // OBankConfig contains O!Dengi merchant credentials and fixed return URLs.
@@ -124,6 +127,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	stagingTestPaymentPriceKGS, err := getEnvInt("STAGING_TEST_PAYMENT_PRICE_KGS", 0)
+	if err != nil {
+		return Config{}, err
+	}
+	subscriptionPriceOverrideKGS, err := getEnvInt("SUBSCRIPTION_PRICE_OVERRIDE_KGS", 0)
 	if err != nil {
 		return Config{}, err
 	}
@@ -179,6 +186,7 @@ func Load() (Config, error) {
 	cfg.StagingTestSMSPhone = normalizePhone(os.Getenv("STAGING_TEST_SMS_PHONE"))
 	cfg.StagingTestSMSCode = strings.TrimSpace(os.Getenv("STAGING_TEST_SMS_CODE"))
 	cfg.StagingTestPaymentPriceKGS = stagingTestPaymentPriceKGS
+	cfg.SubscriptionPriceOverrideKGS = subscriptionPriceOverrideKGS
 	cfg.ReviewOnlyMode = reviewOnlyMode
 	cfg.ReviewSMSPhone = normalizePhone(os.Getenv("REVIEW_SMS_PHONE"))
 	cfg.ReviewSMSCode = strings.TrimSpace(os.Getenv("REVIEW_SMS_CODE"))
@@ -358,6 +366,12 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.StagingTestPaymentPriceKGS > 0 && (!cfg.OBank.Enabled || !cfg.OBank.Test) {
 		problems = append(problems, "STAGING_TEST_PAYMENT_PRICE_KGS requires OBANK_ENABLED=true and OBANK_TEST=true")
+	}
+	if cfg.SubscriptionPriceOverrideKGS < 0 || cfg.SubscriptionPriceOverrideKGS > 100 {
+		problems = append(problems, "SUBSCRIPTION_PRICE_OVERRIDE_KGS must be 0 or between 1 and 100")
+	}
+	if cfg.SubscriptionPriceOverrideKGS > 0 && (!cfg.IsProductionLike() || !cfg.OBank.Enabled) {
+		problems = append(problems, "SUBSCRIPTION_PRICE_OVERRIDE_KGS requires staging or production with OBANK_ENABLED=true")
 	}
 	if cfg.OBank.TestPriceKGS < 0 || cfg.OBank.TestPriceKGS > 100 {
 		problems = append(problems, "OBANK_TEST_PRICE_KGS must be 0 or between 1 and 100")
