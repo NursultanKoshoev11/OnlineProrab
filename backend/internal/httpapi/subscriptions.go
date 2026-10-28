@@ -19,9 +19,12 @@ func ListPlans(w http.ResponseWriter, r *http.Request) {
 		if sandboxMode && checkoutAllowed && plan.ID != "standard" {
 			continue
 		}
+		monthlyPrice, _ := planPrice(plan, "month")
 		annualPrice, _ := planPrice(plan, "year")
-		monthlyPrice := plan.PriceKGS
 		discountPercent := plan.AnnualDiscountPercent
+		if appState.SubscriptionPriceOverrideKGS > 0 && plan.ID != "trial" {
+			discountPercent = 0
+		}
 		if sandboxMode && checkoutAllowed {
 			monthlyPrice = appState.OBank.TestPriceKGS
 			annualPrice = appState.OBank.TestPriceKGS

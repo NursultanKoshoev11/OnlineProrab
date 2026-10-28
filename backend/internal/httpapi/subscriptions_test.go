@@ -98,6 +98,21 @@ func TestStagingSandboxPriceOverrideIsDisplayedAndChargedOnlyInStaging(t *testin
 	}
 }
 
+func TestOperatorPriceOverrideAppliesToAllPaidPeriods(t *testing.T) {
+	originalState := appState
+	defer func() { appState = originalState }()
+	appState = State{SubscriptionPriceOverrideKGS: 10}
+
+	for _, planID := range []string{"standard", "max"} {
+		plan, _ := planByCode(planID)
+		for _, period := range []string{"month", "year"} {
+			if got, _ := planPrice(plan, period); got != 10 {
+				t.Fatalf("%s %s override price = %d, want 10", planID, period, got)
+			}
+		}
+	}
+}
+
 func mustPlanPrice(plan subscriptionPlan, period string) int {
 	price, err := planPrice(plan, period)
 	if err != nil {
