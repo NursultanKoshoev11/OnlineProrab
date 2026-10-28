@@ -1467,7 +1467,7 @@ dialog form > .form-note {
     @apply text-[25px];
   }
   .brand img {
-    @apply w-[29px] h-[29px];
+    @apply w-[48px] h-[48px];
   }
   .desktop-nav {
     @apply hidden;
