@@ -45,13 +45,18 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
 
   bool get _nativeOBankCheckoutEnabled {
     final apiBase = Uri.tryParse(ApiConfig.baseUrl);
-    return _nativeOBankCheckoutRequested &&
-        _obankStagingBuild &&
-        kDebugMode &&
-        apiBase != null &&
-        apiBase.scheme == 'https' &&
-        apiBase.host.isNotEmpty &&
-        apiBase.host != 'api.stroy.com.kg';
+    if (!_nativeOBankCheckoutRequested ||
+        apiBase == null ||
+        apiBase.scheme != 'https' ||
+        apiBase.host.isEmpty) {
+      return false;
+    }
+
+    // Production store builds use the live API and can open the live O!Bank
+    // invoice deep link. Staging remains restricted to debug builds so a
+    // sandbox invoice can never be opened by a release build accidentally.
+    if (apiBase.host == 'api.stroy.com.kg') return true;
+    return _obankStagingBuild && kDebugMode;
   }
 
   @override
@@ -612,8 +617,10 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Тестовый сценарий: нужен staging-сервер и тестовое приложение O!Bank.',
+        Text(
+          _obankStagingBuild
+              ? 'Тестовый сценарий: нужен staging-сервер и тестовое приложение O!Bank.'
+              : 'После оплаты вернитесь в приложение — статус счёта проверится автоматически.',
           style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
         ),
         if (_checkoutMessage != null) ...[

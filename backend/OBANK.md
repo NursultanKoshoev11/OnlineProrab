@@ -20,14 +20,13 @@ separate hosted-paylink fallback. The API only accepts the bank's HTTPS
 Sandbox links must
 be opened in O!Bank's test app; the production app rejects test invoices.
 
-The App Store and Google Play release builds do not link to O!Dengi checkout. A
-sideloaded internal staging build can open `app_link` from the subscription screen
-when both `OBANK_NATIVE_CHECKOUT_ENABLED=true` and `OBANK_STAGING_BUILD=true` are
-passed at compile time. The code blocks this flow in release mode and when the
-configured API host is `api.stroy.com.kg`. The app checks payment status with the
-backend when the user returns from O!Bank. For store distribution, digital
-subscriptions must use the store's payment system unless STROY is enrolled in an
-applicable alternative-billing program for the storefront.
+The production Android and iOS builds can open the live `app_link` directly from
+the subscription screen when `OBANK_NATIVE_CHECKOUT_ENABLED=true` is passed at
+compile time and the API host is `api.stroy.com.kg`. Staging keeps the native flow
+restricted to debug builds and the sandbox API. The app checks payment status with
+the backend when the user returns from O!Bank. Before distributing a store build,
+confirm that the applicable Apple and Google billing rules or an approved
+alternative-billing program permit this external subscription payment flow.
 
 Build an internal Android test APK with the staging API host and the two flags
 above, plus `OFFLINE_DEMO=false`:

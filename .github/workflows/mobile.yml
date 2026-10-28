@@ -267,10 +267,10 @@ jobs:
         run: flutter test
 
       - name: Build signed production AAB
-        run: flutter build appbundle --release --build-number "${{ github.run_number }}" --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+        run: flutter build appbundle --release --build-number "${{ github.run_number }}" --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Build signed production APK
-        run: flutter build apk --release --build-number "${{ github.run_number }}" --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+        run: flutter build apk --release --build-number "${{ github.run_number }}" --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Upload production AAB
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -495,7 +495,7 @@ jobs:
         run: flutter test
 
       - name: Prepare iOS release build
-        run: flutter build ios --release --no-codesign --build-name 1.0.0 --build-number ${{ github.run_number }} --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=false --dart-define=OBANK_STAGING_BUILD=false
+        run: flutter build ios --release --no-codesign --build-name 1.0.0 --build-number ${{ github.run_number }} --dart-define=API_BASE_URL=https://api.stroy.com.kg --dart-define=OFFLINE_DEMO=false --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true --dart-define=OBANK_STAGING_BUILD=false
 
       - name: Configure signing for the Runner app target
         run: |
