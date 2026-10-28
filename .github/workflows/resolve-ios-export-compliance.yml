@@ -79,7 +79,6 @@ jobs:
               {
                   "filter[app]": app_id,
                   "filter[version]": build_number,
-                  "filter[platform]": "IOS",
                   "fields[builds]": "version,processingState,usesNonExemptEncryption,appEncryptionDeclaration",
                   "limit": "50",
               }
