@@ -146,11 +146,11 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
         });
       }
     } on ApiException catch (error) {
-      if (mounted) setState(() => _checkoutMessage = error.message);
+      if (mounted) setState(() => _checkoutMessage = _errorText(error));
     } on FormatException catch (error) {
-      if (mounted) setState(() => _checkoutMessage = error.message.toString());
+      if (mounted) setState(() => _checkoutMessage = _errorText(error));
     } catch (error) {
-      if (mounted) setState(() => _checkoutMessage = error.toString());
+      if (mounted) setState(() => _checkoutMessage = _errorText(error));
     } finally {
       if (mounted) setState(() => _checkoutBusy = false);
     }
@@ -190,7 +190,7 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
         });
       }
     } on ApiException catch (error) {
-      if (mounted) setState(() => _checkoutMessage = error.message);
+      if (mounted) setState(() => _checkoutMessage = _errorText(error));
     } catch (_) {
       if (mounted) {
         setState(

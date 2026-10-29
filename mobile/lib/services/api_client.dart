@@ -77,7 +77,7 @@ class ApiClient {
     }, retry: false);
     final token = data['refresh_token']?.toString() ?? '';
     if (token.isEmpty) {
-      throw const ApiException(500, 'Backend did not return a refresh token');
+      throw const ApiException(500, 'Сервер не вернул токен обновления сессии');
     }
     refreshToken = token;
     return token;
@@ -115,7 +115,7 @@ class ApiClient {
   Future<Map<String, dynamic>> getProject(String projectId) async {
     final data = await getJson('/api/v1/projects/' + projectId);
     if (data is Map<String, dynamic>) return data;
-    throw const ApiException(500, 'Backend returned an invalid project');
+    throw const ApiException(500, 'Сервер вернул некорректные данные объекта');
   }
 
   Future<Map<String, dynamic>> createProject(
@@ -390,7 +390,10 @@ class ApiClient {
   Future<Map<String, dynamic>> getSupportChannels() async {
     final data = await getJson('/api/v1/support/channels');
     if (data is Map<String, dynamic>) return data;
-    throw const ApiException(500, 'Backend returned invalid support channels');
+    throw const ApiException(
+      500,
+      'Сервер вернул некорректные каналы поддержки',
+    );
   }
 
   Future<Map<String, dynamic>> createSupportTicket({
@@ -482,7 +485,7 @@ class ApiClient {
     } on TimeoutException {
       throw const ApiException(
         408,
-        'Request timed out. Check your internet connection and backend status.',
+        'Время ожидания истекло. Проверьте интернет и доступность сервера.',
       );
     } on http.ClientException catch (error) {
       throw ApiException(0, error.message);
@@ -551,7 +554,10 @@ class ApiClient {
     try {
       data = jsonDecode(body);
     } on FormatException {
-      throw ApiException(response.statusCode, 'Backend returned invalid JSON');
+      throw ApiException(
+        response.statusCode,
+        'Сервер вернул некорректный ответ',
+      );
     }
     if (response.statusCode >= 400) {
       final message = data is Map<String, dynamic>
@@ -559,7 +565,7 @@ class ApiClient {
           : null;
       final error = ApiException(
         response.statusCode,
-        message ?? 'Request failed',
+        message ?? 'Не удалось выполнить запрос',
       );
       if (error.isSubscriptionExpired) {
         _subscriptionExpiredController.add(null);

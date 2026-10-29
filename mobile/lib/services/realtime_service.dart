@@ -96,7 +96,9 @@ class RealtimeService {
       }
       throw ApiException(
         response.statusCode,
-        'Realtime stream returned ' + response.statusCode.toString(),
+        'Не удалось обновить данные в реальном времени (код ' +
+            response.statusCode.toString() +
+            ')',
       );
     }
 

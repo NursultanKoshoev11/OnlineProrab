@@ -31,6 +31,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>STROY captures speech only when you start voice search and may send audio to the system speech service for transcription.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>STROY needs photo access so you can attach receipt photos to expenses.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>STROY transcribes expense searches. Audio may be sent to Apple servers for speech recognition.</string>
 	<key>UIApplicationSceneManifest</key>
