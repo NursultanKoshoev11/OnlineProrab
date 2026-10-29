@@ -27,7 +27,7 @@ jobs:
   storage-cutover-required:
     name: Production API deploy waiting for storage cutover
     if: github.event_name == 'push' && vars.API_STORAGE_CUTOVER_COMPLETE != 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, stroy-prod]
     steps:
       - name: Explain why deployment did not run
         run: |
@@ -39,7 +39,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       ((github.event_name == 'push' && vars.API_STORAGE_CUTOVER_COMPLETE == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy))
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, stroy-prod]
     timeout-minutes: 45
     environment: production-api
     services:
