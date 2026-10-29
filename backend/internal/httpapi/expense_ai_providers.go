@@ -31,7 +31,7 @@ type expenseAIProviderCall func(context.Context, expenseAIProviderConfig, string
 func configuredExpenseAIProviders() []expenseAIProviderConfig {
 	order := appState.AIProviderOrder
 	if len(order) == 0 {
-		order = []string{"gemini", "groq", "openrouter", "openrouter-fallback"}
+		order = []string{"deepseek", "gemini", "groq", "openrouter", "openrouter-fallback"}
 	}
 
 	providers := make([]expenseAIProviderConfig, 0, len(order))
@@ -49,6 +49,17 @@ func configuredExpenseAIProviders() []expenseAIProviderConfig {
 			}
 			if provider.model == "" {
 				provider.model = "gemini-3.5-flash-lite"
+			}
+		case "deepseek":
+			provider = expenseAIProviderConfig{
+				name:     "deepseek",
+				apiKey:   strings.TrimSpace(appState.DeepSeekAPIKey),
+				model:    strings.TrimSpace(appState.DeepSeekModel),
+				endpoint: "https://api.deepseek.com/chat/completions",
+				kind:     "openai-compatible",
+			}
+			if provider.model == "" {
+				provider.model = "deepseek-chat"
 			}
 		case "groq":
 			provider = expenseAIProviderConfig{

@@ -9,6 +9,29 @@ import (
 	"testing"
 )
 
+func TestConfiguredExpenseAIProvidersIncludesDeepSeek(t *testing.T) {
+	previous := appState
+	t.Cleanup(func() { appState = previous })
+	appState.DeepSeekAPIKey = "deepseek-test-key"
+	appState.DeepSeekModel = "deepseek-chat"
+	appState.AIProviderOrder = []string{"deepseek"}
+
+	providers := configuredExpenseAIProviders()
+	if len(providers) != 1 {
+		t.Fatalf("expected one configured provider, got %d", len(providers))
+	}
+	provider := providers[0]
+	if provider.name != "deepseek" || provider.model != "deepseek-chat" {
+		t.Fatalf("unexpected DeepSeek provider: %#v", provider)
+	}
+	if provider.endpoint != "https://api.deepseek.com/chat/completions" {
+		t.Fatalf("unexpected DeepSeek endpoint: %q", provider.endpoint)
+	}
+	if provider.kind != "openai-compatible" {
+		t.Fatalf("unexpected DeepSeek provider kind: %q", provider.kind)
+	}
+}
+
 func TestRunExpenseAIProvidersFallsBackAfterFailure(t *testing.T) {
 	providers := []expenseAIProviderConfig{
 		{name: "primary", model: "primary-model", apiKey: "primary-key"},
