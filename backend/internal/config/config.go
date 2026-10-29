@@ -62,6 +62,7 @@ type Config struct {
 	SubscriptionPriceOverrideKGS int
 	ReviewOnlyMode               bool
 	ReviewSMSPhone               string
+	ReviewSMSPhones              []string
 	ReviewSMSCode                string
 	TwilioAccountSID             string
 	TwilioAPIKeySID              string
@@ -191,6 +192,13 @@ func Load() (Config, error) {
 	cfg.SubscriptionPriceOverrideKGS = subscriptionPriceOverrideKGS
 	cfg.ReviewOnlyMode = reviewOnlyMode
 	cfg.ReviewSMSPhone = normalizePhone(os.Getenv("REVIEW_SMS_PHONE"))
+	cfg.ReviewSMSPhones = normalizePhoneList(os.Getenv("REVIEW_SMS_PHONES"))
+	if cfg.ReviewSMSPhone != "" && !containsString(cfg.ReviewSMSPhones, cfg.ReviewSMSPhone) {
+		cfg.ReviewSMSPhones = append([]string{cfg.ReviewSMSPhone}, cfg.ReviewSMSPhones...)
+	}
+	if cfg.ReviewSMSPhone == "" && len(cfg.ReviewSMSPhones) > 0 {
+		cfg.ReviewSMSPhone = cfg.ReviewSMSPhones[0]
+	}
 	cfg.ReviewSMSCode = strings.TrimSpace(os.Getenv("REVIEW_SMS_CODE"))
 	cfg.TwilioAccountSID = strings.TrimSpace(os.Getenv("TWILIO_ACCOUNT_SID"))
 	cfg.TwilioAPIKeySID = strings.TrimSpace(os.Getenv("TWILIO_API_KEY_SID"))
@@ -329,7 +337,7 @@ func (cfg Config) Validate() error {
 	}
 	problems = append(problems, validateOBankConfig(cfg)...)
 
-	reviewPhoneSet := cfg.ReviewSMSPhone != ""
+	reviewPhoneSet := cfg.ReviewSMSPhone != "" || len(cfg.ReviewSMSPhones) > 0
 	reviewCodeSet := cfg.ReviewSMSCode != ""
 	if reviewPhoneSet != reviewCodeSet {
 		problems = append(problems, "REVIEW_SMS_PHONE and REVIEW_SMS_CODE must be configured together")
@@ -337,7 +345,13 @@ func (cfg Config) Validate() error {
 	if (reviewPhoneSet || reviewCodeSet) && !cfg.ReviewOnlyMode {
 		problems = append(problems, "REVIEW_ONLY_MODE=true is required when review credentials are configured")
 	}
-	if reviewPhoneSet && !isValidPhone(cfg.ReviewSMSPhone) {
+	for _, phone := range cfg.ReviewSMSPhones {
+		if !isValidPhone(phone) {
+			problems = append(problems, "REVIEW_SMS_PHONES must contain valid E.164 phone numbers")
+			break
+		}
+	}
+	if cfg.ReviewSMSPhone != "" && !isValidPhone(cfg.ReviewSMSPhone) {
 		problems = append(problems, "REVIEW_SMS_PHONE must be a valid E.164 phone number")
 	}
 	if reviewCodeSet && !isSixDigitCode(cfg.ReviewSMSCode) {
@@ -736,6 +750,27 @@ func isUnsafeProductionOrigin(origin string) bool {
 
 func normalizePhone(value string) string {
 	return strings.ReplaceAll(strings.TrimSpace(value), " ", "")
+}
+
+func normalizePhoneList(value string) []string {
+	parts := strings.Split(value, ",")
+	phones := make([]string, 0, len(parts))
+	for _, part := range parts {
+		phone := normalizePhone(part)
+		if phone != "" && !containsString(phones, phone) {
+			phones = append(phones, phone)
+		}
+	}
+	return phones
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func isValidPhone(value string) bool {
