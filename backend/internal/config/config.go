@@ -392,8 +392,11 @@ func (cfg Config) Validate() error {
 	if cfg.SubscriptionPriceOverrideKGS < 0 || cfg.SubscriptionPriceOverrideKGS > 100 {
 		problems = append(problems, "SUBSCRIPTION_PRICE_OVERRIDE_KGS must be 0 or between 1 and 100")
 	}
-	if cfg.SubscriptionPriceOverrideKGS > 0 && (!cfg.IsProductionLike() || !cfg.OBank.Enabled) {
-		problems = append(problems, "SUBSCRIPTION_PRICE_OVERRIDE_KGS requires staging or production with OBANK_ENABLED=true")
+	if cfg.SubscriptionPriceOverrideKGS > 0 && !cfg.IsStaging() {
+		problems = append(problems, "SUBSCRIPTION_PRICE_OVERRIDE_KGS is allowed only when APP_ENV=staging")
+	}
+	if cfg.SubscriptionPriceOverrideKGS > 0 && !cfg.OBank.Enabled {
+		problems = append(problems, "SUBSCRIPTION_PRICE_OVERRIDE_KGS requires OBANK_ENABLED=true")
 	}
 	if cfg.OBank.TestPriceKGS < 0 || cfg.OBank.TestPriceKGS > 100 {
 		problems = append(problems, "OBANK_TEST_PRICE_KGS must be 0 or between 1 and 100")

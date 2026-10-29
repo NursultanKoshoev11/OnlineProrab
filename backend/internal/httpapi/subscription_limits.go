@@ -79,7 +79,7 @@ func planByCode(code string) (subscriptionPlan, error) {
 }
 
 func planPrice(plan subscriptionPlan, billingPeriod string) (int, error) {
-	if appState.SubscriptionPriceOverrideKGS > 0 && plan.ID != "trial" {
+	if appState.IsStaging && appState.SubscriptionPriceOverrideKGS > 0 && plan.ID != "trial" {
 		if billingPeriod != "month" && billingPeriod != "year" {
 			return 0, fmt.Errorf("unknown billing period %q", billingPeriod)
 		}

@@ -581,6 +581,27 @@ func TestValidateRejectsStagingPaymentPriceAboveSafeTestLimit(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsSubscriptionPriceOverrideInProduction(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.SubscriptionPriceOverrideKGS = 10
+	cfg.OBank = OBankConfig{Enabled: true}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "SUBSCRIPTION_PRICE_OVERRIDE_KGS is allowed only when APP_ENV=staging") {
+		t.Fatalf("expected production subscription price override to be rejected, got %v", err)
+	}
+}
+
+func TestValidateAllowsSubscriptionPriceOverrideOnlyInStaging(t *testing.T) {
+	cfg := validStagingConfig()
+	cfg.SubscriptionPriceOverrideKGS = 10
+	cfg.OBank = OBankConfig{Enabled: true, Test: true, SID: "test-sid", Password: "test-password", APIURL: "https://mw-api-test.dengi.kg/api/json/json.php", APIVersion: 1005, ResultURL: "https://stroy.com.kg/staging-api/api/v1/payments/obank/result", ReturnURL: "https://stroy.com.kg/billing/"}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected staging subscription price override to be valid, got %v", err)
+	}
+}
+
 func TestValidateRejectsStagingTestCodeInProduction(t *testing.T) {
 	cfg := validProductionConfig()
 	cfg.StagingTestSMSPhone = "+996700000001"

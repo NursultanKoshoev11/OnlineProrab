@@ -22,7 +22,7 @@ func ListPlans(w http.ResponseWriter, r *http.Request) {
 		monthlyPrice, _ := planPrice(plan, "month")
 		annualPrice, _ := planPrice(plan, "year")
 		discountPercent := plan.AnnualDiscountPercent
-		if appState.SubscriptionPriceOverrideKGS > 0 && plan.ID != "trial" {
+		if appState.IsStaging && appState.SubscriptionPriceOverrideKGS > 0 && plan.ID != "trial" {
 			discountPercent = 0
 		}
 		if sandboxMode && checkoutAllowed {
