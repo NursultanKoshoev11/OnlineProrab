@@ -25,9 +25,12 @@ signing secrets. The iOS simulator artifact continues to build for staging.
 The workflow validates the release inputs, runs analysis and tests, and saves
 the signed APK and AAB as GitHub Actions artifacts, and uploads the AAB to the
 Google Play `internal` track. It never publishes the working production track.
-The production signing and internal-track upload job runs automatically after
-the API cutover and signing configuration are complete; `workflow_dispatch`
-remains available for manual builds.
+The production signing and closed-testing upload job runs automatically after
+the API cutover and signing configuration are complete. Automatic pushes use
+the `alpha` track. To publish a signed build to Google Play Production, run
+`Mobile CI` manually from `main` with `production_release=true` and
+`google_play_track=production`; this is intentionally explicit so a normal
+code push cannot publish directly to Production by accident.
 
 Since August 31, 2026, Google Play requires new apps and app updates to target
 Android 16 (API 36) or higher. The Android Gradle configuration targets API 36,
