@@ -458,6 +458,14 @@
     font-size: 17px;
   }
 
+  .billing-page #phone-form .input-row {
+    flex-direction: column;
+  }
+
+  .billing-page #phone-form .input-row .button {
+    width: 100%;
+  }
+
   .billing-page .plan-grid,
   .billing-page .info-grid {
     grid-template-columns: 1fr;
