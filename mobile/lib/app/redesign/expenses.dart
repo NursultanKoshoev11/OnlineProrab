@@ -37,6 +37,8 @@ class _ExpensesTab extends StatefulWidget {
 }
 
 class _ExpensesTabState extends State<_ExpensesTab> {
+  static const _voiceProcessingConsentKey = 'stroy.voice_processing_consent.v1';
+
   final _search = TextEditingController();
   late List<RemoteCostItem> _items;
   RemoteExpenseAiResult? _aiResult;
@@ -320,36 +322,45 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   }
 
   Future<void> _voiceSearch() async {
-    final mayProcessVoice = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        actionsAlignment: MainAxisAlignment.end,
-        actionsOverflowButtonSpacing: 4,
-        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
-        title: const Text('Обработка голосового поиска'),
-        content: const Text(
-          'Аудио передаётся системному сервису распознавания речи '
-          '(на iOS — Apple; на Android — сервис, выбранный на устройстве). '
-          'Если нажать «Найти расходы», распознанный запрос и сведения о '
-          'расходах выбранного объекта (названия, описания, суммы, валюты, '
-          'поставщики и даты) сервер STROY отправит настроенному внешнему '
-          'AI-провайдеру, если он включён (например, Google Gemini, Groq или OpenRouter). '
-          'Не диктуйте пароли, коды и другие чувствительные данные.',
+    final preferences = await SharedPreferences.getInstance();
+    final consentGiven =
+        preferences.getBool(_voiceProcessingConsentKey) ?? false;
+
+    if (!consentGiven) {
+      final mayProcessVoice = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          actionsAlignment: MainAxisAlignment.end,
+          actionsOverflowButtonSpacing: 4,
+          actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+          title: const Text('Обработка голосового поиска'),
+          content: const Text(
+            'Аудио передаётся системному сервису распознавания речи '
+            '(на iOS — Apple; на Android — сервис, выбранный на устройстве). '
+            'Если нажать «Найти расходы», распознанный запрос и сведения о '
+            'расходах выбранного объекта (названия, описания, суммы, валюты, '
+            'поставщики и даты) сервер STROY отправит настроенному внешнему '
+            'AI-провайдеру, если он включён (например, Google Gemini, Groq или OpenRouter). '
+            'Не диктуйте пароли, коды и другие чувствительные данные.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Продолжить'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Продолжить'),
-          ),
-        ],
-      ),
-    );
-    if (mayProcessVoice != true || !mounted) return;
+      );
+      if (mayProcessVoice != true || !mounted) return;
+      await preferences.setBool(_voiceProcessingConsentKey, true);
+    }
+
+    if (!mounted) return;
 
     final value = await showModalBottomSheet<String>(
       context: context,
