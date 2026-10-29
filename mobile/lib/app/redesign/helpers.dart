@@ -346,9 +346,86 @@ String _displayDateTime(String value) {
 }
 
 String _errorText(Object? error) {
-  if (error is ApiException) return error.message;
-  if (error is AuthException) return error.message;
-  return 'Не удалось выполнить запрос. Проверьте соединение и повторите.';
+  if (error is ApiException) {
+    return _localizedErrorMessage(
+      statusCode: error.statusCode,
+      message: error.message,
+    );
+  }
+  if (error is AuthException) {
+    return _localizedErrorMessage(message: error.message);
+  }
+  return _localizedErrorMessage(message: error?.toString() ?? '');
+}
+
+String _localizedErrorMessage({int? statusCode, required String message}) {
+  const generic =
+      'Не удалось выполнить запрос. Проверьте соединение и повторите.';
+  final normalized = message
+      .replaceFirst(
+        RegExp(r'^(ApiException|AuthException|FormatException|Exception):?\s*'),
+        '',
+      )
+      .trim();
+  final lower = normalized.toLowerCase();
+
+  if (statusCode == 0 ||
+      statusCode == 408 ||
+      lower.contains('timeout') ||
+      lower.contains('timed out') ||
+      lower.contains('connection') ||
+      lower.contains('network') ||
+      lower.contains('clientexception')) {
+    return 'Не удалось подключиться к серверу. Проверьте интернет и повторите.';
+  }
+  if (statusCode == 401 ||
+      lower.contains('session expired') ||
+      lower.contains('unauthorized') ||
+      lower.contains('access token')) {
+    return 'Сессия истекла. Войдите снова.';
+  }
+  if (lower.contains('subscription') && lower.contains('expired')) {
+    return 'Срок подписки истёк. Продлите подписку, чтобы продолжить.';
+  }
+  if (statusCode == 403 ||
+      lower.contains('subscription') ||
+      lower.contains('forbidden')) {
+    return 'Доступ ограничен. Проверьте подписку или права доступа.';
+  }
+  if (statusCode == 404 || lower.contains('not found')) {
+    return 'Запрашиваемые данные не найдены.';
+  }
+  if (statusCode == 413 ||
+      lower.contains('too large') ||
+      lower.contains('payload')) {
+    return 'Файл слишком большой. Выберите файл меньшего размера.';
+  }
+  if (statusCode == 429 || lower.contains('too many')) {
+    return 'Слишком много запросов. Повторите попытку позже.';
+  }
+  // Backend responses may be localized already. Keep those messages, but
+  // never expose an unlocalized English implementation detail to the user.
+  if (RegExp(r'[А-Яа-яЁё]').hasMatch(normalized)) return normalized;
+  if (lower.contains('sms') && lower.contains('unavailable')) {
+    return 'Сервис SMS временно недоступен. Повторите попытку позже.';
+  }
+  if (lower.contains('sms') || lower.contains('code')) {
+    return 'Не удалось отправить или проверить код. Повторите попытку позже.';
+  }
+  if (statusCode != null && statusCode >= 500) {
+    return 'На сервере произошла ошибка. Повторите попытку позже.';
+  }
+  if (lower.contains('invalid json') ||
+      lower.contains('invalid project') ||
+      lower.contains('support channels') ||
+      lower.contains('refresh token') ||
+      lower.contains('request failed') ||
+      lower.contains('backend returned') ||
+      lower.contains('backend did not return') ||
+      lower.contains('failed')) {
+    return generic;
+  }
+  return generic;
 }
 
 void _toast(BuildContext context, String message) {

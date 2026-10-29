@@ -150,7 +150,7 @@ void main() {
         isA<ApiException>().having(
           (error) => error.message,
           'message',
-          'Backend returned invalid JSON',
+          'Сервер вернул некорректный ответ',
         ),
       ),
     );
