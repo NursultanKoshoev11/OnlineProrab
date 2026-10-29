@@ -1949,7 +1949,7 @@ dialog form > .form-note {
     @apply p-6;
   }
 }
-@media (max-width: 370px) {
+@media (max-width: 350px) {
   .nav-cta {
     @apply hidden;
   }

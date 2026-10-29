@@ -9,14 +9,22 @@
       content="Выберите подписку STROY и оплатите её через O!Dengi. Разовый платёж без автоматического продления."
     />
     <title>Вход и подписка — STROY</title>
+    <link rel="canonical" href="https://stroy.com.kg/billing/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://stroy.com.kg/billing/" />
+    <meta property="og:title" content="Вход и подписка — STROY" />
+    <meta
+      property="og:description"
+      content="Выберите подписку STROY и оплатите её через O!Dengi. Разовый платёж без автоматического продления."
+    />
     <link
       rel="icon"
       type="image/png"
       href="../assets/stroy-favicon-user.png?v=20261028-icon-transparent"
     />
-    <link rel="stylesheet" href="../styles.css?v=20261028-logo48" />
-    <link rel="stylesheet" href="billing.css?v=20261029-mobile-login-stack" />
-    <script src="billing.js" defer></script>
+    <link rel="stylesheet" href="../styles.css?v=20261029-audit-1" />
+    <link rel="stylesheet" href="billing.css?v=20261029-audit-1" />
+    <script src="billing.js?v=20261029-audit-1" defer></script>
   </head>
   <body class="billing-page">
     <a class="skip-link" href="#main">Перейти к содержимому</a>
@@ -129,6 +137,9 @@
           <button id="change-phone" class="text-button" type="button">
             Изменить номер
           </button>
+          <button id="resend-code" class="text-button" type="button" disabled>
+            Повторить отправку
+          </button>
         </form>
       </section>
 
@@ -175,18 +186,6 @@
           >
             Перейти к оплате O!Dengi
           </button>
-          <div id="payment-options" class="payment-options" hidden>
-            <p>
-              Счёт создан. Откройте его в O!Bank или перейдите к оплате в
-              браузере.
-            </p>
-            <a id="obank-app-link" class="button button-wide"
-              >Открыть счёт в приложении O!Bank</a
-            >
-            <a id="web-pay-link" class="payment-fallback"
-              >Оплатить через веб-страницу банка</a
-            >
-          </div>
         </div>
       </section>
 

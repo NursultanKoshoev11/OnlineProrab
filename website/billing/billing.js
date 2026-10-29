@@ -12,13 +12,13 @@
     phone: document.querySelector("#phone"),
     code: document.querySelector("#code"),
     changePhone: document.querySelector("#change-phone"),
+    resendCode: document.querySelector("#resend-code"),
     accountPanel: document.querySelector("#account-panel"),
     accountTitle: document.querySelector("#account-title"),
     currentSubscription: document.querySelector("#current-subscription"),
     plans: document.querySelector("#plans"),
     checkoutPrice: document.querySelector("#checkout-price"),
     payButton: document.querySelector("#pay-button"),
-    paymentOptions: document.querySelector("#payment-options"),
     logout: document.querySelector("#logout"),
     billingNavCurrent: document.querySelector("#billing-nav-current"),
     billingNavCurrentMobile: document.querySelector("#billing-nav-current-mobile"),
@@ -32,6 +32,7 @@
   let plans = [];
   let accessToken = sessionStorage.getItem(tokenKey) || "";
   let pollingTimer = null;
+  let resendTimer = null;
   let activeCheckoutID = sessionStorage.getItem("stroy.billing.order_id") || "";
   let checkoutAllowed = true;
 
@@ -72,12 +73,25 @@
     headers.set("Accept", "application/json");
     if (options.body) headers.set("Content-Type", "application/json");
     if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-    const response = await fetch(`${apiBase}${path}`, {
-      ...options,
-      headers,
-      credentials: "omit",
-      redirect: "error",
-    });
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    let response;
+    try {
+      response = await fetch(`${apiBase}${path}`, {
+        ...options,
+        headers,
+        credentials: "omit",
+        redirect: "error",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error("Сервис отвечает слишком долго. Проверьте соединение и попробуйте ещё раз.");
+      }
+      throw new Error("Не удалось связаться с STROY. Проверьте соединение и попробуйте ещё раз.");
+    } finally {
+      window.clearTimeout(timeout);
+    }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       if (response.status === 401) clearSession();
@@ -101,7 +115,8 @@
     elements.phoneForm.hidden = false;
     elements.codeForm.hidden = true;
     elements.phone.disabled = false;
-    elements.paymentOptions.hidden = true;
+    elements.code.value = "";
+    stopResendCooldown();
     elements.payButton.hidden = false;
     sessionStorage.removeItem("stroy.billing.order_id");
     activeCheckoutID = "";
@@ -116,12 +131,43 @@
     return value === "year" ? "за год" : "за месяц";
   }
 
-  async function requestCode(event) {
-    event.preventDefault();
+  function stopResendCooldown() {
+    if (resendTimer) window.clearInterval(resendTimer);
+    resendTimer = null;
+    if (elements.resendCode) {
+      elements.resendCode.disabled = false;
+      elements.resendCode.textContent = "Повторить отправку";
+    }
+  }
+
+  function startResendCooldown(seconds = 45) {
+    stopResendCooldown();
+    const endsAt = Date.now() + seconds * 1000;
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      if (!elements.resendCode) return;
+      if (remaining === 0) {
+        stopResendCooldown();
+        return;
+      }
+      elements.resendCode.disabled = true;
+      elements.resendCode.textContent = `Повторить через ${remaining} с`;
+    };
+    update();
+    resendTimer = window.setInterval(update, 1000);
+  }
+
+  async function sendCode({ resend = false } = {}) {
     const phone = elements.phone.value.trim();
-    const button = elements.phoneForm.querySelector("button[type=submit]");
+    if (!phone) {
+      elements.phone.reportValidity();
+      return;
+    }
+    const button = resend
+      ? elements.resendCode
+      : elements.phoneForm.querySelector("button[type=submit]");
     button.disabled = true;
-    showNotice("Отправляем код…");
+    showNotice(resend ? "Отправляем новый код…" : "Отправляем код…");
     try {
       const result = await request("/api/v1/auth/sms/request", {
         method: "POST",
@@ -131,16 +177,26 @@
       elements.phoneForm.hidden = true;
       elements.codeForm.hidden = false;
       elements.code.focus();
+      startResendCooldown(45);
       showNotice(
         result.dev_code
           ? `Локальный код: ${result.dev_code}`
           : "Код отправлен. Он действует 5 минут.",
       );
     } catch (error) {
+      if (resend) {
+        button.disabled = false;
+        button.textContent = "Повторить отправку";
+      }
       showNotice(error.message, "error");
     } finally {
-      button.disabled = false;
+      if (!resend) button.disabled = false;
     }
+  }
+
+  async function requestCode(event) {
+    event.preventDefault();
+    await sendCode();
   }
 
   async function verifyCode(event) {
@@ -157,6 +213,7 @@
       if (!accessToken) throw new Error("Сервер не выдал токен входа. Попробуйте ещё раз.");
       sessionStorage.setItem(tokenKey, accessToken);
       updateNavigationTargets();
+      stopResendCooldown();
       await loadAccount();
     } catch (error) {
       showNotice(error.message, "error");
@@ -297,7 +354,6 @@
           : "";
         elements.currentSubscription.textContent = `Текущий тариф: ${planName(subscription.plan)}. Действует до ${endsAt}.`;
         if (pollingTimer) window.clearTimeout(pollingTimer);
-        elements.paymentOptions.hidden = true;
         elements.payButton.hidden = false;
         elements.payButton.disabled = false;
         sessionStorage.removeItem("stroy.billing.order_id");
@@ -309,7 +365,6 @@
         if (pollingTimer) window.clearTimeout(pollingTimer);
         sessionStorage.removeItem("stroy.billing.order_id");
         activeCheckoutID = "";
-        elements.paymentOptions.hidden = true;
         elements.payButton.hidden = false;
         elements.payButton.disabled = false;
       } else {
@@ -363,12 +418,14 @@
   elements.phoneForm.addEventListener("submit", requestCode);
   elements.codeForm.addEventListener("submit", verifyCode);
   elements.changePhone.addEventListener("click", () => {
+    stopResendCooldown();
     elements.phone.disabled = false;
     elements.phoneForm.hidden = false;
     elements.codeForm.hidden = true;
     elements.code.value = "";
     showNotice("");
   });
+  elements.resendCode?.addEventListener("click", () => sendCode({ resend: true }));
   elements.logout.addEventListener("click", () => {
     clearSession();
     elements.phone.value = "";

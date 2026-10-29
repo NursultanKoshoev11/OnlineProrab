@@ -189,8 +189,7 @@
   text-align: left;
 }
 
-.billing-page .text-button:hover,
-.billing-page .payment-fallback:hover {
+.billing-page .text-button:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -337,33 +336,6 @@
   color: var(--color-muted);
   font-size: 14px;
   line-height: 1.55;
-}
-
-.billing-page .payment-options {
-  display: grid;
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.billing-page .payment-options p {
-  margin: 0;
-}
-
-.billing-page .payment-options .button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  text-decoration: none;
-}
-
-.billing-page .payment-fallback {
-  color: #52773a;
-  font-size: 15px;
-  font-weight: 600;
-  text-align: center;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
 }
 
 .billing-page .info-grid {
