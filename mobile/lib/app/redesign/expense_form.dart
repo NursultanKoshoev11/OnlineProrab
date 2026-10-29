@@ -21,7 +21,7 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
   final _amount = TextEditingController();
   final _description = TextEditingController();
   DateTime _spentAt = DateTime.now();
-  PlatformFile? _receiptFile;
+  _ReceiptFile? _receiptFile;
   bool _busy = false;
 
   @override
@@ -139,7 +139,7 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
                     if (_receiptFile != null) ...[
                       const SizedBox(height: 6),
                       Text(
-                        _fileSize(_receiptFile!.lengthSync() ?? 0),
+                        _fileSize(_receiptFile!.size),
                         style: const TextStyle(color: _muted, fontSize: 12),
                       ),
                     ],
@@ -209,14 +209,63 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
   }
 
   Future<void> _pickReceipt() async {
+    final source = await showModalBottomSheet<_ReceiptSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Выбрать фото'),
+              subtitle: const Text('Из галереи устройства'),
+              onTap: () => Navigator.of(context).pop(_ReceiptSource.photo),
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: const Text('Выбрать файл'),
+              subtitle: const Text('Чек или PDF из файлов устройства'),
+              onTap: () => Navigator.of(context).pop(_ReceiptSource.file),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-      );
-      if (!mounted || result.isEmpty) return;
-      final file = result.single;
-      if (file.path == null || file.path!.isEmpty) {
+      final _ReceiptFile file;
+      if (source == _ReceiptSource.photo) {
+        final image = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+        );
+        if (!mounted || image == null) return;
+        file = _ReceiptFile(
+          name: image.name,
+          size: await image.length(),
+          path: image.path,
+        );
+      } else {
+        final result = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+        );
+        if (!mounted || result.isEmpty) return;
+        final picked = result.single;
+        final path = picked.path;
+        if (path == null || path.isEmpty) {
+          _toast(context, 'Выбранный файл недоступен');
+          return;
+        }
+        file = _ReceiptFile(
+          name: picked.name,
+          size: picked.lengthSync() ?? await picked.length(),
+          path: path,
+        );
+      }
+      if (file.path.isEmpty) {
         _toast(context, 'Выбранный файл недоступен');
         return;
       }
@@ -256,7 +305,7 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
       final receiptFile = _receiptFile;
       if (receiptFile != null) {
         final path = receiptFile.path;
-        if (path == null || path.isEmpty) {
+        if (path.isEmpty) {
           throw const ApiException(400, 'Выбранный чек недоступен');
         }
         try {
@@ -292,4 +341,18 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
       if (mounted) setState(() => _busy = false);
     }
   }
+}
+
+enum _ReceiptSource { photo, file }
+
+class _ReceiptFile {
+  const _ReceiptFile({
+    required this.name,
+    required this.size,
+    required this.path,
+  });
+
+  final String name;
+  final int size;
+  final String path;
 }
