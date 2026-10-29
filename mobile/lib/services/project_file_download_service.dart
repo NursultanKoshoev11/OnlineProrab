@@ -45,12 +45,12 @@ class ProjectFileDownloadService {
     if (response.statusCode == 401) {
       final refreshed = await _apiClient.refreshAccessToken();
       if (!refreshed) {
-        throw const ApiException(401, 'Session expired. Please sign in again.');
+        throw const ApiException(401, 'Сессия истекла. Войдите снова.');
       }
       response = await _request(fileId);
       if (response.statusCode == 401) {
         await _apiClient.expireSession();
-        throw const ApiException(401, 'Session expired. Please sign in again.');
+        throw const ApiException(401, 'Сессия истекла. Войдите снова.');
       }
     }
 
@@ -79,7 +79,7 @@ class ProjectFileDownloadService {
           )
           .timeout(_timeout);
     } on TimeoutException {
-      throw const ApiException(408, 'File download timed out');
+      throw const ApiException(408, 'Загрузка файла превысила время ожидания');
     } on http.ClientException catch (error) {
       throw ApiException(0, error.message);
     }
@@ -124,7 +124,7 @@ class ProjectFileDownloadService {
 
   String _readErrorMessage(http.Response response) {
     final text = response.body.trim();
-    if (text.isEmpty) return 'File download failed';
+    if (text.isEmpty) return 'Не удалось загрузить файл';
     try {
       final data = jsonDecode(text);
       if (data is Map<String, dynamic>) {
@@ -136,7 +136,7 @@ class ProjectFileDownloadService {
     } on FormatException {
       // Fall back to the raw response below.
     }
-    if (text.length > 300) return 'File download failed';
+    if (text.length > 300) return 'Не удалось загрузить файл';
     return text;
   }
 

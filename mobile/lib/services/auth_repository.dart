@@ -45,7 +45,7 @@ class AuthRepository {
     final data = await _apiClient.verifySMSCode(phone, code);
     final accessToken = data['access_token']?.toString() ?? '';
     if (accessToken.isEmpty) {
-      throw const AuthException('Backend did not return an access token');
+      throw const AuthException('Сервер не вернул токен доступа');
     }
 
     _apiClient.setTokens(accessToken: accessToken, refreshToken: null);
