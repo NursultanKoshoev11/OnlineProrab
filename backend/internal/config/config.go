@@ -91,6 +91,8 @@ type Config struct {
 	OpenRouterAPIKey             string
 	OpenRouterModel              string
 	OpenRouterFallbackModel      string
+	FCMProjectID                 string
+	FCMServiceAccountJSON        string
 	OBank                        OBankConfig
 }
 
@@ -227,6 +229,8 @@ func Load() (Config, error) {
 	cfg.OpenRouterAPIKey = strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY"))
 	cfg.OpenRouterModel = getEnv("OPENROUTER_MODEL", "openrouter/free")
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
+	cfg.FCMProjectID = strings.TrimSpace(os.Getenv("FCM_PROJECT_ID"))
+	cfg.FCMServiceAccountJSON = strings.TrimSpace(os.Getenv("FCM_SERVICE_ACCOUNT_JSON"))
 	cfg.OBank = OBankConfig{
 		Enabled:       obankEnabled,
 		SID:           strings.TrimSpace(os.Getenv("OBANK_SID")),

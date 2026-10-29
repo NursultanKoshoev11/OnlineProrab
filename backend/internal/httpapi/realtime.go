@@ -76,6 +76,10 @@ func (h *realtimeHub) publish(projectID string, userIDs map[string]struct{}, pay
 }
 
 func publishProjectEvent(projectID, entityType, entityID, action string, extraUserIDs ...string) {
+	publishProjectEventForActor(projectID, entityType, entityID, action, "", extraUserIDs...)
+}
+
+func publishProjectEventForActor(projectID, entityType, entityID, action, actorID string, extraUserIDs ...string) {
 	projectID = strings.TrimSpace(projectID)
 	if projectID == "" || appState.DB == nil || appState.DB.Pool == nil {
 		return
@@ -121,6 +125,48 @@ func publishProjectEvent(projectID, entityType, entityID, action string, extraUs
 		return
 	}
 	projectRealtime.publish(projectID, userIDs, payload)
+	if entityType == "cost_item" && action == "created" && appState.PushSender != nil {
+		// Push delivery must not add provider latency to the cost-item response.
+		go notifyProjectMembers(context.Background(), projectID, userIDs, actorID, entityID)
+	}
+}
+
+func notifyProjectMembers(ctx context.Context, projectID string, userIDs map[string]struct{}, actorID, entityID string) {
+	ids := make([]string, 0, len(userIDs))
+	for userID := range userIDs {
+		if userID != "" && userID != actorID {
+			ids = append(ids, userID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	rows, err := appState.DB.Pool.Query(ctx, `SELECT token FROM push_tokens WHERE user_id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		slog.Error("push_token_lookup_failed", "project_id", projectID, "error", err)
+		return
+	}
+	defer rows.Close()
+	tokens := make([]string, 0)
+	for rows.Next() {
+		var token string
+		if rows.Scan(&token) == nil {
+			tokens = append(tokens, token)
+		}
+	}
+	if err := rows.Err(); err != nil || len(tokens) == 0 {
+		return
+	}
+	pushCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := appState.PushSender.Send(pushCtx, tokens, "STROY", "A new expense was added to your project.", map[string]string{
+		"type":         "cost_item_created",
+		"project_id":   projectID,
+		"cost_item_id": entityID,
+		"click_action": "OPEN_PROJECT_EXPENSES",
+	}); err != nil {
+		slog.Error("firebase_push_notification_failed", "project_id", projectID, "error", err)
+	}
 }
 
 func RealtimeEvents(w http.ResponseWriter, r *http.Request) {

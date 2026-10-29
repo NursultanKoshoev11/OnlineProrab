@@ -70,6 +70,7 @@ jobs:
       ACCESS_TOKEN_TTL_MINUTES: 15
       CORS_ALLOWED_ORIGINS: http://localhost:3000
       MAX_UPLOAD_MB: 10
+      FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
     defaults:
       run:
         shell: bash
@@ -184,12 +185,17 @@ jobs:
       - name: Transfer the image and matching Compose file
         run: |
           set -euo pipefail
+          [[ -n "$FCM_SERVICE_ACCOUNT_JSON" ]]
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
           compose_file="$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml"
+          fcm_secret_file="$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.fcm.json"
           cp backend/docker-compose.prod.yml "$compose_file"
+          umask 077
+          printf '%s' "$FCM_SERVICE_ACCOUNT_JSON" > "$fcm_secret_file"
           scp "${ssh_options[@]}" \
             "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.image.tar.gz" \
             "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml" \
+            "$fcm_secret_file" \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
           scp "${ssh_options[@]}" \
             backend/scripts/backup.sh \

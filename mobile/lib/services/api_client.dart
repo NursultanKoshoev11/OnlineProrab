@@ -54,6 +54,13 @@ class ApiClient {
   Future<Map<String, dynamic>> requestSMSCode(String phone) =>
       _postJson('/api/v1/auth/sms/request', {'phone': phone}, retry: false);
 
+  Future<void> registerPushToken(String token, String platform) async {
+    await _postJson('/api/v1/push-tokens', {
+      'token': token,
+      'platform': platform,
+    });
+  }
+
   Future<Map<String, dynamic>> verifySMSCode(String phone, String code) async {
     final data = await _postJson('/api/v1/auth/sms/verify', {
       'phone': phone,
