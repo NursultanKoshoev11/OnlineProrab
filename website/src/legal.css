@@ -40,6 +40,8 @@
   font-size: clamp(40px, 5.8vw, 76px);
   @apply leading-[1.05] tracking-[-3px] font-medium;
   overflow-wrap: break-word;
+  word-break: normal;
+  text-wrap: balance;
 }
 .legal-lead {
   @apply max-w-[700px] text-[#7b8670] text-[18px] leading-[1.8];
@@ -262,7 +264,8 @@
   }
   .legal-main h1 {
     @apply text-[38px] tracking-[-1.7px];
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
   }
   .legal-main {
     @apply pt-[43px];

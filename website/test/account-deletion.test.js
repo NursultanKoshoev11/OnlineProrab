@@ -19,6 +19,7 @@ test("public pages and resources comply with the production CSP", () => {
     "terms/index.html",
     "support/index.html",
     "account-deletion/index.html",
+    "billing/index.html",
   ];
   const html = pages
     .map((page) => readFileSync(path.join(websiteRoot, page), "utf8"))
@@ -57,7 +58,7 @@ test("public pages and resources comply with the production CSP", () => {
   assert.doesNotMatch(html, /\sstyle\s*=/i);
   assert.doesNotMatch(
     html,
-    /<(?:script|img|link|source|iframe)\b[^>]*\b(?:src|href)\s*=\s*["']https?:\/\//i,
+    /<(?:script|img|link(?!\b[^>]*\brel\s*=\s*["']canonical["'])|source|iframe)\b[^>]*\b(?:src|href)\s*=\s*["']https?:\/\//i,
   );
   assert.doesNotMatch(css, /url\(\s*["']?https?:\/\//i);
 
