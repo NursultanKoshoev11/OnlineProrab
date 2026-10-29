@@ -53,8 +53,14 @@ class PushNotificationService {
       // The first token can be issued before an onRegistered listener is
       // attached. Register it explicitly, then keep the stable refresh
       // stream for rotations and app reinstalls.
+      // firebase_messaging 17 exposes the FCM delivery token through the
+      // legacy API while its new onRegistered stream exposes an FID. FCM
+      // cannot send to an FID, so keep using the token API until the plugin
+      // provides a non-deprecated delivery-token stream.
+      // ignore: deprecated_member_use
       _tokenSubscription = messaging.onTokenRefresh.listen(_registerToken);
       await messaging.register();
+      // ignore: deprecated_member_use
       await _registerToken(await messaging.getToken());
       _messageSubscription = FirebaseMessaging.onMessage.listen((_) {
         // The existing SSE stream refreshes the open workspace immediately.
