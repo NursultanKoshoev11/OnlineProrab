@@ -33,16 +33,35 @@ type realtimeHub struct {
 	subscribers map[uint64]*realtimeSubscriber
 }
 
+const (
+	maxRealtimeConnections        = 256
+	maxRealtimeConnectionsPerUser = 8
+)
+
 var projectRealtime = realtimeHub{
 	subscribers: make(map[uint64]*realtimeSubscriber),
 }
 
-func (h *realtimeHub) subscribe(userID, projectID string) (<-chan []byte, func()) {
+func (h *realtimeHub) subscribe(userID, projectID string) (<-chan []byte, func(), bool) {
+	h.mu.Lock()
+	if len(h.subscribers) >= maxRealtimeConnections {
+		h.mu.Unlock()
+		return nil, nil, false
+	}
+	userConnections := 0
+	for _, existing := range h.subscribers {
+		if existing.userID == userID {
+			userConnections++
+		}
+	}
+	if userConnections >= maxRealtimeConnectionsPerUser {
+		h.mu.Unlock()
+		return nil, nil, false
+	}
 	id := atomic.AddUint64(&h.nextID, 1)
 	subscriber := &realtimeSubscriber{
 		userID: userID, projectID: projectID, events: make(chan []byte, 32),
 	}
-	h.mu.Lock()
 	h.subscribers[id] = subscriber
 	h.mu.Unlock()
 
@@ -54,7 +73,7 @@ func (h *realtimeHub) subscribe(userID, projectID string) (<-chan []byte, func()
 			close(subscriber.events)
 			h.mu.Unlock()
 		})
-	}
+	}, true
 }
 
 func (h *realtimeHub) publish(projectID string, userIDs map[string]struct{}, payload []byte) {
@@ -185,7 +204,12 @@ func RealtimeEvents(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "streaming is not supported")
 		return
 	}
-	events, unsubscribe := projectRealtime.subscribe(userID, projectID)
+	events, unsubscribe, ok := projectRealtime.subscribe(userID, projectID)
+	if !ok {
+		w.Header().Set("Retry-After", "10")
+		Error(w, http.StatusTooManyRequests, "too many realtime connections")
+		return
+	}
 	defer unsubscribe()
 
 	w.Header().Set("Content-Type", "text/event-stream")

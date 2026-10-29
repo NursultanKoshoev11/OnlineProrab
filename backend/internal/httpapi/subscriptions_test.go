@@ -101,7 +101,7 @@ func TestStagingSandboxPriceOverrideIsDisplayedAndChargedOnlyInStaging(t *testin
 func TestOperatorPriceOverrideAppliesToAllPaidPeriods(t *testing.T) {
 	originalState := appState
 	defer func() { appState = originalState }()
-	appState = State{SubscriptionPriceOverrideKGS: 10}
+	appState = State{IsStaging: true, SubscriptionPriceOverrideKGS: 10}
 
 	for _, planID := range []string{"standard", "max"} {
 		plan, _ := planByCode(planID)
