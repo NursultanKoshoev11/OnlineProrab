@@ -54,8 +54,8 @@ builds. Configure the values below in `production-mobile`:
 The workflow CMS-decodes the profile before reading its plist, then checks its
 expiration, team, bundle ID, and App Store distribution settings. It creates a
 signed IPA and saves it as a GitHub Actions artifact; it does not upload the IPA
-to App Store Connect. The iOS deployment target is 14.0 because the file picker
-plugin requires iOS 14 or newer.
+to App Store Connect. The iOS deployment target is 15.0 because Firebase
+Messaging requires iOS 15 or newer.
 
 Apple requires uploads to App Store Connect to use Xcode 26 or later with the
 iOS 26 SDK as of April 28, 2026. Both the iOS simulator CI job and the signed

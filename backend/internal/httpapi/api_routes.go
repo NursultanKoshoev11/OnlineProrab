@@ -6,6 +6,7 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	api := "/api/v1"
 	mux.HandleFunc(api+"/projects", requireSubscribed(Projects))
 	mux.HandleFunc(api+"/realtime", requireSubscribed(RealtimeEvents))
+	mux.HandleFunc(api+"/push-tokens", requireAuth(PushTokens))
 	mux.HandleFunc(api+"/projects/create-with-cover", requireSubscribed(CreateProjectWithCover))
 	mux.HandleFunc(api+"/projects/", requireSubscribed(Projects))
 	mux.HandleFunc(api+"/project-members", requireSubscribed(ProjectMembers))

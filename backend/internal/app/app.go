@@ -13,6 +13,7 @@ import (
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/bootstrap"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/httpapi"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/notifications"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/observability"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/sms"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
@@ -95,6 +96,16 @@ func Run() {
 	migrationCancel()
 
 	httpapi.SetState(cfg, db, smsSender, fileStore)
+	if cfg.FCMProjectID != "" && cfg.FCMServiceAccountJSON != "" {
+		pushSender, err := notifications.NewFirebaseSender(rootCtx, cfg.FCMProjectID, cfg.FCMServiceAccountJSON)
+		if err != nil {
+			slog.Error("firebase_push_initialization_failed", "error", err)
+		} else {
+			httpapi.SetPushSender(pushSender)
+		}
+	} else {
+		slog.Warn("firebase_push_disabled", "reason", "FCM_PROJECT_ID or FCM_SERVICE_ACCOUNT_JSON is missing")
+	}
 	deletionWorkerDone := make(chan struct{})
 	go func() {
 		defer close(deletionWorkerDone)

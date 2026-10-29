@@ -101,9 +101,11 @@ assert_container_matches_compose() {
     return 1
   fi
   local status=0
-  if python3 - "$config_file" "$container_file" <<'PY'
+  if python3 - "$config_file" "$container_file" "$image_ref" <<'PY'
 import json
 import sys
+
+image_ref = sys.argv[3]
 
 try:
     with open(sys.argv[1], encoding="utf-8") as config_file:
@@ -120,6 +122,8 @@ for entry in entries:
     if separator:
         actual[key] = value
 mismatches = [key for key, value in expected.items() if actual.get(key) != str(value)]
+if image_ref == "stroy-api:baseline":
+    mismatches = [key for key in mismatches if key not in {"FCM_PROJECT_ID", "FCM_SERVICE_ACCOUNT_JSON"}]
 if mismatches:
     print("active API environment differs from the prepared release for: " + ", ".join(sorted(mismatches)), file=sys.stderr)
     raise SystemExit(1)
@@ -152,7 +156,11 @@ compose() {
   local image_ref="$1"
   local compose_file="$2"
   shift 2
-  API_IMAGE="$image_ref" docker compose \
+  local fcm_service_account_json=""
+  if [[ -f "$deploy_path/.fcm_service_account.json" && ! -L "$deploy_path/.fcm_service_account.json" ]]; then
+    fcm_service_account_json="$(cat -- "$deploy_path/.fcm_service_account.json")"
+  fi
+  FCM_SERVICE_ACCOUNT_JSON="$fcm_service_account_json" API_IMAGE="$image_ref" docker compose \
     --project-name "$compose_project" \
     --env-file "$env_file" \
     --file "$compose_file" \
@@ -222,17 +230,21 @@ fi
 
 backup_script="/tmp/stroy-api-$deploy_sha.backup.sh"
 safe_path_script="/tmp/stroy-api-$deploy_sha.safe-path.sh"
+fcm_secret_file="/tmp/stroy-api-$deploy_sha.fcm.json"
 if [[ ! -f "/tmp/stroy-api-$deploy_sha.image.tar.gz" || -L "/tmp/stroy-api-$deploy_sha.image.tar.gz" || \
   ! -f "/tmp/stroy-api-$deploy_sha.compose.yml" || -L "/tmp/stroy-api-$deploy_sha.compose.yml" || \
+  ! -f "$fcm_secret_file" || -L "$fcm_secret_file" || \
   ! -f "$backup_script" || -L "$backup_script" || \
   ! -f "$safe_path_script" || -L "$safe_path_script" ]]; then
   echo "transferred image, Compose file, or backup scripts are missing" >&2
   exit 1
 fi
 cleanup_transferred_files() {
-  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml" "$backup_script" "$safe_path_script"
+  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml" "$fcm_secret_file" "$backup_script" "$safe_path_script"
 }
 trap cleanup_transferred_files EXIT
+
+install -m 0600 -- "$fcm_secret_file" "$deploy_path/.fcm_service_account.json"
 
 if [[ "$release_ref" == "releases/$deploy_sha" ]]; then
   echo "revision is already the active release" >&2
@@ -355,7 +367,7 @@ on_exit() {
       echo "automatic API rollback failed; inspect Docker and the production database immediately" >&2
     fi
   fi
-  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml" "$backup_script" "$safe_path_script"
+  rm -f -- "/tmp/stroy-api-$deploy_sha.image.tar.gz" "/tmp/stroy-api-$deploy_sha.compose.yml" "$fcm_secret_file" "$backup_script" "$safe_path_script"
   exit "$exit_code"
 }
 trap on_exit EXIT

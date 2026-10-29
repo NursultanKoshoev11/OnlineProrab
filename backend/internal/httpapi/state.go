@@ -6,6 +6,7 @@ import (
 
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/config"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/database"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/notifications"
 	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/storage"
 )
 
@@ -57,6 +58,7 @@ type State struct {
 	OpenRouterAPIKey             string
 	OpenRouterModel              string
 	OpenRouterFallbackModel      string
+	PushSender                   notifications.Sender
 	IsStaging                    bool
 	OBank                        config.OBankConfig
 }
@@ -98,6 +100,7 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore
 		OpenRouterAPIKey:             cfg.OpenRouterAPIKey,
 		OpenRouterModel:              cfg.OpenRouterModel,
 		OpenRouterFallbackModel:      cfg.OpenRouterFallbackModel,
+		PushSender:                   nil,
 		IsStaging:                    cfg.IsStaging(),
 		StagingTestSMSPhone:          cfg.StagingTestSMSPhone,
 		StagingTestSMSCode:           cfg.StagingTestSMSCode,
@@ -111,4 +114,8 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore
 	if appState.AccessTokenTTL <= 0 {
 		appState.AccessTokenTTL = 15 * time.Minute
 	}
+}
+
+func SetPushSender(sender notifications.Sender) {
+	appState.PushSender = sender
 }

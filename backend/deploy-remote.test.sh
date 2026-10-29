@@ -97,15 +97,17 @@ image_archive="/tmp/stroy-api-$valid_sha.image.tar.gz"
 compose_file="/tmp/stroy-api-$valid_sha.compose.yml"
 backup_script="/tmp/stroy-api-$valid_sha.backup.sh"
 safe_path_script="/tmp/stroy-api-$valid_sha.safe-path.sh"
-for artifact in "$image_archive" "$compose_file" "$backup_script" "$safe_path_script"; do
+fcm_secret_file="/tmp/stroy-api-$valid_sha.fcm.json"
+for artifact in "$image_archive" "$compose_file" "$fcm_secret_file" "$backup_script" "$safe_path_script"; do
   if [[ -e "$artifact" || -L "$artifact" ]]; then
     echo "deployment test artifact already exists: $artifact" >&2
     exit 1
   fi
 done
-trap 'rm -rf -- "$temporary_dir"; rm -f -- "$image_archive" "$compose_file" "$backup_script" "$safe_path_script"' EXIT
+trap 'rm -rf -- "$temporary_dir"; rm -f -- "$image_archive" "$compose_file" "$fcm_secret_file" "$backup_script" "$safe_path_script"' EXIT
 printf '%s' fake-image | gzip -c > "$image_archive"
 printf '%s\n' 'services: {}' > "$compose_file"
+printf '%s\n' '{"project_id":"stroy-notifications"}' > "$fcm_secret_file"
 cp "$script_dir/scripts/backup.sh" "$backup_script"
 cp "$script_dir/scripts/safe-path.sh" "$safe_path_script"
 docker_log="$temporary_dir/docker.log"
@@ -132,7 +134,7 @@ if ! grep -Fq 'up --detach --no-build --pull never --wait --wait-timeout 180 api
   echo "successful deployment did not start the API release" >&2
   exit 1
 fi
-for artifact in "$image_archive" "$compose_file" "$backup_script" "$safe_path_script"; do
+for artifact in "$image_archive" "$compose_file" "$fcm_secret_file" "$backup_script" "$safe_path_script"; do
   if [[ -e "$artifact" || -L "$artifact" ]]; then
     echo "deployment left a transferred artifact behind: $artifact" >&2
     exit 1

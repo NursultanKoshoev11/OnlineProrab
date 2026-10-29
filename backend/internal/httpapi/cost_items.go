@@ -180,7 +180,7 @@ func createCostItem(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, 'create', 'cost_item', $3)
 	`, userID, req.ProjectID, item.ID)
 
-	publishProjectEvent(req.ProjectID, "cost_item", item.ID, "created")
+	publishProjectEventForActor(req.ProjectID, "cost_item", item.ID, "created", userID)
 	JSON(w, http.StatusCreated, item)
 }
 

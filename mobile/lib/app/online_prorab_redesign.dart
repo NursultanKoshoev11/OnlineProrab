@@ -19,6 +19,7 @@ import 'package:online_prorab/services/project_file_download_service.dart';
 import 'package:online_prorab/services/session_store.dart';
 import 'package:online_prorab/services/demo_mode.dart';
 import 'package:online_prorab/services/realtime_service.dart';
+import 'package:online_prorab/services/push_notification_service.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:online_prorab/features/reports/expense_report_pdf.dart';
@@ -72,6 +73,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   late final stt.SpeechToText _speechToText;
   late final http.Client? _demoHttpClient;
   late final RealtimeService _realtimeService;
+  late final PushNotificationService _pushNotificationService;
 
   @override
   void initState() {
@@ -79,6 +81,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     _demoHttpClient = _offlineDemo ? DemoHttpClient() : null;
     _apiClient = ApiClient(httpClient: _demoHttpClient);
     _realtimeService = RealtimeService(apiClient: _apiClient);
+    _pushNotificationService = PushNotificationService(apiClient: _apiClient);
     _authRepository = AuthRepository(
       apiClient: _apiClient,
       sessionStore: SessionStore(),
@@ -94,6 +97,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
   void dispose() {
     _authRepository.dispose();
     unawaited(_realtimeService.close());
+    unawaited(_pushNotificationService.dispose());
     _apiClient.close();
     _speechToText.cancel();
     super.dispose();
@@ -284,6 +288,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
         teamRepository: _teamRepository,
         speechToText: _speechToText,
         realtimeService: _realtimeService,
+        pushNotificationService: _pushNotificationService,
         offlineDemo: _offlineDemo,
       ),
     );
@@ -300,6 +305,7 @@ class _Dependencies {
     required this.teamRepository,
     required this.speechToText,
     required this.realtimeService,
+    required this.pushNotificationService,
     required this.offlineDemo,
   });
 
@@ -311,6 +317,7 @@ class _Dependencies {
   final ProjectTeamRepository teamRepository;
   final stt.SpeechToText speechToText;
   final RealtimeService realtimeService;
+  final PushNotificationService pushNotificationService;
   final bool offlineDemo;
 }
 
@@ -324,6 +331,7 @@ class _AuthGate extends StatefulWidget {
     required this.teamRepository,
     required this.speechToText,
     required this.realtimeService,
+    required this.pushNotificationService,
     required this.offlineDemo,
   });
 
@@ -335,6 +343,7 @@ class _AuthGate extends StatefulWidget {
   final ProjectTeamRepository teamRepository;
   final stt.SpeechToText speechToText;
   final RealtimeService realtimeService;
+  final PushNotificationService pushNotificationService;
   final bool offlineDemo;
 
   @override
@@ -356,6 +365,7 @@ class _AuthGateState extends State<_AuthGate> {
     teamRepository: widget.teamRepository,
     speechToText: widget.speechToText,
     realtimeService: widget.realtimeService,
+    pushNotificationService: widget.pushNotificationService,
     offlineDemo: widget.offlineDemo,
   );
 
@@ -373,7 +383,10 @@ class _AuthGateState extends State<_AuthGate> {
         : widget.authRepository.loadSession();
     if (!widget.offlineDemo) {
       _sessionFuture.then((session) {
-        if (session != null) widget.realtimeService.start();
+        if (session != null) {
+          widget.realtimeService.start();
+          unawaited(widget.pushNotificationService.initializeForSession());
+        }
       });
     }
     _sessionExpiredSubscription = widget.authRepository.sessionExpired.listen((
@@ -426,7 +439,10 @@ class _AuthGateState extends State<_AuthGate> {
         return _LoginScreen(
           deps: _deps,
           onAuthenticated: (session) {
-            if (!widget.offlineDemo) widget.realtimeService.start();
+            if (!widget.offlineDemo) {
+              widget.realtimeService.start();
+              unawaited(widget.pushNotificationService.initializeForSession());
+            }
             setState(() {
               _sessionFuture = Future<SessionData?>.value(session);
             });
