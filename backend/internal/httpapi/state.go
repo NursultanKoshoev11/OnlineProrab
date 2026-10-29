@@ -33,6 +33,7 @@ type State struct {
 	DevSMSCodeEnabled            bool
 	ReviewOnlyMode               bool
 	ReviewSMSPhone               string
+	ReviewSMSPhones              []string
 	ReviewSMSCode                string
 	StagingTestSMSPhone          string
 	StagingTestSMSCode           string
@@ -77,6 +78,7 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore
 		DevSMSCodeEnabled:            cfg.DevSMSCodeEnabled,
 		ReviewOnlyMode:               cfg.ReviewOnlyMode,
 		ReviewSMSPhone:               cfg.ReviewSMSPhone,
+		ReviewSMSPhones:              append([]string(nil), cfg.ReviewSMSPhones...),
 		ReviewSMSCode:                cfg.ReviewSMSCode,
 		SMSSender:                    smsSender,
 		SupportTelegramBotToken:      cfg.SupportTelegramBotToken,

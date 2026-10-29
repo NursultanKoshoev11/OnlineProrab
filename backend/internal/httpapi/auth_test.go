@@ -269,3 +269,25 @@ func TestIssueSMSCodeForPhoneUsesConfiguredReviewCodeOnlyForReviewPhone(t *testi
 		t.Fatal("a different phone must not be recognized as review phone")
 	}
 }
+
+func TestIssueSMSCodeForPhoneSupportsMultipleConfiguredReviewPhones(t *testing.T) {
+	oldState := appState
+	defer func() { appState = oldState }()
+
+	appState.IsProduction = true
+	appState.ReviewOnlyMode = true
+	appState.ReviewSMSPhones = []string{"+996700000001", "+996990339925"}
+	appState.ReviewSMSCode = "111111"
+	appState.SMSSender = nil
+
+	code, err := issueSMSCodeForPhone("+996 990 339 925")
+	if err != nil {
+		t.Fatalf("issueSMSCodeForPhone returned error: %v", err)
+	}
+	if code != "111111" {
+		t.Fatalf("expected configured review code, got %q", code)
+	}
+	if !isReviewPhone("+996990339925") {
+		t.Fatal("expected second configured phone to be recognized")
+	}
+}

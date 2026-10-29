@@ -45,9 +45,22 @@ var accountIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 const developmentSMSCode = "111111"
 
 func isReviewPhone(phone string) bool {
-	return appState.ReviewOnlyMode &&
-		appState.ReviewSMSPhone != "" &&
-		normalizePhone(phone) == appState.ReviewSMSPhone
+	if !appState.ReviewOnlyMode {
+		return false
+	}
+	normalized := normalizePhone(phone)
+	if normalized == "" {
+		return false
+	}
+	if appState.ReviewSMSPhone != "" && normalized == appState.ReviewSMSPhone {
+		return true
+	}
+	for _, reviewPhone := range appState.ReviewSMSPhones {
+		if normalized == reviewPhone {
+			return true
+		}
+	}
+	return false
 }
 
 func isStagingTestPhone(phone string) bool {
