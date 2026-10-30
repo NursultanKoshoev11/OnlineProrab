@@ -30,6 +30,22 @@ for attempt in 1 2 3 4 5 6; do
 done
 
 test "$installed" -eq 1
+
+# Capture the first Android surface before Maestro starts.  This is useful for
+# diagnosing a splash/permission/engine startup issue when the flow cannot see
+# its first selector.  Diagnostics are written to the runner temp directory
+# and are never sent to the application backend.
+if [ -n "${RUNNER_TEMP:-}" ]; then
+  adb shell am force-stop kg.com.stroy.app >/dev/null 2>&1 || true
+  adb shell monkey -p kg.com.stroy.app 1 >/dev/null 2>&1 || true
+  sleep 15
+  adb exec-out screencap -p >"$RUNNER_TEMP/maestro-startup.png" 2>/dev/null || true
+  adb shell uiautomator dump /sdcard/maestro-startup.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/maestro-startup.xml "$RUNNER_TEMP/maestro-startup.xml" >/dev/null 2>&1 || true
+  adb shell dumpsys activity activities >"$RUNNER_TEMP/maestro-activity.txt" 2>/dev/null || true
+  adb shell am force-stop kg.com.stroy.app >/dev/null 2>&1 || true
+fi
+
 # GitHub-hosted runners use a software-rendered emulator without KVM.  The
 # Maestro Android driver can need several minutes to install, dex-opt, and
 # start on that constrained path, so keep the timeout explicit and bounded.
