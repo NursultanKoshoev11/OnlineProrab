@@ -98,9 +98,10 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096
           disable-animations: true
           emulator-boot-timeout: 1200
+          cores: 4
           script: |
             bash mobile/tool/run_maestro_staging.sh
 

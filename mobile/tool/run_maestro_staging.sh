@@ -30,6 +30,10 @@ for attempt in 1 2 3 4 5 6; do
 done
 
 test "$installed" -eq 1
+# GitHub-hosted runners use a software-rendered emulator without KVM.  The
+# Maestro Android driver can need several minutes to install, dex-opt, and
+# start on that constrained path, so keep the timeout explicit and bounded.
+export MAESTRO_DRIVER_STARTUP_TIMEOUT="300000"
 timeout --signal=TERM --kill-after=30s 900s maestro test \
   --format junit \
   --output "$RUNNER_TEMP/maestro-results.xml" \
