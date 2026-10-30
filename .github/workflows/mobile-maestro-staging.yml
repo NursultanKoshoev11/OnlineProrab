@@ -1,0 +1,116 @@
+name: Mobile Maestro staging smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Staging API base URL (must remain outside production)'
+        required: true
+        default: 'https://stroy.com.kg/staging-api'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-maestro-staging
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Android Maestro staging smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: staging-mobile
+    env:
+      STAGING_API_BASE_URL: ${{ inputs.api_base_url }}
+      STAGING_TEST_PHONE: ${{ secrets.STAGING_TEST_PHONE }}
+      STAGING_TEST_CODE: ${{ secrets.STAGING_TEST_CODE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate staging-only inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STAGING_TEST_PHONE"
+          test -n "$STAGING_TEST_CODE"
+          [[ "$STAGING_TEST_CODE" =~ ^[0-9]{6}$ ]]
+          [[ "$STAGING_API_BASE_URL" == https://stroy.com.kg/staging-api ]]
+          curl --fail --silent --show-error --location --max-time 30 \
+            "$STAGING_API_BASE_URL/ready" | grep -Fq '"status":"ready"'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+          cache: true
+
+      - name: Prepare Android platform
+        working-directory: mobile
+        run: python3 tool/prepare_android.py
+
+      - name: Install and verify Android NDK
+        working-directory: mobile
+        run: python3 tool/install_android_ndk.py
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build staging debug APK
+        working-directory: mobile
+        run: >-
+          flutter build apk --debug
+          --dart-define=API_BASE_URL=$STAGING_API_BASE_URL
+          --dart-define=OFFLINE_DEMO=false
+          --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true
+          --dart-define=OBANK_STAGING_BUILD=true
+
+      - name: Install pinned Maestro CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          maestro_version='1.41.0'
+          maestro_sha256='0b87a2eed8c1594fe572c5f29d6d64af389f4b7231ddde714179bbcb05f0fe0c'
+          archive="$RUNNER_TEMP/maestro.zip"
+          curl --fail --silent --show-error --location \
+            "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-${maestro_version}/maestro.zip" \
+            --output "$archive"
+          printf '%s  %s\n' "$maestro_sha256" "$archive" | sha256sum --check --status
+          mkdir -p "$RUNNER_TEMP/maestro"
+          unzip -q "$archive" -d "$RUNNER_TEMP/maestro"
+          find "$RUNNER_TEMP/maestro" -type f -name maestro -exec chmod +x {} +
+          maestro_bin="$(find "$RUNNER_TEMP/maestro" -type f -name maestro -perm -111 -print -quit)"
+          test -n "$maestro_bin"
+          echo "$(dirname "$maestro_bin")" >> "$GITHUB_PATH"
+          "$maestro_bin" --version
+
+      - name: Run Maestro on Android emulator
+        uses: ReactiveCircus/android-emulator-runner@324029e2f414c084d8b15ba075288885e74aef9c # v2.34.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: Pixel_6
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            adb install -r mobile/build/app/outputs/flutter-apk/app-debug.apk
+            maestro test --format junit --output "$RUNNER_TEMP/maestro-results.xml" mobile/.maestro/staging-login.yaml
+
+      - name: Upload Maestro results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-maestro-staging-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/maestro-results.xml
+            ${{ runner.temp }}/maestro
+          if-no-files-found: warn
+          retention-days: 14
