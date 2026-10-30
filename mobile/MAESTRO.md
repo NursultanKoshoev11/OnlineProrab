@@ -21,8 +21,9 @@ The backend must have the same phone/code pair configured with
 
 Open **Actions → Mobile Maestro staging smoke → Run workflow** and keep the
 default API URL. The job first checks `/ready`, builds a debug APK with
-`OFFLINE_DEMO=false`, starts a clean Android API 35 emulator, and runs the
-login-to-workspace flow. A JUnit result artifact is retained for 14 days.
+`OFFLINE_DEMO=false`, starts a clean Android API 34 `pixel_2` emulator, and
+runs the login-to-workspace flow with a pinned, checksum-verified Maestro CLI.
+A JUnit result artifact is retained for 14 days.
 
 The flow deliberately stops after the authenticated workspace is visible. It
 does not create projects or expenses, so repeated runs do not consume project
