@@ -16,7 +16,7 @@ for attempt in 1 2 3 4 5 6; do
 done
 
 test "$installed" -eq 1
-maestro test \
+timeout --signal=TERM --kill-after=30s 900s maestro test \
   --format junit \
   --output "$RUNNER_TEMP/maestro-results.xml" \
   mobile/.maestro/staging-login.yaml

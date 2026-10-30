@@ -20,7 +20,7 @@ jobs:
   smoke:
     name: Android Maestro staging smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     environment: staging-mobile
     env:
       STAGING_API_BASE_URL: ${{ inputs.api_base_url }}
