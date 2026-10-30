@@ -76,8 +76,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          maestro_version='1.41.0'
-          maestro_sha256='0b87a2eed8c1594fe572c5f29d6d64af389f4b7231ddde714179bbcb05f0fe0c'
+          maestro_version='2.12.0'
+          maestro_sha256='a6044a84542f522f434c5dc3d609e60c7446d423f3ed1b2ae513f5c48663ec5e'
           archive="$RUNNER_TEMP/maestro.zip"
           curl --fail --silent --show-error --location \
             "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-${maestro_version}/maestro.zip" \
