@@ -32,7 +32,10 @@ registry and `POST /api/v1/push-tokens` registers device tokens.
 
 When a cost item is created, all other members of the project with a registered
 token receive an FCM notification. The author still receives the in-app SSE
-update but is not sent a duplicate push notification.
+update but is not sent a duplicate push notification. The notification title is
+`Новый расход`; its body includes the actor name (or phone as a fallback),
+expense title, amount, and currency, for example:
+`Нурсултан добавил расход «Бетон» на 1 250,5 сом`.
 
 ## Apple APNs setup
 
