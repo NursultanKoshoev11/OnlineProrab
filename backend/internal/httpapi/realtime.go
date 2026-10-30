@@ -176,15 +176,88 @@ func notifyProjectMembers(ctx context.Context, projectID string, userIDs map[str
 	if err := rows.Err(); err != nil || len(tokens) == 0 {
 		return
 	}
+	title, body := costItemPushMessage(ctx, projectID, entityID)
 	pushCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	if err := appState.PushSender.Send(pushCtx, tokens, "STROY", "A new expense was added to your project.", map[string]string{
+	if err := appState.PushSender.Send(pushCtx, tokens, title, body, map[string]string{
 		"type":         "cost_item_created",
 		"project_id":   projectID,
 		"cost_item_id": entityID,
 		"click_action": "OPEN_PROJECT_EXPENSES",
 	}); err != nil {
 		slog.Error("firebase_push_notification_failed", "project_id", projectID, "error", err)
+	}
+}
+
+type costItemPushDetails struct {
+	ActorName string
+	Title     string
+	Amount    float64
+	Currency  string
+}
+
+func costItemPushMessage(ctx context.Context, projectID, entityID string) (string, string) {
+	const fallbackTitle = "Новый расход"
+	const fallbackBody = "В проект добавлен новый расход."
+
+	detailsCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var details costItemPushDetails
+	err := appState.DB.Pool.QueryRow(detailsCtx, `
+		SELECT COALESCE(NULLIF(u.name, ''), NULLIF(u.phone, ''), 'Участник проекта'),
+		       c.title, c.amount::float8, COALESCE(NULLIF(c.currency, ''), 'KGS')
+		FROM cost_items c
+		LEFT JOIN users u ON u.id = c.created_by
+		WHERE c.id = $1 AND c.project_id = $2 AND c.deleted_at IS NULL
+	`, entityID, projectID).Scan(&details.ActorName, &details.Title, &details.Amount, &details.Currency)
+	if err != nil {
+		slog.Warn("push_notification_details_lookup_failed", "project_id", projectID, "cost_item_id", entityID, "error", err)
+		return fallbackTitle, fallbackBody
+	}
+
+	actor := sanitizeNotificationText(details.ActorName, "Участник проекта")
+	expense := sanitizeNotificationText(details.Title, "Расход")
+	unit := notificationCurrency(details.Currency)
+	body := fmt.Sprintf("%s добавил расход «%s» на %s %s", actor, expense, formatNotificationAmount(details.Amount), unit)
+	return fallbackTitle, body
+}
+
+func sanitizeNotificationText(value, fallback string) string {
+	value = strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+	if value == "" {
+		return fallback
+	}
+	runes := []rune(value)
+	const maxLength = 96
+	if len(runes) > maxLength {
+		return string(runes[:maxLength-1]) + "…"
+	}
+	return value
+}
+
+func formatNotificationAmount(amount float64) string {
+	value := fmt.Sprintf("%.2f", amount)
+	parts := strings.SplitN(value, ".", 2)
+	integer := parts[0]
+	for index := len(integer) - 3; index > 0; index -= 3 {
+		integer = integer[:index] + " " + integer[index:]
+	}
+	if len(parts) == 1 {
+		return integer
+	}
+	fraction := strings.TrimRight(parts[1], "0")
+	if fraction == "" {
+		return integer
+	}
+	return integer + "," + fraction
+}
+
+func notificationCurrency(currency string) string {
+	switch strings.ToUpper(strings.TrimSpace(currency)) {
+	case "", "KGS":
+		return "сом"
+	default:
+		return strings.ToUpper(strings.TrimSpace(currency))
 	}
 }
 
