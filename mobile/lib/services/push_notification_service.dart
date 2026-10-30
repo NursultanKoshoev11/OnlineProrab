@@ -19,7 +19,7 @@ class PushNotificationService {
     : _apiClient = apiClient;
 
   final ApiClient _apiClient;
-  StreamSubscription<String>? _tokenSubscription;
+  StreamSubscription<String>? _registrationSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
   bool _initialized = false;
   bool _initializing = false;
@@ -50,18 +50,14 @@ class PushNotificationService {
         sound: true,
       );
 
-      // The first token can be issued before an onRegistered listener is
-      // attached. Register it explicitly, then keep the stable refresh
-      // stream for rotations and app reinstalls.
-      // firebase_messaging 17 exposes the FCM delivery token through the
-      // legacy API while its new onRegistered stream exposes an FID. FCM
-      // cannot send to an FID, so keep using the token API until the plugin
-      // provides a non-deprecated delivery-token stream.
-      // ignore: deprecated_member_use
-      _tokenSubscription = messaging.onTokenRefresh.listen(_registerToken);
+      // firebase_messaging 17 switched Android and iOS to Firebase
+      // Installation IDs (FIDs). With the installation-ID manifest flag
+      // enabled, getToken() is intentionally disabled; onRegistered is the
+      // supported callback and the FCM HTTP v1 API accepts the FID directly.
+      _registrationSubscription = messaging.onRegistered.listen(
+        _registerRegistration,
+      );
       await messaging.register();
-      // ignore: deprecated_member_use
-      await _registerToken(await messaging.getToken());
       _messageSubscription = FirebaseMessaging.onMessage.listen((_) {
         // The existing SSE stream refreshes the open workspace immediately.
         // Foreground notification presentation is enabled above for a visible
@@ -73,15 +69,15 @@ class PushNotificationService {
       // Keep _initialized false so a later session initialization can retry.
       debugPrint('STROY push initialization failed: $error');
       debugPrintStack(stackTrace: stackTrace);
-      await _tokenSubscription?.cancel();
-      _tokenSubscription = null;
+      await _registrationSubscription?.cancel();
+      _registrationSubscription = null;
     } finally {
       _initializing = false;
     }
   }
 
-  Future<void> _registerToken(String? token) async {
-    final value = token?.trim() ?? '';
+  Future<void> _registerRegistration(String registrationId) async {
+    final value = registrationId.trim();
     if (value.isEmpty) return;
     final platform = defaultTargetPlatform == TargetPlatform.iOS
         ? 'ios'
@@ -89,13 +85,13 @@ class PushNotificationService {
     try {
       await _apiClient.registerPushToken(value, platform);
     } catch (_) {
-      // Token refresh will retry registration; push delivery must not block
-      // authentication or workspace rendering.
+      // A later FID refresh will retry registration; push delivery must not
+      // block authentication or workspace rendering.
     }
   }
 
   Future<void> dispose() async {
-    await _tokenSubscription?.cancel();
+    await _registrationSubscription?.cancel();
     await _messageSubscription?.cancel();
   }
 }
