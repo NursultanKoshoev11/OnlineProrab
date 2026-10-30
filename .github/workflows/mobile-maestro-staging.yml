@@ -94,11 +94,13 @@ jobs:
       - name: Run Maestro on Android emulator
         uses: ReactiveCircus/android-emulator-runner@324029e2f414c084d8b15ba075288885e74aef9c # v2.34.0
         with:
-          api-level: 35
+          api-level: 34
           target: google_apis
           arch: x86_64
+          profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           disable-animations: true
+          emulator-boot-timeout: 1200
           script: |
             adb install -r mobile/build/app/outputs/flutter-apk/app-debug.apk
             maestro test --format junit --output "$RUNNER_TEMP/maestro-results.xml" mobile/.maestro/staging-login.yaml
