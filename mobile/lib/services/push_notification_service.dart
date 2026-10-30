@@ -38,6 +38,15 @@ class PushNotificationService {
       );
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       final messaging = FirebaseMessaging.instance;
+
+      // Listen before requesting permission or registering. On iOS Firebase
+      // can emit the FID as soon as APNs registration completes; attaching the
+      // listener later can lose that first event and leave the device absent
+      // from the server registry.
+      _registrationSubscription = messaging.onRegistered.listen(
+        _registerRegistration,
+      );
+
       await messaging.requestPermission(
         alert: true,
         badge: true,
@@ -54,10 +63,9 @@ class PushNotificationService {
       // Installation IDs (FIDs). With the installation-ID manifest flag
       // enabled, getToken() is intentionally disabled; onRegistered is the
       // supported callback and the FCM HTTP v1 API accepts the FID directly.
-      _registrationSubscription = messaging.onRegistered.listen(
-        _registerRegistration,
-      );
-      await messaging.register();
+      // On iOS, register() can race APNs registration on a fresh install, so
+      // wait briefly for the APNs device token and retry the FID registration.
+      await _registerWithRetry(messaging);
       _messageSubscription = FirebaseMessaging.onMessage.listen((_) {
         // The existing SSE stream refreshes the open workspace immediately.
         // Foreground notification presentation is enabled above for a visible
@@ -74,6 +82,41 @@ class PushNotificationService {
     } finally {
       _initializing = false;
     }
+  }
+
+  Future<void> _registerWithRetry(FirebaseMessaging messaging) async {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // Firebase Messaging exposes no APNs-token stream. Polling for a short
+      // bounded window avoids the first-launch race without delaying login
+      // indefinitely when APNs is unavailable or permission is denied.
+      for (var attempt = 0; attempt < 20; attempt++) {
+        try {
+          final apnsToken = await messaging.getAPNSToken();
+          if (apnsToken != null && apnsToken.isNotEmpty) break;
+        } catch (_) {
+          // register() below will surface the actionable provider error.
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    }
+
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await messaging.register();
+        return;
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+        if (attempt < 2) {
+          await Future<void>.delayed(const Duration(seconds: 1));
+        }
+      }
+    }
+
+    Error.throwWithStackTrace(lastError!, lastStackTrace!);
   }
 
   Future<void> _registerRegistration(String registrationId) async {
