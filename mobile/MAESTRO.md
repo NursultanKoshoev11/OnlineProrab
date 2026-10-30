@@ -28,6 +28,11 @@ to 60 minutes for the hosted emulator, and bounds the Maestro command to 15
 minutes so a runner hang produces a diagnostic failure.
 A JUnit result artifact is retained for 14 days.
 
+On slow software-rendered runners Android may briefly show the system-level
+`System UI isn't responding` dialog while the emulator settles. The staging
+flow dismisses that dialog with the safe `Wait` action when it is present; it
+does not bypass an application error or change production behavior.
+
 The flow deliberately stops after the authenticated workspace is visible. It
 does not create projects or expenses, so repeated runs do not consume project
 limits or leave test data behind. The existing Flutter integration test remains

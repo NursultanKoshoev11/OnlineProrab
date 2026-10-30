@@ -3,6 +3,9 @@ appId: kg.com.stroy.app
 ---
 - launchApp:
     clearState: true
+- tapOn:
+    text: "Wait"
+    optional: true
 - extendedWaitUntil:
     visible: "Получить код"
     timeout: 60000
