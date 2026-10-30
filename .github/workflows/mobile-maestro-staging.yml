@@ -113,5 +113,8 @@ jobs:
           path: |
             ${{ runner.temp }}/maestro-results.xml
             ${{ runner.temp }}/maestro
+            ${{ runner.temp }}/maestro-startup.png
+            ${{ runner.temp }}/maestro-startup.xml
+            ${{ runner.temp }}/maestro-activity.txt
           if-no-files-found: warn
           retention-days: 14
