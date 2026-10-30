@@ -21,6 +21,9 @@
 	<string>STROY</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<!-- Enable Firebase Installation ID registration for FCM on Apple platforms. -->
+	<key>FirebaseMessagingInstallationIdEnabled</key>
+	<true/>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
