@@ -381,7 +381,7 @@ class _AuthGateState extends State<_AuthGate> {
               refreshToken: 'demo-refresh-token',
             ),
           )
-        : widget.authRepository.loadSession();
+        : _loadSessionSafely();
     if (!widget.offlineDemo) {
       _sessionFuture.then((session) {
         if (session != null) {
@@ -408,6 +408,19 @@ class _AuthGateState extends State<_AuthGate> {
           Navigator.of(context).popUntil((route) => route.isFirst);
           setState(() => _subscriptionExpired = true);
         });
+  }
+
+  Future<SessionData?> _loadSessionSafely() async {
+    try {
+      return await widget.authRepository.loadSession().timeout(
+        const Duration(seconds: 10),
+      );
+    } catch (_) {
+      // A damaged/locked secure-storage record must not leave the app on an
+      // infinite splash screen. The user can authenticate again and replace
+      // the local session.
+      return null;
+    }
   }
 
   @override

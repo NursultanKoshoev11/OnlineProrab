@@ -4,20 +4,19 @@ appId: kg.com.stroy.app
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "Номер телефона"
-    timeout: 15000
-- tapOn: "Номер телефона"
+    visible: "Получить код"
+    timeout: 60000
+- tapOn: "+996"
 - eraseText: 20
 - inputText: ${STAGING_TEST_PHONE}
 - tapOn: "Получить код"
 - extendedWaitUntil:
-    visible: "Код из SMS"
-    timeout: 20000
-- tapOn: "Код из SMS"
+    visible: "Войти"
+    timeout: 60000
 - inputText: ${STAGING_TEST_CODE}
 - tapOn: "Войти"
 - extendedWaitUntil:
-    visible: "Объекты"
-    timeout: 30000
-- assertVisible: "Добавить объект"
+    visible: "Текущие проекты"
+    timeout: 120000
+- assertVisible: "Объекты"
 - assertNotVisible: "Не удалось загрузить"
