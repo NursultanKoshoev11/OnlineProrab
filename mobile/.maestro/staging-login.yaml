@@ -7,8 +7,9 @@ appId: kg.com.stroy.app
     text: "Wait"
     optional: true
 - extendedWaitUntil:
-    visible: "Получить код"
-    timeout: 60000
+    visible: "Номер телефона"
+    timeout: 90000
+- assertVisible: "Получить код"
 - tapOn: "+996"
 - eraseText: 20
 - inputText: ${STAGING_TEST_PHONE}

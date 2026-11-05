@@ -98,7 +98,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect -memory 4096
           disable-animations: true
           emulator-boot-timeout: 1200
           cores: 4
@@ -115,5 +115,7 @@ jobs:
             ${{ runner.temp }}/maestro-startup.png
             ${{ runner.temp }}/maestro-startup.xml
             ${{ runner.temp }}/maestro-activity.txt
+            ${{ runner.temp }}/maestro-windows.txt
+            ${{ runner.temp }}/maestro-logcat.txt
           if-no-files-found: warn
           retention-days: 14

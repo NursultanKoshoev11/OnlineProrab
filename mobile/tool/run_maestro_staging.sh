@@ -4,8 +4,50 @@ set -euo pipefail
 apk_path="mobile/build/app/outputs/flutter-apk/app-debug.apk"
 installed=0
 
+capture_diagnostics() {
+  if [ -z "${RUNNER_TEMP:-}" ]; then
+    return
+  fi
+
+  adb exec-out screencap -p >"$RUNNER_TEMP/maestro-startup.png" 2>/dev/null || true
+  adb shell uiautomator dump /sdcard/maestro-startup.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/maestro-startup.xml "$RUNNER_TEMP/maestro-startup.xml" >/dev/null 2>&1 || true
+  adb shell dumpsys activity activities >"$RUNNER_TEMP/maestro-activity.txt" 2>/dev/null || true
+  adb shell dumpsys window windows >"$RUNNER_TEMP/maestro-windows.txt" 2>/dev/null || true
+  adb logcat -d -b all -t 5000 >"$RUNNER_TEMP/maestro-logcat.txt" 2>/dev/null || true
+}
+
+trap capture_diagnostics EXIT
+
+# Hosted GitHub runners can expose the emulator before ADB and Android system
+# services are actually usable.  Starting the app during that window can cause
+# the Android system ANR dialog and leave Flutter on its splash screen.  Wait
+# for a stable device before installing or launching the app.
+device_ready=0
+for attempt in $(seq 1 90); do
+  state="$(adb get-state 2>/dev/null || true)"
+  boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+  boot_animation="$(adb shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' || true)"
+  if [ "$state" = "device" ] && [ "$boot_completed" = "1" ] && \
+     { [ -z "$boot_animation" ] || [ "$boot_animation" = "stopped" ]; } && \
+     adb shell pm list packages >/dev/null 2>&1 && \
+     adb shell sm list-volumes all 2>/dev/null | grep -q .; then
+    device_ready=1
+    break
+  fi
+
+  echo "Android device is not stable yet (attempt $attempt/90); retrying in 5s"
+  sleep 5
+done
+
+test "$device_ready" -eq 1
+
+# Give SystemUI and package services a short settling window after boot.  This
+# is intentionally before app launch; it does not mask application failures.
+sleep 20
+
 package_services_ready=0
-for attempt in $(seq 1 36); do
+for attempt in $(seq 1 24); do
   if adb shell pm path android 2>/dev/null | grep -q '^package:' && \
      adb shell sm list-volumes all 2>/dev/null | grep -q .; then
     package_services_ready=1
@@ -30,21 +72,6 @@ for attempt in 1 2 3 4 5 6; do
 done
 
 test "$installed" -eq 1
-
-# Capture the first Android surface before Maestro starts.  This is useful for
-# diagnosing a splash/permission/engine startup issue when the flow cannot see
-# its first selector.  Diagnostics are written to the runner temp directory
-# and are never sent to the application backend.
-if [ -n "${RUNNER_TEMP:-}" ]; then
-  adb shell am force-stop kg.com.stroy.app >/dev/null 2>&1 || true
-  adb shell monkey -p kg.com.stroy.app 1 >/dev/null 2>&1 || true
-  sleep 15
-  adb exec-out screencap -p >"$RUNNER_TEMP/maestro-startup.png" 2>/dev/null || true
-  adb shell uiautomator dump /sdcard/maestro-startup.xml >/dev/null 2>&1 || true
-  adb pull /sdcard/maestro-startup.xml "$RUNNER_TEMP/maestro-startup.xml" >/dev/null 2>&1 || true
-  adb shell dumpsys activity activities >"$RUNNER_TEMP/maestro-activity.txt" 2>/dev/null || true
-  adb shell am force-stop kg.com.stroy.app >/dev/null 2>&1 || true
-fi
 
 # GitHub-hosted runners use a software-rendered emulator without KVM.  The
 # Maestro Android driver can need several minutes to install, dex-opt, and
