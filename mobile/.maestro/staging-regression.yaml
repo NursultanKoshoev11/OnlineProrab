@@ -1,0 +1,156 @@
+appId: kg.com.stroy.app
+
+---
+# Authenticate with the staging-only phone/code pair supplied by the workflow.
+- runFlow:
+    file: staging-login.yaml
+
+# Projects list: search, archive filter, and empty-form validation.
+- assertVisible: "Добавить объект"
+- assertVisible: "Объекты"
+- tapOn: "Поиск объектов"
+- inputText: "maestro-no-match-9f3b"
+- assertVisible: "Ничего не найдено"
+- tapOn: "Очистить поиск объектов"
+- assertVisible: "Добавить объект"
+- tapOn: "Архивные объекты"
+- extendedWaitUntil:
+    visible: "Архив объектов"
+    timeout: 30000
+- assertNotVisible: "Не удалось загрузить"
+- tapOn: "Архивные объекты"
+- extendedWaitUntil:
+    visible: "Объекты"
+    timeout: 30000
+- tapOn: "Добавить объект"
+- extendedWaitUntil:
+    visible: "Новый объект"
+    timeout: 30000
+- assertVisible: "Создать объект"
+- tapOn: "Создать объект"
+- extendedWaitUntil:
+    visible: "Введите название объекта"
+    timeout: 10000
+- pressKey: BACK
+
+# Open the existing staging project. The staging fixture has an active project;
+# the regex also tolerates the dynamic project name and line break.
+- tapOn:
+    text: "(?s)^В работе.*"
+- extendedWaitUntil:
+    visible: "Обзор объекта"
+    timeout: 60000
+- assertNotVisible: "Не удалось загрузить"
+- assertVisible: "Всего потрачено"
+- assertVisible: "Разделы объекта"
+- assertVisible: "Команда"
+- assertVisible: "Расходы"
+- assertVisible: "Отчёт"
+
+# Expense screen: local search, voice-consent gate, and receipt picker entrypoint.
+- tapOn: "Расходы"
+- extendedWaitUntil:
+    visible: "Поиск расходов"
+    timeout: 30000
+- assertVisible: "Добавить расход"
+- tapOn: "Голосовой поиск расходов"
+- extendedWaitUntil:
+    visible: "Обработка голосового поиска"
+    timeout: 10000
+- tapOn: "Отмена"
+- tapOn: "Поиск расходов"
+- inputText: "maestro-no-match-9f3b"
+- assertVisible: "Расходы не найдены"
+- tapOn: "Очистить поиск расходов"
+- tapOn: "Добавить расход"
+- extendedWaitUntil:
+    visible: "Сохранить расход"
+    timeout: 20000
+- assertVisible: "Например: Цемент М500"
+- assertVisible: "Прикрепить фото или PDF"
+- tapOn: "Прикрепить фото или PDF"
+- extendedWaitUntil:
+    visible: "Выбрать фото"
+    timeout: 10000
+- assertVisible: "Выбрать файл"
+- pressKey: BACK
+- pressKey: BACK
+
+# Reports, team, support, and the non-payment subscription screen.
+- tapOn: "Отчёты"
+- extendedWaitUntil:
+    visible: "Отчёт"
+    timeout: 30000
+- tapOn: "Ещё"
+- extendedWaitUntil:
+    visible: "Разделы"
+    timeout: 30000
+- tapOn: "Команда"
+- extendedWaitUntil:
+    visible: "Команда объекта"
+    timeout: 30000
+- assertVisible: "Добавить участника"
+- tapOn: "Добавить участника"
+- extendedWaitUntil:
+    visible: "Номер телефона"
+    timeout: 10000
+- assertVisible: "Роль"
+- assertVisible: "Пригласить"
+- tapOn: "Отмена"
+- pressKey: BACK
+- tapOn: "Техподдержка"
+- extendedWaitUntil:
+    visible: "Техподдержка"
+    timeout: 30000
+- tapOn: "Отправить обращение"
+- extendedWaitUntil:
+    visible: "Напишите сообщение"
+    timeout: 10000
+- pressKey: BACK
+- tapOn: "Отчёт расходов"
+- extendedWaitUntil:
+    visible: "Отчёт"
+    timeout: 30000
+- tapOn: "Ещё"
+- tapOn: "Подписка и доступ"
+- extendedWaitUntil:
+    visible: "Выберите план"
+    timeout: 30000
+- assertVisible: "Пробный"
+- assertVisible: "Стандартный"
+- assertVisible: "Максимальный"
+# Payment buttons are deliberately not tapped in this suite.
+- pressKey: BACK
+- tapOn: "Обзор"
+
+# Repeat all workspace tab transitions 100 times. This is intentionally
+# read-only: it stresses navigation, rebuilds, section loading, and state
+# restoration without creating projects, expenses, or payments.
+- repeat:
+    times: 100
+    commands:
+      - tapOn: "Расходы"
+      - assertVisible: "Поиск расходов"
+      - tapOn: "Отчёты"
+      - assertVisible: "Отчёт"
+      - tapOn: "Ещё"
+      - assertVisible: "Разделы"
+      - tapOn: "Обзор"
+      - assertVisible: "Обзор объекта"
+
+# Return to the list and verify the profile sheet and sign-out path.
+- pressKey: BACK
+- extendedWaitUntil:
+    visible: "Добавить объект"
+    timeout: 30000
+- tapOn: "Профиль"
+- extendedWaitUntil:
+    visible: "Подписка и оплата"
+    timeout: 20000
+- assertVisible: "Выйти"
+- assertVisible: "Удалить аккаунт"
+- tapOn: "Выйти"
+- extendedWaitUntil:
+    visible: "Номер телефона"
+    timeout: 30000
+- assertVisible: "Получить код"

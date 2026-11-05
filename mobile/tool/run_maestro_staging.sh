@@ -78,12 +78,12 @@ test "$installed" -eq 1
 # start on that constrained path, so keep the timeout explicit and bounded.
 export MAESTRO_DRIVER_STARTUP_TIMEOUT="300000"
 set +e
-timeout --signal=TERM --kill-after=30s 900s maestro test \
+timeout --signal=TERM --kill-after=30s 1800s maestro test \
   --env "STAGING_TEST_PHONE=$STAGING_TEST_PHONE" \
   --env "STAGING_TEST_CODE=$STAGING_TEST_CODE" \
   --format junit \
   --output "$RUNNER_TEMP/maestro-results.xml" \
-  mobile/.maestro/staging-login.yaml
+  mobile/.maestro/staging-regression.yaml
 maestro_status=$?
 set -e
 exit "$maestro_status"

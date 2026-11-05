@@ -1,6 +1,7 @@
 # Maestro staging smoke test
 
-The repository keeps the Maestro flow in `.maestro/staging-login.yaml`. It is
+The repository keeps the login flow in `.maestro/staging-login.yaml` and the
+full non-payment regression flow in `.maestro/staging-regression.yaml`. It is
 intentionally staging-only: the workflow rejects every API URL except
 `https://stroy.com.kg/staging-api` and never uses the production API.
 
@@ -22,9 +23,13 @@ The backend must have the same phone/code pair configured with
 Open **Actions → Mobile Maestro staging smoke → Run workflow** and keep the
 default API URL. The job first checks `/ready`, builds a profile APK with
 `OFFLINE_DEMO=false`, starts a clean Android API 30 `pixel_2` emulator, and
-runs the login-to-workspace flow with a pinned, checksum-verified Maestro CLI.
+runs the login-to-workspace flow, project search/form validation, expense
+search and receipt-picker checks, reports, team invite validation, support
+validation, subscription-plan rendering (without tapping payment), profile
+and sign-out checks, and 100 read-only workspace tab-transition iterations
+with a pinned, checksum-verified Maestro CLI.
 The runner waits for Android package and storage services after boot, allows up
-to 60 minutes for the hosted emulator, and bounds the Maestro command to 15
+to 60 minutes for the hosted emulator, and bounds the Maestro command to 30
 minutes so a runner hang produces a diagnostic failure.
 A JUnit result artifact is retained for 14 days.
 
@@ -33,8 +38,10 @@ On slow software-rendered runners Android may briefly show the system-level
 flow dismisses that dialog with the safe `Wait` action when it is present; it
 does not bypass an application error or change production behavior.
 
-The flow deliberately stops after the authenticated workspace is visible. It
-does not create projects or expenses, so repeated runs do not consume project
-limits or leave test data behind. The existing Flutter integration test remains
-the broader server-flow test; a separate fixture-backed Maestro flow can be
-added once a disposable staging project is provisioned.
+The flow deliberately does not submit project, expense, invite, support, or
+payment forms. It uses empty-form validation and opens selectors without
+committing data, so repeated runs do not consume project limits or leave new
+test data behind. Payment/O!Bank controls are explicitly not tapped. The
+existing Flutter integration test remains the broader server-flow test; push
+delivery, speech recognition accuracy, and multi-device realtime delivery
+still require device/service-specific tests rather than a single UI flow.
