@@ -79,6 +79,8 @@ test "$installed" -eq 1
 export MAESTRO_DRIVER_STARTUP_TIMEOUT="300000"
 set +e
 timeout --signal=TERM --kill-after=30s 900s maestro test \
+  --env "STAGING_TEST_PHONE=$STAGING_TEST_PHONE" \
+  --env "STAGING_TEST_CODE=$STAGING_TEST_CODE" \
   --format junit \
   --output "$RUNNER_TEMP/maestro-results.xml" \
   mobile/.maestro/staging-login.yaml
