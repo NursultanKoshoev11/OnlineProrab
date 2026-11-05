@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-apk_path="mobile/build/app/outputs/flutter-apk/app-debug.apk"
+apk_path="mobile/build/app/outputs/flutter-apk/app-release.apk"
 installed=0
 
 capture_diagnostics() {
