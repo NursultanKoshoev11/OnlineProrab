@@ -65,12 +65,30 @@ jobs:
 
       - name: Build staging profile APK
         working-directory: mobile
-        run: >-
-          flutter build apk --profile
-          --dart-define=API_BASE_URL=$STAGING_API_BASE_URL
-          --dart-define=OFFLINE_DEMO=false
-          --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true
-          --dart-define=OBANK_STAGING_BUILD=true
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_args=(
+            apk
+            --profile
+            "--dart-define=API_BASE_URL=$STAGING_API_BASE_URL"
+            --dart-define=OFFLINE_DEMO=false
+            --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true
+            --dart-define=OBANK_STAGING_BUILD=true
+          )
+
+          for attempt in 1 2 3; do
+            echo "Building staging profile APK (attempt $attempt/3)"
+            if flutter build "${build_args[@]}"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 20))
+            fi
+          done
+
+          echo "Flutter profile APK build failed after 3 attempts" >&2
+          exit 1
 
       - name: Install pinned Maestro CLI
         shell: bash
