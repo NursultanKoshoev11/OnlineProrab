@@ -80,10 +80,12 @@ test "$installed" -eq 1
 # the dialog is present and keep doing so while Maestro starts.
 dismiss_system_anr() {
   local window_dump
-  window_dump="$(adb shell dumpsys window windows 2>/dev/null || true)"
+  # dumpsys can block while system_server is the process reporting the ANR;
+  # never let recovery itself hold the workflow open.
+  window_dump="$(timeout --signal=KILL 8s adb shell dumpsys window windows 2>/dev/null || true)"
   if printf '%s\n' "$window_dump" | grep -q 'Application Not Responding: system'; then
     echo "Android system ANR dialog detected; selecting Wait"
-    adb shell input tap 360 1088 >/dev/null 2>&1 || true
+    timeout --signal=KILL 5s adb shell input tap 360 1088 >/dev/null 2>&1 || true
     sleep 3
   fi
 }
