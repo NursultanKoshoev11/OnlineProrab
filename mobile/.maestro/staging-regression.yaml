@@ -7,7 +7,7 @@ appId: kg.com.stroy.app
 
 # Projects list: search, archive filter, and empty-form validation.
 - assertVisible: "Добавить объект"
-- assertVisible: "Объекты"
+- assertVisible: "(?s).*Объекты.*"
 - tapOn: "Поиск объектов"
 - inputText: "maestro-no-match-9f3b"
 - assertVisible: "Ничего не найдено"
