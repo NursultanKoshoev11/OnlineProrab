@@ -76,27 +76,13 @@ test "$installed" -eq 1
 # The hosted Google-API emulator can briefly show Android's system ANR dialog
 # while Google/permission services finish starting.  That dialog is outside
 # Maestro's accessibility tree, so a text-based `tapOn: Wait` is not reliable.
-# The runner uses the fixed `pixel_2` profile (1080x1920); tap the Wait row when
-# the dialog is present and keep doing so while Maestro starts.
-dismiss_system_anr() {
-  local window_dump
-  # dumpsys can block while system_server is the process reporting the ANR;
-  # never let recovery itself hold the workflow open.
-  window_dump="$(timeout --signal=KILL 8s adb shell dumpsys window windows 2>/dev/null || true)"
-  if printf '%s\n' "$window_dump" | grep -q 'Application Not Responding: system'; then
-    echo "Android system ANR dialog detected; selecting Wait"
-    timeout --signal=KILL 5s adb shell input tap 360 1088 >/dev/null 2>&1 || true
-    sleep 3
-  fi
-}
-
-dismiss_system_anr
-
-# Keep the recovery active during Maestro startup.  This only interacts with
-# the Android system ANR dialog; it never taps application controls.
+# The runner uses the fixed `pixel_2` profile (1080x1920), where the Wait row is
+# at approximately (360,1088).  Tap that row for a bounded startup window.  We
+# deliberately avoid `dumpsys`: system_server may be the process reporting the
+# ANR and a dumpsys call can block the runner itself.
 (
-  while true; do
-    dismiss_system_anr
+  for attempt in $(seq 1 60); do
+    timeout --signal=KILL 5s adb shell input tap 360 1088 >/dev/null 2>&1 || true
     sleep 2
   done
 ) &
