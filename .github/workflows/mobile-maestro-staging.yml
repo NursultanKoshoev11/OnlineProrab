@@ -91,6 +91,16 @@ jobs:
           echo "$(dirname "$maestro_bin")" >> "$GITHUB_PATH"
           "$maestro_bin" --version
 
+      - name: Prepare resilient ADB wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrapper_dir="$RUNNER_TEMP/adb-wrapper"
+          mkdir -p "$wrapper_dir"
+          cp mobile/tool/adb-retry-wrapper.sh "$wrapper_dir/adb"
+          chmod +x "$wrapper_dir/adb"
+          echo "$wrapper_dir" >> "$GITHUB_PATH"
+
       - name: Run Maestro on Android emulator
         uses: ReactiveCircus/android-emulator-runner@324029e2f414c084d8b15ba075288885e74aef9c # v2.34.0
         with:
