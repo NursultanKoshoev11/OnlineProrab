@@ -63,10 +63,10 @@ jobs:
         working-directory: mobile
         run: flutter pub get --enforce-lockfile
 
-      - name: Build staging release APK
+      - name: Build staging profile APK
         working-directory: mobile
         run: >-
-          flutter build apk --release
+          flutter build apk --profile
           --dart-define=API_BASE_URL=$STAGING_API_BASE_URL
           --dart-define=OFFLINE_DEMO=false
           --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true
