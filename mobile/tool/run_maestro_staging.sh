@@ -73,11 +73,45 @@ done
 
 test "$installed" -eq 1
 
+# The hosted Google-API emulator can briefly show Android's system ANR dialog
+# while Google/permission services finish starting.  That dialog is outside
+# Maestro's accessibility tree, so a text-based `tapOn: Wait` is not reliable.
+# The runner uses the fixed `pixel_2` profile (1080x1920); tap the Wait row when
+# the dialog is present and keep doing so while Maestro starts.
+dismiss_system_anr() {
+  local window_dump
+  window_dump="$(adb shell dumpsys window windows 2>/dev/null || true)"
+  if printf '%s\n' "$window_dump" | grep -q 'Application Not Responding: system'; then
+    echo "Android system ANR dialog detected; selecting Wait"
+    adb shell input tap 360 1088 >/dev/null 2>&1 || true
+    sleep 3
+  fi
+}
+
+dismiss_system_anr
+
+# Keep the recovery active during Maestro startup.  This only interacts with
+# the Android system ANR dialog; it never taps application controls.
+(
+  while true; do
+    dismiss_system_anr
+    sleep 2
+  done
+) &
+anr_watcher_pid=$!
+
 # GitHub-hosted runners use a software-rendered emulator without KVM.  The
 # Maestro Android driver can need several minutes to install, dex-opt, and
 # start on that constrained path, so keep the timeout explicit and bounded.
 export MAESTRO_DRIVER_STARTUP_TIMEOUT="300000"
+set +e
 timeout --signal=TERM --kill-after=30s 900s maestro test \
   --format junit \
   --output "$RUNNER_TEMP/maestro-results.xml" \
   mobile/.maestro/staging-login.yaml
+maestro_status=$?
+set -e
+
+kill "$anr_watcher_pid" >/dev/null 2>&1 || true
+wait "$anr_watcher_pid" >/dev/null 2>&1 || true
+exit "$maestro_status"
