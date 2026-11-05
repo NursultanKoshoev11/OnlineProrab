@@ -104,7 +104,7 @@ jobs:
       - name: Run Maestro on Android emulator
         uses: ReactiveCircus/android-emulator-runner@324029e2f414c084d8b15ba075288885e74aef9c # v2.34.0
         with:
-          api-level: 34
+          api-level: 30
           # The login smoke test needs the Android framework and network only;
           # the Google-APIs image adds background services that intermittently
           # ANR on hosted runners before Maestro can attach.
