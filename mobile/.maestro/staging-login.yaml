@@ -20,7 +20,7 @@ appId: kg.com.stroy.app
 - inputText: ${STAGING_TEST_CODE}
 - tapOn: "Войти"
 - extendedWaitUntil:
-    visible: "Текущие проекты"
+    visible: "Добавить объект"
     timeout: 120000
-- assertVisible: "Объекты"
+- assertVisible: "Добавить объект"
 - assertNotVisible: "Не удалось загрузить"

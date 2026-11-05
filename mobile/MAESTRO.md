@@ -20,8 +20,8 @@ The backend must have the same phone/code pair configured with
 ## Run it
 
 Open **Actions → Mobile Maestro staging smoke → Run workflow** and keep the
-default API URL. The job first checks `/ready`, builds a debug APK with
-`OFFLINE_DEMO=false`, starts a clean Android API 34 `pixel_2` emulator, and
+default API URL. The job first checks `/ready`, builds a profile APK with
+`OFFLINE_DEMO=false`, starts a clean Android API 30 `pixel_2` emulator, and
 runs the login-to-workspace flow with a pinned, checksum-verified Maestro CLI.
 The runner waits for Android package and storage services after boot, allows up
 to 60 minutes for the hosted emulator, and bounds the Maestro command to 15
