@@ -102,6 +102,18 @@ appId: kg.com.stroy.app
 - assertVisible: "Например: Цемент М500"
 - assertVisible: "Прикрепить фото или PDF"
 - hideKeyboard
+# Close the form before using the workspace navigation. The first BACK hides
+# the IME when it is still present; the conditional second BACK dismisses the
+# bottom sheet without accidentally leaving the project workspace.
+- pressKey: BACK
+- runFlow:
+    when:
+      visible: "Сохранить расход"
+    commands:
+      - pressKey: BACK
+- extendedWaitUntil:
+    visible: "Расходы объекта"
+    timeout: 10000
 
 # Reports, team, support, and the non-payment subscription screen.
 - tapOn:
