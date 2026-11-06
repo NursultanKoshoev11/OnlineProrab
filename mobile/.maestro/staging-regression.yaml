@@ -88,7 +88,10 @@ appId: kg.com.stroy.app
 - tapOn: "Отмена"
 - tapOn: "Поиск расходов"
 - inputText: "maestro-no-match-9f3b"
-- assertVisible: "Расходы не найдены"
+- pressKey: BACK
+- extendedWaitUntil:
+    visible: "Расходы не найдены"
+    timeout: 10000
 - tapOn: "Очистить поиск расходов"
 - tapOn: "Добавить расход"
 - extendedWaitUntil:
