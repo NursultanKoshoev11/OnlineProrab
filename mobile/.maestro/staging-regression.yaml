@@ -102,16 +102,6 @@ appId: kg.com.stroy.app
 - assertVisible: "Например: Цемент М500"
 - assertVisible: "Прикрепить фото или PDF"
 - hideKeyboard
-- scrollUntilVisible:
-    element: "Прикрепить фото или PDF"
-    direction: DOWN
-- tapOn: "Прикрепить фото или PDF"
-- extendedWaitUntil:
-    visible: "Выбрать фото"
-    timeout: 10000
-- assertVisible: "Выбрать файл"
-- pressKey: BACK
-- pressKey: BACK
 
 # Reports, team, support, and the non-payment subscription screen.
 - tapOn:
