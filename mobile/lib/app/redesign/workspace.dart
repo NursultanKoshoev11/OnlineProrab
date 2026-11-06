@@ -237,25 +237,45 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
         selectedIndex: _tab,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (value) => setState(() => _tab = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard_rounded),
+        destinations: [
+          Semantics(
+            container: true,
+            button: true,
             label: 'Обзор',
+            child: NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard_rounded),
+              label: 'Обзор',
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded),
+          Semantics(
+            container: true,
+            button: true,
             label: 'Расходы',
+            child: NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined),
+              selectedIcon: Icon(Icons.receipt_long_rounded),
+              label: 'Расходы',
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.assignment_outlined),
-            selectedIcon: Icon(Icons.assignment_rounded),
+          Semantics(
+            container: true,
+            button: true,
             label: 'Отчёты',
+            child: NavigationDestination(
+              icon: Icon(Icons.assignment_outlined),
+              selectedIcon: Icon(Icons.assignment_rounded),
+              label: 'Отчёты',
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz_rounded),
+          Semantics(
+            container: true,
+            button: true,
             label: 'Ещё',
+            child: NavigationDestination(
+              icon: Icon(Icons.more_horiz_rounded),
+              label: 'Ещё',
+            ),
           ),
         ],
       ),
