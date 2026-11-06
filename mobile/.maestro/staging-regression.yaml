@@ -124,7 +124,7 @@ appId: kg.com.stroy.app
 - tapOn:
     point: "87%, 88%"
 - extendedWaitUntil:
-    visible: "Разделы"
+    visible: "(?s).*Разделы.*"
     timeout: 30000
 - tapOn: "Команда"
 - extendedWaitUntil:
@@ -179,7 +179,7 @@ appId: kg.com.stroy.app
       - assertVisible: "(?s).*Отчёт.*"
       - tapOn:
           point: "87%, 88%"
-      - assertVisible: "Разделы"
+      - assertVisible: "(?s).*Разделы.*"
       - tapOn:
           point: "12%, 88%"
       - assertVisible: "Обзор объекта"
