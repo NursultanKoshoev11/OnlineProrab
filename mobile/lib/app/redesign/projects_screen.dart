@@ -279,6 +279,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
         ),
         child: NavigationBar(
           selectedIndex: 0,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           onDestinationSelected: (index) {
             if (index == 1) _showProfile();
           },

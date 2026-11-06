@@ -235,6 +235,7 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
             ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         onDestinationSelected: (value) => setState(() => _tab = value),
         destinations: const [
           NavigationDestination(
