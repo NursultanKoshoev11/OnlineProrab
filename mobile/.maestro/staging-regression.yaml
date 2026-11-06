@@ -45,7 +45,7 @@ appId: kg.com.stroy.app
 
 - tapOn: "Архивные объекты"
 - extendedWaitUntil:
-    visible: "Архив объектов"
+    visible: "(?s).*Архив объектов.*"
     timeout: 30000
 - assertNotVisible: "Не удалось загрузить"
 - tapOn: "Архивные объекты"

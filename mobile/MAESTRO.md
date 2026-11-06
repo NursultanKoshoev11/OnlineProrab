@@ -38,10 +38,11 @@ On slow software-rendered runners Android may briefly show the system-level
 flow dismisses that dialog with the safe `Wait` action when it is present; it
 does not bypass an application error or change production behavior.
 
-The flow deliberately does not submit project, expense, invite, support, or
-payment forms. It uses empty-form validation and opens selectors without
-committing data, so repeated runs do not consume project limits or leave new
-test data behind. Payment/O!Bank controls are explicitly not tapped. The
-existing Flutter integration test remains the broader server-flow test; push
-delivery, speech recognition accuracy, and multi-device realtime delivery
-still require device/service-specific tests rather than a single UI flow.
+The flow does not submit expense, invite, support, or payment forms. If the
+staging account has no active project, it creates one deterministic
+`Maestro QA Object` so the workspace checks can run; later runs reuse it. The
+project form is also opened once with an empty submission to verify validation.
+Payment/O!Bank controls are explicitly not tapped. The existing Flutter
+integration test remains the broader server-flow test; push delivery, speech
+recognition accuracy, and multi-device realtime delivery still require
+device/service-specific tests rather than a single UI flow.
