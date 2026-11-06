@@ -107,7 +107,7 @@ appId: kg.com.stroy.app
 - tapOn:
     point: "62%, 88%"
 - extendedWaitUntil:
-    visible: "Отчёт расходов"
+    visible: "(?s).*Отчёт.*"
     timeout: 30000
 - tapOn:
     point: "87%, 88%"
@@ -138,7 +138,7 @@ appId: kg.com.stroy.app
 - pressKey: BACK
 - tapOn: "Отчёт расходов"
 - extendedWaitUntil:
-    visible: "Отчёт расходов"
+    visible: "(?s).*Отчёт.*"
     timeout: 30000
 - tapOn: "Ещё"
 - tapOn: "Подписка и доступ"
@@ -164,7 +164,7 @@ appId: kg.com.stroy.app
       - assertVisible: "Поиск расходов"
       - tapOn:
           point: "62%, 88%"
-      - assertVisible: "Отчёт расходов"
+      - assertVisible: "(?s).*Отчёт.*"
       - tapOn:
           point: "87%, 88%"
       - assertVisible: "Разделы"
