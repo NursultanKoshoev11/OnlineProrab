@@ -75,7 +75,8 @@ appId: kg.com.stroy.app
 - assertVisible: "(?s).*Разделы объекта.*"
 
 # Expense screen: local search, voice-consent gate, and receipt picker entrypoint.
-- tapOn: "Расходы"
+- tapOn:
+    point: "37%, 88%"
 - extendedWaitUntil:
     visible: "Поиск расходов"
     timeout: 30000
@@ -104,11 +105,13 @@ appId: kg.com.stroy.app
 - pressKey: BACK
 
 # Reports, team, support, and the non-payment subscription screen.
-- tapOn: "Отчёты"
+- tapOn:
+    point: "62%, 88%"
 - extendedWaitUntil:
     visible: "Отчёт"
     timeout: 30000
-- tapOn: "Ещё"
+- tapOn:
+    point: "87%, 88%"
 - extendedWaitUntil:
     visible: "Разделы"
     timeout: 30000
@@ -148,7 +151,8 @@ appId: kg.com.stroy.app
 - assertVisible: "Максимальный"
 # Payment buttons are deliberately not tapped in this suite.
 - pressKey: BACK
-- tapOn: "Обзор"
+- tapOn:
+    point: "12%, 88%"
 
 # Repeat all workspace tab transitions 100 times. This is intentionally
 # read-only: it stresses navigation, rebuilds, section loading, and state
@@ -156,13 +160,17 @@ appId: kg.com.stroy.app
 - repeat:
     times: 100
     commands:
-      - tapOn: "Расходы"
+      - tapOn:
+          point: "37%, 88%"
       - assertVisible: "Поиск расходов"
-      - tapOn: "Отчёты"
+      - tapOn:
+          point: "62%, 88%"
       - assertVisible: "Отчёт"
-      - tapOn: "Ещё"
+      - tapOn:
+          point: "87%, 88%"
       - assertVisible: "Разделы"
-      - tapOn: "Обзор"
+      - tapOn:
+          point: "12%, 88%"
       - assertVisible: "Обзор объекта"
 
 # Return to the list and verify the profile sheet and sign-out path.
