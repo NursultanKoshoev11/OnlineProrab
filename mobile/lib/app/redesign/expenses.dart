@@ -322,6 +322,10 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   }
 
   Future<void> _voiceSearch() async {
+    // A focused search field can keep the Android IME above the modal sheet.
+    // Clear it before opening the consent/dialog flow so the sheet receives
+    // the full viewport on both Android and iOS.
+    FocusManager.instance.primaryFocus?.unfocus();
     final preferences = await SharedPreferences.getInstance();
     final consentGiven =
         preferences.getBool(_voiceProcessingConsentKey) ?? false;
@@ -478,6 +482,9 @@ class _ExpensesTabState extends State<_ExpensesTab> {
   }
 
   Future<void> _addExpense() async {
+    // Dismiss the search IME before presenting the form. Without this, the
+    // keyboard can cover the sheet and intercept the next workspace-tab tap.
+    FocusManager.instance.primaryFocus?.unfocus();
     final result = await showModalBottomSheet<RemoteCostItem>(
       context: context,
       isScrollControlled: true,
