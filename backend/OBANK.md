@@ -20,28 +20,13 @@ separate hosted-paylink fallback. The API only accepts the bank's HTTPS
 Sandbox links must
 be opened in O!Bank's test app; the production app rejects test invoices.
 
-The production Android and iOS builds can open the live `app_link` directly from
-the subscription screen when `OBANK_NATIVE_CHECKOUT_ENABLED=true` is passed at
-compile time and the API host is `api.stroy.com.kg`. Staging keeps the native flow
-restricted to debug builds and the sandbox API. The app checks payment status with
-the backend when the user returns from O!Bank. Before distributing a store build,
-confirm that the applicable Apple and Google billing rules or an approved
-alternative-billing program permit this external subscription payment flow.
-
-Build an internal Android test APK with the staging API host and the two flags
-above, plus `OFFLINE_DEMO=false`:
-
-```sh
-cd mobile
-flutter build apk --debug \
-  --dart-define=API_BASE_URL=https://<staging-api-host> \
-  --dart-define=OFFLINE_DEMO=false \
-  --dart-define=OBANK_NATIVE_CHECKOUT_ENABLED=true \
-  --dart-define=OBANK_STAGING_BUILD=true
-```
-
-Store release workflows explicitly disable both flags. Never point the internal
-payment build at the production API while sandbox credentials are configured.
+The Android and iOS apps do not create O!Bank invoices and do not open O!Bank
+app links. All subscription payments start on the STROY billing website at
+`https://stroy.com.kg/billing/`. After the browser payment callback is verified,
+the mobile app refreshes `/api/v1/subscriptions/status` when it returns to the
+foreground, so the paid plan becomes available on the phone without a second
+mobile checkout flow. Never point a mobile build at a payment-specific staging
+flow while sandbox credentials are configured.
 
 ## Merchant setup
 

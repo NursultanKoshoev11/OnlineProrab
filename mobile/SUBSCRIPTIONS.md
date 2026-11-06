@@ -36,10 +36,9 @@ Rules:
 - The owner is not counted in the invited participant limit.
 - Project limits count active, non-deleted projects.
 - Pending invitations count toward the participant limit.
-- App Store and Google Play release builds do not launch external O!Bank payment
-  links for the digital subscription. An internal sideloaded staging build can
-  open the invoice-specific bank link and check payment status after returning.
-- The STROY billing website also offers the O!Bank app link on mobile browsers,
-  with the bank's hosted web payment as a fallback.
+- Android and iOS builds do not launch external O!Bank payment links for the
+  digital subscription. All payments start on the STROY billing website.
+- When the app returns from the browser, it refreshes subscription state from
+  the backend so a verified website payment unlocks the phone app.
 - App Store and Google Play builds must use their store billing systems unless
   the applicable alternative-billing program and storefront are confirmed.

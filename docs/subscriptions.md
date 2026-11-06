@@ -15,11 +15,10 @@ Mobile purchases:
 
 Bank checkout:
 
-- App Store and Google Play release builds do not launch external bank payment
-  links for the digital subscription. An internal staging build can open the
-  invoice-specific O!Bank app link and check payment status after return. The
-  billing website also offers the bank app link on mobile browsers, with its
-  hosted-paylink fallback.
+- Android and iOS builds do not launch external bank payment links for the
+  digital subscription. All payments start on the STROY billing website. When
+  the app returns from the browser, it refreshes subscription state from the
+  backend so a verified website payment unlocks the phone app.
 - Do not unlock a plan from a screenshot or client-side flag. The backend must
   verify a business payment callback or a bank-approved payment reference.
 - The project owner owns the subscription; invited members consume the owner's
