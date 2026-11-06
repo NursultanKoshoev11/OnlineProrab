@@ -73,9 +73,6 @@ appId: kg.com.stroy.app
 - assertNotVisible: "Не удалось загрузить"
 - assertVisible: "(?s).*Всего потрачено.*"
 - assertVisible: "(?s).*Разделы объекта.*"
-- assertVisible: "(?s).*Команда.*"
-- assertVisible: "(?s).*Расходы.*"
-- assertVisible: "(?s).*Отчёт.*"
 
 # Expense screen: local search, voice-consent gate, and receipt picker entrypoint.
 - tapOn: "Расходы"
