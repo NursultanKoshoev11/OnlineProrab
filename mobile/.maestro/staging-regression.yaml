@@ -10,9 +10,39 @@ appId: kg.com.stroy.app
 - assertVisible: "(?s).*Объекты.*"
 - tapOn: "Поиск объектов"
 - inputText: "maestro-no-match-9f3b"
-- assertVisible: "Ничего не найдено"
+- runFlow:
+    when:
+      visible: "Ничего не найдено"
+    commands:
+      - assertVisible: "Ничего не найдено"
+- runFlow:
+    when:
+      visible: "Пока нет объектов"
+    commands:
+      - assertVisible: "Пока нет объектов"
 - tapOn: "Очистить поиск объектов"
 - assertVisible: "Добавить объект"
+
+# The staging account may start with no projects. Seed one deterministic,
+# non-payment project so the rest of the regression can exercise the workspace.
+- runFlow:
+    when:
+      visible: "Пока нет объектов"
+    commands:
+      - tapOn: "Добавить объект"
+      - extendedWaitUntil:
+          visible: "Новый объект"
+          timeout: 30000
+      - tapOn: "Например: Дом в Кок-Жаре"
+      - inputText: "Maestro QA Object"
+      - tapOn: "Например: с. Кок-Жар, ул. Центральная, 10"
+      - inputText: "Maestro QA Address"
+      - pressKey: BACK
+      - tapOn: "Создать объект"
+      - extendedWaitUntil:
+          visible: "Добавить объект"
+          timeout: 60000
+
 - tapOn: "Архивные объекты"
 - extendedWaitUntil:
     visible: "Архив объектов"
@@ -20,7 +50,7 @@ appId: kg.com.stroy.app
 - assertNotVisible: "Не удалось загрузить"
 - tapOn: "Архивные объекты"
 - extendedWaitUntil:
-    visible: "Объекты"
+    visible: "(?s).*Объекты.*"
     timeout: 30000
 - tapOn: "Добавить объект"
 - extendedWaitUntil:
