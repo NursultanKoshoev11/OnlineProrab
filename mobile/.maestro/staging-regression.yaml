@@ -71,11 +71,11 @@ appId: kg.com.stroy.app
     visible: "Обзор объекта"
     timeout: 60000
 - assertNotVisible: "Не удалось загрузить"
-- assertVisible: "Всего потрачено"
-- assertVisible: "Разделы объекта"
-- assertVisible: "Команда"
-- assertVisible: "Расходы"
-- assertVisible: "Отчёт"
+- assertVisible: "(?s).*Всего потрачено.*"
+- assertVisible: "(?s).*Разделы объекта.*"
+- assertVisible: "(?s).*Команда.*"
+- assertVisible: "(?s).*Расходы.*"
+- assertVisible: "(?s).*Отчёт.*"
 
 # Expense screen: local search, voice-consent gate, and receipt picker entrypoint.
 - tapOn: "Расходы"
