@@ -101,8 +101,11 @@ appId: kg.com.stroy.app
     timeout: 20000
 - assertVisible: "Например: Цемент М500"
 - assertVisible: "Прикрепить фото или PDF"
-- tapOn: "Прикрепить фото или PDF"
 - hideKeyboard
+- scrollUntilVisible:
+    element: "Прикрепить фото или PDF"
+    direction: DOWN
+- tapOn: "Прикрепить фото или PDF"
 - extendedWaitUntil:
     visible: "Выбрать фото"
     timeout: 10000
