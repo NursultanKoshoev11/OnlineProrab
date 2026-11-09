@@ -22,11 +22,18 @@ jobs:
           compose_project="${API_DEPLOY_COMPOSE_PROJECT:-backend}"
           env_file="$deploy_path/.env"
           current_link="$deploy_path/current"
-          if [[ ! -L "$current_link" ]]; then
-            echo "managed current release pointer is missing" >&2
-            exit 1
+          if [[ -L "$current_link" ]]; then
+            current_release="$(readlink -f -- "$current_link")"
+          else
+            echo "managed current release pointer is missing; selecting the previous release recorded by the interrupted deploy"
+            latest_release="$(find "$deploy_path/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
+            previous_ref="$(cat -- "$latest_release/previous-release" 2>/dev/null || true)"
+            if [[ "$previous_ref" =~ ^releases/(baseline|[0-9a-f]{40})$ && -d "$deploy_path/$previous_ref" ]]; then
+              current_release="$deploy_path/$previous_ref"
+            else
+              current_release="$latest_release"
+            fi
           fi
-          current_release="$(readlink -f -- "$current_link")"
           compose_file="$current_release/backend/docker-compose.prod.yml"
           image_ref="$(cat -- "$current_release/image-tag")"
           [[ "$current_release" == "$deploy_path/releases/"* ]]
