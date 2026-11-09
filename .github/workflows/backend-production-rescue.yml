@@ -1,0 +1,84 @@
+name: Backend Production Rescue
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rescue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production-api
+    env:
+      DEPLOY_HOST: 13.50.100.226
+      DEPLOY_USER: ${{ vars.API_DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
+      COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
+      DEPLOY_SSH_KEY: ${{ secrets.API_DEPLOY_SSH_KEY }}
+    steps:
+      - name: Stop the stuck recovery and restore the API
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d "$RUNNER_TEMP/ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/ssh/id_ed25519"
+          chmod 600 "$RUNNER_TEMP/ssh/id_ed25519"
+          ssh_opts=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -i "$RUNNER_TEMP/ssh/id_ed25519")
+          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH=$DEPLOY_PATH COMPOSE_PROJECT=$COMPOSE_PROJECT bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_path="${DEPLOY_PATH:-/opt/stroy-api}"
+          compose_project="${COMPOSE_PROJECT:-backend}"
+          env_file="$deploy_path/.env"
+          current_link="$deploy_path/current"
+
+          # The self-hosted runner is on this same host. Stop only the interrupted
+          # API Compose command so the recovery can release Docker's project lock.
+          mapfile -t stuck_pids < <(ps -eo pid=,args= | awk '/docker compose/ && /docker-compose\.prod\.yml/ {print $1}')
+          for pid in "${stuck_pids[@]}"; do
+            [[ "$pid" =~ ^[0-9]+$ ]] && kill -TERM "$pid" 2>/dev/null || true
+          done
+          sleep 3
+
+          stale_ids="$(docker ps --all --quiet --filter name=stroy-api || true)"
+          if [[ -n "$stale_ids" ]]; then
+            docker rm --force $stale_ids || true
+          fi
+
+          if [[ -L "$current_link" ]]; then
+            current_release="$(readlink -f -- "$current_link")"
+          else
+            latest_release="$(find "$deploy_path/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2- || true)"
+            [[ -n "$latest_release" ]]
+            previous_ref="$(cat -- "$latest_release/previous-release" 2>/dev/null || true)"
+            if [[ -n "$previous_ref" && -d "$deploy_path/$previous_ref" ]]; then
+              current_release="$deploy_path/$previous_ref"
+            else
+              current_release="$latest_release"
+            fi
+          fi
+
+          compose_file="$current_release/backend/docker-compose.prod.yml"
+          image_ref="$(cat -- "$current_release/image-tag")"
+          [[ "$current_release" == "$deploy_path/releases/"* ]]
+          [[ "$image_ref" =~ ^stroy-api:(baseline|[0-9a-f]{40})$ ]]
+          [[ -f "$env_file" && -f "$compose_file" ]]
+          echo "Restoring $image_ref from $current_release"
+          API_IMAGE="$image_ref" timeout 120 docker compose --project-name "$compose_project" --env-file "$env_file" --file "$compose_file" up --detach --no-build --pull never api
+
+          for attempt in $(seq 1 36); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' stroy-api 2>/dev/null || true)"
+            echo "health attempt $attempt: ${status:-missing}"
+            if [[ "$status" == healthy ]]; then
+              exit 0
+            fi
+            if [[ "$status" == unhealthy || "$status" == exited || "$status" == dead ]]; then
+              docker logs --tail 120 stroy-api || true
+              exit 1
+            fi
+            sleep 5
+          done
+          docker logs --tail 120 stroy-api || true
+          exit 1
+          REMOTE
