@@ -57,7 +57,7 @@ jobs:
           [[ "$image_ref" =~ ^stroy-api:(baseline|[0-9a-f]{40})$ ]]
           [[ -f "$env_file" && -f "$compose_file" ]]
           echo "Restoring $image_ref from $current_release"
-          docker compose --project-name "$compose_project" --env-file "$env_file" --file "$compose_file" up --detach --no-build --pull never api
+          API_IMAGE="$image_ref" docker compose --project-name "$compose_project" --env-file "$env_file" --file "$compose_file" up --detach --no-build --pull never api
           for attempt in $(seq 1 36); do
             status="$(docker inspect --format '{{.State.Health.Status}}' stroy-api 2>/dev/null || true)"
             echo "health attempt $attempt: ${status:-missing}"
