@@ -48,7 +48,7 @@ jobs:
   flutter-checks:
     # The production API recovery PR does not change mobile code; avoid coupling
     # an emergency server recovery to a redundant full Flutter APK compilation.
-    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-recovery')
+    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

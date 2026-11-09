@@ -139,7 +139,7 @@ jobs:
     name: Mobile
     # This emergency API recovery PR does not change mobile code; avoid
     # coupling production server recovery to a redundant Flutter APK build.
-    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-recovery')
+    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-')
     runs-on: ubuntu-latest
     defaults:
       run:
