@@ -11,6 +11,13 @@ jobs:
     runs-on: [self-hosted, stroy-prod]
     timeout-minutes: 10
     environment: production-api
+    env:
+      DEPLOY_HOST: ${{ vars.API_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.API_DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
+      COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
+      DEPLOY_SSH_KEY: ${{ secrets.API_DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.API_DEPLOY_KNOWN_HOSTS }}
     defaults:
       run:
         shell: bash
@@ -18,8 +25,18 @@ jobs:
       - name: Restore the managed API release
         run: |
           set -Eeuo pipefail
-          deploy_path="${API_DEPLOY_PATH:-/opt/stroy-api}"
-          compose_project="${API_DEPLOY_COMPOSE_PROJECT:-backend}"
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_PATH" && -n "$COMPOSE_PROJECT" ]]
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/api_recovery"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/api_recovery_known_hosts"
+          chmod 600 "$HOME/.ssh/api_recovery" "$HOME/.ssh/api_recovery_known_hosts"
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_recovery_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_recovery")
+          printf -v remote_command 'bash -s -- %q %q' "$DEPLOY_PATH" "$COMPOSE_PROJECT"
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_path="$1"
+          compose_project="$2"
           env_file="$deploy_path/.env"
           current_link="$deploy_path/current"
           if [[ -L "$current_link" ]]; then
@@ -55,3 +72,10 @@ jobs:
           done
           docker logs --tail 120 stroy-api || true
           exit 1
+          REMOTE
+        if: always()
+        shell: bash
+        continue-on-error: false
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/api_recovery" "$HOME/.ssh/api_recovery_known_hosts"
