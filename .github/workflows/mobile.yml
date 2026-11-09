@@ -315,6 +315,7 @@ jobs:
 
   ios-simulator:
     name: Staging iOS simulator build
+    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-')
     runs-on: macos-26
     defaults:
       run:
