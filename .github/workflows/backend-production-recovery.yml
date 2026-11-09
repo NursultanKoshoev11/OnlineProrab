@@ -1,0 +1,50 @@
+name: Backend Production Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, stroy-prod]
+    timeout-minutes: 10
+    environment: production-api
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Restore the managed API release
+        run: |
+          set -Eeuo pipefail
+          deploy_path="${API_DEPLOY_PATH:-/opt/stroy-api}"
+          compose_project="${API_DEPLOY_COMPOSE_PROJECT:-backend}"
+          env_file="$deploy_path/.env"
+          current_link="$deploy_path/current"
+          if [[ ! -L "$current_link" ]]; then
+            echo "managed current release pointer is missing" >&2
+            exit 1
+          fi
+          current_release="$(readlink -f -- "$current_link")"
+          compose_file="$current_release/backend/docker-compose.prod.yml"
+          image_ref="$(cat -- "$current_release/image-tag")"
+          [[ "$current_release" == "$deploy_path/releases/"* ]]
+          [[ "$image_ref" =~ ^stroy-api:(baseline|[0-9a-f]{40})$ ]]
+          [[ -f "$env_file" && -f "$compose_file" ]]
+          echo "Restoring $image_ref from $current_release"
+          docker compose --project-name "$compose_project" --env-file "$env_file" --file "$compose_file" up --detach --no-build --pull never api
+          for attempt in $(seq 1 36); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' stroy-api 2>/dev/null || true)"
+            echo "health attempt $attempt: ${status:-missing}"
+            if [[ "$status" == healthy ]]; then
+              exit 0
+            fi
+            if [[ "$status" == unhealthy || "$status" == exited || "$status" == dead ]]; then
+              docker logs --tail 120 stroy-api || true
+              exit 1
+            fi
+            sleep 5
+          done
+          docker logs --tail 120 stroy-api || true
+          exit 1
