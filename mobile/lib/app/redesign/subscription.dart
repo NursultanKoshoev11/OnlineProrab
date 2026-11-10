@@ -410,7 +410,6 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
       ],
     ];
   }
-
 }
 
 class _PlanChoice extends StatelessWidget {
