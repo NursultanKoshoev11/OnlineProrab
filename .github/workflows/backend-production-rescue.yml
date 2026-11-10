@@ -17,15 +17,20 @@ jobs:
       DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
       COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
       DEPLOY_SSH_KEY: ${{ secrets.API_DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.API_DEPLOY_KNOWN_HOSTS }}
     steps:
       - name: Stop the stuck recovery and restore the API
         shell: bash
         run: |
           set -Eeuo pipefail
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
           install -m 700 -d "$RUNNER_TEMP/ssh"
+          trap 'rm -f "$RUNNER_TEMP/ssh/id_ed25519" "$RUNNER_TEMP/ssh/known_hosts"' EXIT
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/ssh/id_ed25519"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/ssh/id_ed25519"
-          ssh_opts=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -i "$RUNNER_TEMP/ssh/id_ed25519")
+          chmod 600 "$RUNNER_TEMP/ssh/known_hosts"
+          ssh_opts=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -i "$RUNNER_TEMP/ssh/id_ed25519")
           ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH=$DEPLOY_PATH COMPOSE_PROJECT=$COMPOSE_PROJECT bash -s" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="${DEPLOY_PATH:-/opt/stroy-api}"
