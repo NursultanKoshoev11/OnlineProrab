@@ -10,14 +10,11 @@ Plans:
 - Max: 5,000 KGS/month or 51,000 KGS/year (15% discount), up to 20 active
   projects and 20 invited participants per project.
 
-Screens:
+In-app subscription information:
 
-- Paywall
-- Plan selection
-- Manage subscription
-- Error state
-- Billing period selector with monthly and annual pricing
-- Payment unavailable state for store builds unless a supported store purchase is configured
+- Current plan, access limits, and expiration date
+- Active and expired access status
+- No in-app plan selection, prices, checkout buttons, or payment directions
 
 States:
 
@@ -31,14 +28,14 @@ Rules:
 
 - Backend decides access.
 - Device state is not enough.
-- Restore purchases must sync with backend.
+- Backend is the source of truth for subscription access.
 - The project owner pays; invited project members do not pay separately.
 - The owner is not counted in the invited participant limit.
 - Project limits count active, non-deleted projects.
 - Pending invitations count toward the participant limit.
-- Android and iOS builds do not launch external O!Bank payment links for the
-  digital subscription. All payments start on the STROY billing website.
-- When the app returns from the browser, it refreshes subscription state from
-  the backend so a verified website payment unlocks the phone app.
-- App Store and Google Play builds must use their store billing systems unless
-  the applicable alternative-billing program and storefront are confirmed.
+- Subscription billing is handled outside the mobile apps. The apps show
+  entitlement status only and do not direct users to an external payment flow.
+- The app refreshes subscription state from the backend when it resumes, so a
+  newly active entitlement is reflected without an in-app purchase prompt.
+- Do not add external-payment messaging or links to store builds unless the
+  relevant platform program and storefront are confirmed for STROY.

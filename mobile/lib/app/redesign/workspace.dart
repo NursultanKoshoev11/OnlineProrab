@@ -290,7 +290,6 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
         builder: (_) => _SubscriptionScreen(
           project: _currentProject,
           members: _members,
-          canManage: _canManage,
           apiClient: widget.deps.apiClient,
         ),
       ),

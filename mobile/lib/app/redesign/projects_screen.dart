@@ -356,8 +356,8 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.workspace_premium_outlined),
-                  title: const Text('Подписка и оплата'),
-                  subtitle: const Text('Тариф и срок действия'),
+                  title: const Text('Подписка'),
+                  subtitle: const Text('Текущий план и доступ'),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => Navigator.of(context).pop(true),
                 ),

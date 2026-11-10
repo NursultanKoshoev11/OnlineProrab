@@ -385,12 +385,12 @@ String _localizedErrorMessage({int? statusCode, required String message}) {
     return 'Сессия истекла. Войдите снова.';
   }
   if (lower.contains('subscription') && lower.contains('expired')) {
-    return 'Срок подписки истёк. Продлите подписку, чтобы продолжить.';
+    return 'Срок действия подписки закончился. Доступ к этому действию приостановлен.';
   }
   if (statusCode == 403 ||
       lower.contains('subscription') ||
       lower.contains('forbidden')) {
-    return 'Доступ ограничен. Проверьте подписку или права доступа.';
+    return 'Доступ к этому действию ограничен. Проверьте статус доступа или права.';
   }
   if (statusCode == 404 || lower.contains('not found')) {
     return 'Запрашиваемые данные не найдены.';
