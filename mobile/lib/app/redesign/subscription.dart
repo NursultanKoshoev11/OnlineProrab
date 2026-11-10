@@ -29,7 +29,6 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
   String _selectedBillingPeriod = 'month';
   String _currentBillingPeriod = 'month';
   DateTime? _subscriptionEndsAt;
-  String? _billingMessage;
 
   @override
   void initState() {
@@ -401,26 +400,9 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Откройте страницу продления подписки в браузере. После оплаты вернитесь в приложение — оно автоматически обновит статус подписки.',
+                  'Оплата подписки проходит на официальном сайте STROY. После оплаты вернитесь в приложение — статус подписки обновится автоматически.',
                   style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _openWebBilling,
-                  icon: const Icon(Icons.open_in_new_rounded),
-                  label: const Text('Открыть сайт для оплаты'),
-                ),
-                if (_billingMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _billingMessage!,
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 12,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -429,17 +411,6 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
     ];
   }
 
-  Future<void> _openWebBilling() async {
-    final opened = await launchUrl(
-      Uri.parse('https://stroy.com.kg/billing/'),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened && mounted) {
-      setState(() {
-        _billingMessage = 'Не удалось открыть страницу продления подписки.';
-      });
-    }
-  }
 }
 
 class _PlanChoice extends StatelessWidget {
