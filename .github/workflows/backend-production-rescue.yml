@@ -8,11 +8,11 @@ permissions:
 
 jobs:
   rescue:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, stroy-prod]
     timeout-minutes: 8
     environment: production-api
     env:
-      DEPLOY_HOST: 13.50.100.226
+      DEPLOY_HOST: ${{ vars.API_DEPLOY_HOST }}
       DEPLOY_USER: ${{ vars.API_DEPLOY_USER }}
       DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
       COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
