@@ -109,7 +109,7 @@ image_ref = sys.argv[3]
 
 try:
     with open(sys.argv[1], encoding="utf-8") as config_file:
-expected = json.load(config_file)["services"]["api"]["environment"]
+        expected = json.load(config_file)["services"]["api"]["environment"]
     with open(sys.argv[2], encoding="utf-8") as container_file:
         entries = json.load(container_file)
 except (OSError, KeyError, TypeError, ValueError):
