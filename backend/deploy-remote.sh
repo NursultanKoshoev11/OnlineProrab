@@ -354,6 +354,7 @@ if [[ -z "$release_ref" && -n "$running_ids" ]]; then
   printf '\n' > "$baseline_release/previous-release"
   set_current "releases/baseline"
   release_ref="releases/baseline"
+  active_container="$existing_container"
 fi
 if [[ -n "$release_ref" ]]; then
   previous_compose="$deploy_path/$release_ref/backend/docker-compose.prod.yml"
@@ -375,6 +376,7 @@ if [[ -n "$release_ref" ]]; then
     echo "running API image does not match the managed current release" >&2
     exit 1
   fi
+  active_container="$running_container"
 fi
 release_dir="$deploy_path/releases/$deploy_sha"
 if [[ -e "$release_dir" && ( ! -d "$release_dir" || -L "$release_dir" ) ]]; then
@@ -443,6 +445,21 @@ on_exit() {
   exit "$exit_code"
 }
 trap on_exit EXIT
+
+# The active container can have been created by a legacy Compose project.  A
+# normal `compose up` then blocks while trying to stop/recreate it, even though
+# the image and environment are valid.  We already validated this exact
+# container above, so remove only it before creating the new release.  The EXIT
+# trap will bring the previous release back if the new container is unhealthy.
+if [[ -n "${active_container:-}" ]]; then
+  command -v timeout >/dev/null 2>&1 || {
+    echo "GNU timeout is required for bounded API container replacement" >&2
+    exit 1
+  }
+  echo "Removing the validated previous API container before replacement."
+  timeout --signal=TERM --kill-after=15s 60s \
+    docker rm --force --time 30 "$active_container"
+fi
 
 compose_bounded 240 "stroy-api:$deploy_sha" "$new_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api
 set_current "releases/$deploy_sha"
