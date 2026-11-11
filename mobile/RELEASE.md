@@ -22,15 +22,12 @@ signing secrets. The iOS simulator artifact continues to build for staging.
   service-account JSON key authorized in Play Console to release testing
   versions.
 
-The workflow validates the release inputs, runs analysis and tests, and saves
-the signed APK and AAB as GitHub Actions artifacts, and uploads the AAB to the
-Google Play `internal` track. It never publishes the working production track.
-The production signing and closed-testing upload job runs automatically after
-the API cutover and signing configuration are complete. Automatic pushes use
-the `alpha` track. To publish a signed build to Google Play Production, run
+The workflow validates the release inputs, runs analysis and tests, builds a
+signed APK and AAB, saves both as GitHub Actions artifacts, and uploads the AAB
+to Google Play. Pushes to `main` use the `alpha` testing track. They do not
+publish to Production. To upload a signed build to Google Play Production, run
 `Mobile CI` manually from `main` with `production_release=true` and
-`google_play_track=production`; this is intentionally explicit so a normal
-code push cannot publish directly to Production by accident.
+`google_play_track=production`. That production upload is deliberately explicit.
 
 Since August 31, 2026, Google Play requires new apps and app updates to target
 Android 16 (API 36) or higher. The Android Gradle configuration targets API 36,
@@ -39,9 +36,11 @@ and CI checks that it does not fall below this policy minimum.
 ## iOS
 
 The iOS simulator build runs on pull requests and pushes. On mobile changes
-merged to `main`, the workflow builds and signs an App Store IPA after the
-production API cutover. `workflow_dispatch` remains available for manual IPA
-builds. Configure the values below in `production-mobile`:
+merged to `main`, the workflow builds, signs, validates, and uploads an App
+Store IPA to App Store Connect after the production API cutover. The upload
+does not submit the app version for App Review. `workflow_dispatch` can run a
+manual signed upload by setting `production_ios_release=true`. Configure the
+values below in `production-mobile`:
 
 - Environment variable `STROY_IOS_BUNDLE_ID`: the exact App Store Connect bundle ID. It defaults to `com.koshoev.stroy` from the current App Store Connect app record.
 - Environment variable `STROY_IOS_TEAM_ID`: the Apple Developer Team ID that owns that app.
@@ -66,9 +65,9 @@ support for iOS 14 devices is needed.
 
 ## Release checks
 
-- Update `version` in `pubspec.yaml` when the user-visible app version changes.
-  CI assigns the monotonically increasing store build number from the GitHub
-  Actions run number.
+- Keep the user-visible iOS and Android version names aligned in `pubspec.yaml`
+  and the iOS build configuration. CI assigns the monotonically increasing
+  store build number from the GitHub Actions run number.
 - Confirm the configured Android package ID and iOS bundle ID match their
   store records.
 - Complete the app privacy details and provide the public privacy-policy and
