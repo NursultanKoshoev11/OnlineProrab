@@ -123,10 +123,10 @@ for entry in entries:
         actual[key] = value
 
 # Credentials are intentionally allowed to rotate independently of the image
-# and Compose release.  Comparing their exact values would make the next
-# deployment fail before it has a chance to apply the new secret.  Still reject
-# a missing credential so an existing container cannot be adopted when it is
-# obviously incomplete.
+# and Compose release.  Comparing their exact values—or requiring them to be
+# present in the old container—would make the next deployment fail before it
+# has a chance to apply the new secret.  The new Compose invocation remains the
+# authority for the complete runtime environment.
 secret_keys = {
     "DATABASE_URL",
     "JWT_SECRET",
@@ -151,8 +151,7 @@ for key, value in expected.items():
     expected_value = str(value)
     actual_value = actual.get(key)
     if key in secret_keys:
-        if expected_value and not actual_value:
-            mismatches.append(key)
+        continue
     elif actual_value != expected_value:
         mismatches.append(key)
 if mismatches:
