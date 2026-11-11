@@ -220,7 +220,8 @@ jobs:
           set -euo pipefail
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
           printf -v remote_command 'bash -s -- %q %q %q %q' deploy "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
-          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
+          timeout --signal=TERM --kill-after=20s 8m \
+            ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
 
       - name: Verify the public account-deletion API route
         id: public-api
@@ -233,13 +234,24 @@ jobs:
           fi
           echo "Public API route probe returned the expected 405 for GET." >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Recover after a failed deployment attempt
+        if: ${{ always() && steps.deploy.outcome == 'failure' }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          printf -v remote_command 'bash -s -- %q %q %q %q' rollback "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
+          timeout --signal=TERM --kill-after=20s 5m \
+            ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
+
       - name: Roll back after failed public verification
         if: failure() && steps.deploy.outcome == 'success'
         run: |
           set -euo pipefail
           ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
           printf -v remote_command 'bash -s -- %q %q %q %q' rollback "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
-          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
+          timeout --signal=TERM --kill-after=20s 5m \
+            ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
 
       - name: Remove SSH credentials
         if: always()

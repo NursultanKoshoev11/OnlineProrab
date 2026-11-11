@@ -167,6 +167,32 @@ compose() {
     "$@"
 }
 
+# Docker Compose can wait indefinitely while stopping/recreating a container
+# (especially when the container was originally created by another Compose
+# project).  Keep every state-changing Compose operation bounded so the EXIT
+# trap can restore the last known-good release instead of leaving the runner
+# and the server stuck forever.
+compose_bounded() {
+  local timeout_seconds="$1"
+  local image_ref="$2"
+  local compose_file="$3"
+  shift 3
+  local fcm_service_account_json=""
+  if [[ -f "$deploy_path/.fcm_service_account.json" && ! -L "$deploy_path/.fcm_service_account.json" ]]; then
+    fcm_service_account_json="$(cat -- "$deploy_path/.fcm_service_account.json")"
+  fi
+  command -v timeout >/dev/null 2>&1 || {
+    echo "GNU timeout is required for bounded API deployment operations" >&2
+    return 1
+  }
+  timeout --signal=TERM --kill-after=20s "${timeout_seconds}s" \
+    env FCM_SERVICE_ACCOUNT_JSON="$fcm_service_account_json" API_IMAGE="$image_ref" docker compose \
+      --project-name "$compose_project" \
+      --env-file "$env_file" \
+      --file "$compose_file" \
+      "$@"
+}
+
 set_current() {
   local target_ref="$1"
   local temporary_link="$deploy_path/.current-$deploy_sha"
@@ -198,22 +224,22 @@ rollback_to_previous() {
       return 1
     fi
     docker image inspect "$previous_image" >/dev/null
-    compose "$previous_image" "$previous_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api
+    if ! compose_bounded 240 "$previous_image" "$previous_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api; then
+      echo "previous API release did not converge; removing only the managed stroy-api container and retrying" >&2
+      docker rm --force --time 20 stroy-api >/dev/null 2>&1 || true
+      compose_bounded 120 "$previous_image" "$previous_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api
+    fi
     set_current "$previous_ref"
     echo "Restored API release ${previous_ref#releases/}."
   else
-    compose "$new_image" "$new_compose" stop --timeout 30 api || true
-    compose "$new_image" "$new_compose" rm --force --stop api || true
+    compose_bounded 90 "$new_image" "$new_compose" stop --timeout 30 api || true
+    compose_bounded 90 "$new_image" "$new_compose" rm --force --stop api || true
     set_current ""
     echo "Removed the failed first API release."
   fi
 }
 
 if [[ "$mode" == "rollback" ]]; then
-  if [[ "$release_ref" != "releases/$deploy_sha" ]]; then
-    echo "refusing stale rollback: current release does not match requested revision" >&2
-    exit 1
-  fi
   previous_file="$deploy_path/releases/$deploy_sha/previous-release"
   [[ -f "$previous_file" && ! -L "$previous_file" ]] || {
     echo "release rollback metadata is missing" >&2
@@ -222,6 +248,15 @@ if [[ "$mode" == "rollback" ]]; then
   previous_ref="$(cat -- "$previous_file")"
   if [[ -n "$previous_ref" && ! "$previous_ref" =~ ^releases/(baseline|[0-9a-f]{40})$ ]]; then
     echo "release rollback metadata is invalid" >&2
+    exit 1
+  fi
+  # A deploy can fail before the new release pointer is switched.  In that
+  # case the pointer still targets the previous release, while the interrupted
+  # release records that same value in previous-release.  Permit rollback only
+  # for that exact relationship; arbitrary stale release requests remain
+  # rejected.
+  if [[ "$release_ref" != "releases/$deploy_sha" && "$release_ref" != "$previous_ref" ]]; then
+    echo "refusing stale rollback: current release is unrelated to requested revision" >&2
     exit 1
   fi
   rollback_to_previous "$previous_ref"
@@ -252,6 +287,13 @@ if [[ "$release_ref" == "releases/$deploy_sha" ]]; then
 fi
 
 running_ids="$(docker ps --quiet --filter "label=com.docker.compose.project=$compose_project" --filter 'label=com.docker.compose.service=api')"
+# A previous deployment may have been created by the legacy Compose project
+# name.  The service has an explicit, unique container_name, so adopt that
+# single running container after validating its image and environment instead
+# of treating a healthy production API as an unmanaged second instance.
+if [[ -z "$running_ids" ]]; then
+  running_ids="$(docker ps --quiet --filter 'name=^stroy-api$')"
+fi
 if [[ -z "$release_ref" && -n "$running_ids" ]]; then
   if [[ "$(printf '%s\n' "$running_ids" | sed '/^$/d' | wc -l | tr -d ' ')" != "1" ]]; then
     echo "expected exactly one existing API container to adopt as the S3-ready baseline" >&2
@@ -372,7 +414,7 @@ on_exit() {
 }
 trap on_exit EXIT
 
-compose "stroy-api:$deploy_sha" "$new_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api
+compose_bounded 240 "stroy-api:$deploy_sha" "$new_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api
 set_current "releases/$deploy_sha"
 deployment_committed=1
 echo "API release $deploy_sha is healthy and active."
