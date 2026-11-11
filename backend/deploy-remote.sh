@@ -109,7 +109,7 @@ image_ref = sys.argv[3]
 
 try:
     with open(sys.argv[1], encoding="utf-8") as config_file:
-        expected = json.load(config_file)["services"]["api"]["environment"]
+expected = json.load(config_file)["services"]["api"]["environment"]
     with open(sys.argv[2], encoding="utf-8") as container_file:
         entries = json.load(container_file)
 except (OSError, KeyError, TypeError, ValueError):
@@ -121,9 +121,40 @@ for entry in entries:
     key, separator, value = entry.partition("=")
     if separator:
         actual[key] = value
-mismatches = [key for key, value in expected.items() if actual.get(key) != str(value)]
-if image_ref == "stroy-api:baseline":
-    mismatches = [key for key in mismatches if key not in {"FCM_PROJECT_ID", "FCM_SERVICE_ACCOUNT_JSON"}]
+
+# Credentials are intentionally allowed to rotate independently of the image
+# and Compose release.  Comparing their exact values would make the next
+# deployment fail before it has a chance to apply the new secret.  Still reject
+# a missing credential so an existing container cannot be adopted when it is
+# obviously incomplete.
+secret_keys = {
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "FCM_SERVICE_ACCOUNT_JSON",
+    "TWILIO_ACCOUNT_SID",
+    "TWILIO_API_KEY_SID",
+    "TWILIO_API_KEY_SECRET",
+    "NIKITA_LOGIN",
+    "NIKITA_PASSWORD",
+    "OBANK_SID",
+    "OBANK_PASSWORD",
+    "DEEPSEEK_API_KEY",
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENROUTER_API_KEY",
+}
+mismatches = []
+for key, value in expected.items():
+    expected_value = str(value)
+    actual_value = actual.get(key)
+    if key in secret_keys:
+        if expected_value and not actual_value:
+            mismatches.append(key)
+    elif actual_value != expected_value:
+        mismatches.append(key)
 if mismatches:
     print("active API environment differs from the prepared release for: " + ", ".join(sorted(mismatches)), file=sys.stderr)
     raise SystemExit(1)
