@@ -256,7 +256,7 @@ rollback_to_previous() {
     docker image inspect "$previous_image" >/dev/null
     if ! compose_bounded 240 "$previous_image" "$previous_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api; then
       echo "previous API release did not converge; removing only the managed stroy-api container and retrying" >&2
-      docker rm --force --time 20 stroy-api >/dev/null 2>&1 || true
+      docker rm --force stroy-api >/dev/null 2>&1 || true
       compose_bounded 120 "$previous_image" "$previous_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api
     fi
     set_current "$previous_ref"
@@ -458,7 +458,7 @@ if [[ -n "${active_container:-}" ]]; then
   }
   echo "Removing the validated previous API container before replacement."
   timeout --signal=TERM --kill-after=15s 60s \
-    docker rm --force --time 30 "$active_container"
+    docker rm --force "$active_container"
 fi
 
 compose_bounded 240 "stroy-api:$deploy_sha" "$new_compose" up --detach --no-build --pull never --wait --wait-timeout 180 api
