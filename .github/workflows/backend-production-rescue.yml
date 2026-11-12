@@ -72,8 +72,32 @@ jobs:
             stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
             if [[ -n "$stale_ids" ]]; then
               if ! timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids; then
-                echo "Docker did not remove the stale API container; requesting a runner-side Docker restart."
-                exit 42
+                echo "Docker did not remove the stale API container; restarting the deploy user's Docker service."
+                restart_status=0
+                timeout --signal=TERM --kill-after=15s 90s systemctl --user restart docker.service || restart_status=$?
+                if [[ "$restart_status" -ne 0 ]]; then
+                  echo "The deploy user's Docker service did not restart; terminating only its rootless daemon."
+                  mapfile -t daemon_pids < <(ps -eo pid=,user=,args= | awk -v user="$USER" '$2 == user && (/dockerd-rootless/ || /rootlesskit[[:space:]].*dockerd/) {print $1}')
+                  for pid in "${daemon_pids[@]}"; do
+                    [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -TERM "$pid" 2>/dev/null || true
+                  done
+                  sleep 5
+                  for pid in "${daemon_pids[@]}"; do
+                    if [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
+                      kill -KILL "$pid" 2>/dev/null || true
+                    fi
+                  done
+                  sleep 5
+                fi
+                if ! timeout --signal=TERM --kill-after=10s 30s docker info >/dev/null 2>&1; then
+                  echo "The deploy user's Docker daemon did not recover; a host-level restart is required." >&2
+                  exit 42
+                fi
+                stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
+                if [[ -n "$stale_ids" ]] && ! timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids; then
+                  echo "The stale API container still cannot be removed after restarting Docker." >&2
+                  exit 42
+                fi
               fi
             fi
           fi
@@ -121,49 +145,8 @@ jobs:
           remote_status=$?
           set -e
           if [[ "$remote_status" -eq 42 ]]; then
-            echo "The deploy-user Docker cleanup is wedged; restarting Docker from the self-hosted production runner."
-            restart_status=0
-            timeout --signal=TERM --kill-after=15s 90s sudo -n systemctl restart docker.service || restart_status=$?
-            if [[ "$restart_status" -ne 0 ]]; then
-              echo "Runner sudo cannot restart Docker; trying the runner user's rootless Docker service."
-              restart_status=0
-              timeout --signal=TERM --kill-after=15s 90s systemctl --user restart docker.service || restart_status=$?
-            fi
-            if [[ "$restart_status" -ne 0 ]]; then
-              echo "The rootless Docker service did not restart; terminating only this runner user's rootless daemon."
-              mapfile -t daemon_pids < <(ps -eo pid=,user=,args= | awk -v user="$USER" '$2 == user && (/dockerd-rootless/ || /rootlesskit[[:space:]].*dockerd/) {print $1}')
-              for pid in "${daemon_pids[@]}"; do
-                [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -TERM "$pid" 2>/dev/null || true
-              done
-              sleep 5
-              for pid in "${daemon_pids[@]}"; do
-                if [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
-                  kill -KILL "$pid" 2>/dev/null || true
-                fi
-              done
-              sleep 5
-            fi
-            if ! timeout --signal=TERM --kill-after=10s 30s docker info >/dev/null 2>&1; then
-              echo "Runner-level Docker recovery failed; using the existing Docker socket for a host service restart."
-              rescue_image="$(timeout --signal=TERM --kill-after=10s 15s docker inspect --format '{{.Config.Image}}' stroy-api 2>/dev/null || true)"
-              if [[ ! "$rescue_image" =~ ^stroy-api:(baseline|[0-9a-f]{40})$ ]]; then
-                rescue_image="stroy-api:baseline"
-              fi
-              set +e
-              timeout --signal=TERM --kill-after=15s 90s \
-                docker run --rm --privileged --pid=host --volume /:/host:rw \
-                --entrypoint /bin/busybox "$rescue_image" \
-                chroot /host /usr/bin/systemctl restart docker.service
-              helper_status=$?
-              set -e
-              sleep 5
-              if ! timeout --signal=TERM --kill-after=10s 30s docker info >/dev/null 2>&1; then
-                echo "Docker did not recover after the runner-side service restart (helper exit ${helper_status})." >&2
-                exit 1
-              fi
-            fi
-            sleep 5
-            rescue_remote 1
+            echo "The production Docker daemon requires a host-level restart outside the deploy user's permissions." >&2
+            exit 1
           elif [[ "$remote_status" -ne 0 ]]; then
             exit "$remote_status"
           fi
