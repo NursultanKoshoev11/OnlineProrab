@@ -52,9 +52,31 @@ jobs:
             fi
           done
 
+          # A wedged Docker client can leave the daemon unable to remove the
+          # old container.  Stop any remaining deploy-user Docker clients
+          # before attempting the API call again.
+          mapfile -t stale_client_pids < <(ps -eo pid=,user=,args= | awk -v user="$USER" '$2 == user && /(^|[[:space:]])docker([[:space:]]|$)/ {print $1}')
+          for pid in "${stale_client_pids[@]}"; do
+            [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -TERM "$pid" 2>/dev/null || true
+          done
+          sleep 2
+          for pid in "${stale_client_pids[@]}"; do
+            if [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          done
+
           stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
           if [[ -n "$stale_ids" ]]; then
-            timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids
+            if ! timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids; then
+              echo "Docker did not remove the stale API container; restarting the Docker service."
+              timeout --signal=TERM --kill-after=15s 90s sudo -n systemctl restart docker.service
+              sleep 5
+              stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
+              if [[ -n "$stale_ids" ]]; then
+                timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids
+              fi
+            fi
           fi
 
           if [[ -L "$current_link" ]]; then
