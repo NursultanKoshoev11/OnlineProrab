@@ -125,7 +125,26 @@ jobs:
             restart_status=0
             timeout --signal=TERM --kill-after=15s 90s sudo -n systemctl restart docker.service || restart_status=$?
             if [[ "$restart_status" -ne 0 ]]; then
-              echo "Runner sudo cannot restart Docker; using the existing Docker socket for the scoped service restart."
+              echo "Runner sudo cannot restart Docker; trying the runner user's rootless Docker service."
+              restart_status=0
+              timeout --signal=TERM --kill-after=15s 90s systemctl --user restart docker.service || restart_status=$?
+            fi
+            if [[ "$restart_status" -ne 0 ]]; then
+              echo "The rootless Docker service did not restart; terminating only this runner user's rootless daemon."
+              mapfile -t daemon_pids < <(ps -eo pid=,user=,args= | awk -v user="$USER" '$2 == user && (/dockerd-rootless/ || /rootlesskit[[:space:]].*dockerd/) {print $1}')
+              for pid in "${daemon_pids[@]}"; do
+                [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -TERM "$pid" 2>/dev/null || true
+              done
+              sleep 5
+              for pid in "${daemon_pids[@]}"; do
+                if [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
+                  kill -KILL "$pid" 2>/dev/null || true
+                fi
+              done
+              sleep 5
+            fi
+            if ! timeout --signal=TERM --kill-after=10s 30s docker info >/dev/null 2>&1; then
+              echo "Runner-level Docker recovery failed; using the existing Docker socket for a host service restart."
               rescue_image="$(timeout --signal=TERM --kill-after=10s 15s docker inspect --format '{{.Config.Image}}' stroy-api 2>/dev/null || true)"
               if [[ ! "$rescue_image" =~ ^stroy-api:(baseline|[0-9a-f]{40})$ ]]; then
                 rescue_image="stroy-api:baseline"
