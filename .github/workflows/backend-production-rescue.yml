@@ -145,8 +145,30 @@ jobs:
           remote_status=$?
           set -e
           if [[ "$remote_status" -eq 42 ]]; then
-            echo "The production Docker daemon requires a host-level restart outside the deploy user's permissions." >&2
-            exit 1
+            rootful_socket="/var/run/docker.sock"
+            if [[ ! -S "$rootful_socket" ]] || ! DOCKER_HOST="unix://$rootful_socket" timeout --signal=TERM --kill-after=10s 30s docker info >/dev/null 2>&1; then
+              echo "The production Docker daemon requires a host-level restart outside the available runner permissions." >&2
+              exit 1
+            fi
+            echo "Restarting the production Docker daemon through the host rootful socket."
+            rescue_image="$(DOCKER_HOST="unix://$rootful_socket" timeout --signal=TERM --kill-after=10s 15s docker inspect --format '{{.Config.Image}}' stroy-api 2>/dev/null || true)"
+            if [[ ! "$rescue_image" =~ ^stroy-api:(baseline|[0-9a-f]{40})$ ]]; then
+              rescue_image="stroy-api:baseline"
+            fi
+            set +e
+            DOCKER_HOST="unix://$rootful_socket" timeout --signal=TERM --kill-after=15s 90s \
+              docker run --rm --privileged --pid=host --volume /:/host:rw \
+              --entrypoint /bin/busybox "$rescue_image" \
+              chroot /host /usr/bin/systemctl restart docker.service
+            helper_status=$?
+            set -e
+            sleep 5
+            if ! DOCKER_HOST="unix://$rootful_socket" timeout --signal=TERM --kill-after=10s 30s docker info >/dev/null 2>&1; then
+              echo "The production Docker daemon did not recover after the rootful-socket restart (helper exit ${helper_status})." >&2
+              exit 1
+            fi
+            sleep 5
+            rescue_remote 1
           elif [[ "$remote_status" -ne 0 ]]; then
             exit "$remote_status"
           fi
