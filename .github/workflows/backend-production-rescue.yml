@@ -9,7 +9,7 @@ permissions:
 jobs:
   rescue:
     runs-on: [self-hosted, stroy-prod]
-    timeout-minutes: 8
+    timeout-minutes: 10
     environment: production-api
     env:
       DEPLOY_HOST: ${{ vars.API_DEPLOY_HOST }}
@@ -31,7 +31,8 @@ jobs:
           chmod 600 "$RUNNER_TEMP/ssh/id_ed25519"
           chmod 600 "$RUNNER_TEMP/ssh/known_hosts"
           ssh_opts=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -i "$RUNNER_TEMP/ssh/id_ed25519")
-          ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH=$DEPLOY_PATH COMPOSE_PROJECT=$COMPOSE_PROJECT bash -s" <<'REMOTE'
+          timeout --signal=TERM --kill-after=15s 6m \
+            ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH=$DEPLOY_PATH COMPOSE_PROJECT=$COMPOSE_PROJECT bash -s" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="${DEPLOY_PATH:-/opt/stroy-api}"
           compose_project="${COMPOSE_PROJECT:-backend}"
@@ -45,10 +46,15 @@ jobs:
             [[ "$pid" =~ ^[0-9]+$ ]] && kill -TERM "$pid" 2>/dev/null || true
           done
           sleep 3
+          for pid in "${stuck_pids[@]}"; do
+            if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          done
 
-          stale_ids="$(docker ps --all --quiet --filter name=stroy-api || true)"
+          stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
           if [[ -n "$stale_ids" ]]; then
-            docker rm --force $stale_ids || true
+            timeout --signal=TERM --kill-after=10s 60s docker rm --force --time 10 $stale_ids
           fi
 
           if [[ -L "$current_link" ]]; then
@@ -70,20 +76,20 @@ jobs:
           [[ "$image_ref" =~ ^stroy-api:(baseline|[0-9a-f]{40})$ ]]
           [[ -f "$env_file" && -f "$compose_file" ]]
           echo "Restoring $image_ref from $current_release"
-          API_IMAGE="$image_ref" timeout 120 docker compose --project-name "$compose_project" --env-file "$env_file" --file "$compose_file" up --detach --no-build --pull never api
+          API_IMAGE="$image_ref" timeout --signal=TERM --kill-after=15s 120s docker compose --project-name "$compose_project" --env-file "$env_file" --file "$compose_file" up --detach --no-build --pull never api
 
           for attempt in $(seq 1 36); do
-            status="$(docker inspect --format '{{.State.Health.Status}}' stroy-api 2>/dev/null || true)"
+            status="$(timeout --signal=TERM --kill-after=5s 10s docker inspect --format '{{.State.Health.Status}}' stroy-api 2>/dev/null || true)"
             echo "health attempt $attempt: ${status:-missing}"
             if [[ "$status" == healthy ]]; then
               exit 0
             fi
             if [[ "$status" == unhealthy || "$status" == exited || "$status" == dead ]]; then
-              docker logs --tail 120 stroy-api || true
+              timeout --signal=TERM --kill-after=5s 10s docker logs --tail 120 stroy-api || true
               exit 1
             fi
             sleep 5
           done
-          docker logs --tail 120 stroy-api || true
+          timeout --signal=TERM --kill-after=5s 10s docker logs --tail 120 stroy-api || true
           exit 1
           REMOTE
