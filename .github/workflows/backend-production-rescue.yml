@@ -31,50 +31,49 @@ jobs:
           chmod 600 "$RUNNER_TEMP/ssh/id_ed25519"
           chmod 600 "$RUNNER_TEMP/ssh/known_hosts"
           ssh_opts=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -i "$RUNNER_TEMP/ssh/id_ed25519")
-          timeout --signal=TERM --kill-after=15s 6m \
-            ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH=$DEPLOY_PATH COMPOSE_PROJECT=$COMPOSE_PROJECT bash -s" <<'REMOTE'
+
+          rescue_remote() {
+            local skip_cleanup="$1"
+            timeout --signal=TERM --kill-after=15s 6m \
+              ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH=$DEPLOY_PATH COMPOSE_PROJECT=$COMPOSE_PROJECT SKIP_CLEANUP=$skip_cleanup bash -s" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="${DEPLOY_PATH:-/opt/stroy-api}"
           compose_project="${COMPOSE_PROJECT:-backend}"
           env_file="$deploy_path/.env"
           current_link="$deploy_path/current"
 
-          # The self-hosted runner is on this same host. Stop only the interrupted
-          # API Compose command so the recovery can release Docker's project lock.
-          mapfile -t stuck_pids < <(ps -eo pid=,args= | awk '/docker compose/ && /docker-compose\.prod\.yml/ {print $1}')
-          for pid in "${stuck_pids[@]}"; do
-            [[ "$pid" =~ ^[0-9]+$ ]] && kill -TERM "$pid" 2>/dev/null || true
-          done
-          sleep 3
-          for pid in "${stuck_pids[@]}"; do
-            if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
-              kill -KILL "$pid" 2>/dev/null || true
-            fi
-          done
+          if [[ "${SKIP_CLEANUP:-0}" != 1 ]]; then
+            # Stop only the interrupted API Compose command so the recovery can
+            # release Docker's project lock.
+            mapfile -t stuck_pids < <(ps -eo pid=,args= | awk '/docker compose/ && /docker-compose\.prod\.yml/ {print $1}')
+            for pid in "${stuck_pids[@]}"; do
+              [[ "$pid" =~ ^[0-9]+$ ]] && kill -TERM "$pid" 2>/dev/null || true
+            done
+            sleep 3
+            for pid in "${stuck_pids[@]}"; do
+              if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+                kill -KILL "$pid" 2>/dev/null || true
+              fi
+            done
 
-          # A wedged Docker client can leave the daemon unable to remove the
-          # old container.  Stop any remaining deploy-user Docker clients
-          # before attempting the API call again.
-          mapfile -t stale_client_pids < <(ps -eo pid=,user=,args= | awk -v user="$USER" '$2 == user && /(^|[[:space:]])docker([[:space:]]|$)/ {print $1}')
-          for pid in "${stale_client_pids[@]}"; do
-            [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -TERM "$pid" 2>/dev/null || true
-          done
-          sleep 2
-          for pid in "${stale_client_pids[@]}"; do
-            if [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
-              kill -KILL "$pid" 2>/dev/null || true
-            fi
-          done
+            # A wedged Docker client can leave the daemon unable to remove the
+            # old container. Stop deploy-user Docker clients before the API call.
+            mapfile -t stale_client_pids < <(ps -eo pid=,user=,args= | awk -v user="$USER" '$2 == user && /(^|[[:space:]])docker([[:space:]]|$)/ {print $1}')
+            for pid in "${stale_client_pids[@]}"; do
+              [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -TERM "$pid" 2>/dev/null || true
+            done
+            sleep 2
+            for pid in "${stale_client_pids[@]}"; do
+              if [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
+                kill -KILL "$pid" 2>/dev/null || true
+              fi
+            done
 
-          stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
-          if [[ -n "$stale_ids" ]]; then
-            if ! timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids; then
-              echo "Docker did not remove the stale API container; restarting the Docker service."
-              timeout --signal=TERM --kill-after=15s 90s sudo -n systemctl restart docker.service
-              sleep 5
-              stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
-              if [[ -n "$stale_ids" ]]; then
-                timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids
+            stale_ids="$(timeout --signal=TERM --kill-after=10s 30s docker ps --all --quiet --filter name=stroy-api || true)"
+            if [[ -n "$stale_ids" ]]; then
+              if ! timeout --signal=TERM --kill-after=10s 60s docker rm --force $stale_ids; then
+                echo "Docker did not remove the stale API container; requesting a runner-side Docker restart."
+                exit 42
               fi
             fi
           fi
@@ -115,3 +114,17 @@ jobs:
           timeout --signal=TERM --kill-after=5s 10s docker logs --tail 120 stroy-api || true
           exit 1
           REMOTE
+          }
+
+          set +e
+          rescue_remote 0
+          remote_status=$?
+          set -e
+          if [[ "$remote_status" -eq 42 ]]; then
+            echo "The deploy-user Docker cleanup is wedged; restarting Docker from the self-hosted production runner."
+            timeout --signal=TERM --kill-after=15s 90s sudo -n systemctl restart docker.service
+            sleep 5
+            rescue_remote 1
+          elif [[ "$remote_status" -ne 0 ]]; then
+            exit "$remote_status"
+          fi
