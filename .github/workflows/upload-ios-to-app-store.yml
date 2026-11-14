@@ -85,7 +85,7 @@ jobs:
           test -n "$ASC_ISSUER_ID"
           test -n "$ASC_PRIVATE_KEY_P8"
           [[ "$ASC_KEY_ID" =~ ^[A-Z0-9]+$ ]]
-          KEY_DIR="$RUNNER_TEMP/private_keys"
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
           KEY_PATH="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
           python3 - <<'PY'
@@ -93,35 +93,22 @@ jobs:
           from pathlib import Path
 
           key = os.environ["ASC_PRIVATE_KEY_P8"].replace("\r\n", "\n")
-          Path(os.environ["RUNNER_TEMP"], "private_keys", f"AuthKey_{os.environ['ASC_KEY_ID']}.p8").write_text(key, encoding="utf-8")
+          Path(os.environ["HOME"], ".appstoreconnect", "private_keys", f"AuthKey_{os.environ['ASC_KEY_ID']}.p8").write_text(key, encoding="utf-8")
           PY
           openssl pkey -in "$KEY_PATH" -noout
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
-      - name: Validate IPA with Apple
+      - name: Upload IPA to App Store Connect with Transporter
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          xcrun altool --validate-app \
-            --type ios \
-            --file "$STROY_IPA_PATH" \
-            --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID" \
-            --p8-file-path "$ASC_KEY_PATH"
-
-      - name: Upload IPA to App Store Connect
-        env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-        run: |
-          xcrun altool --upload-app \
-            --type ios \
-            --file "$STROY_IPA_PATH" \
-            --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID" \
-            --p8-file-path "$ASC_KEY_PATH" \
-            --verbose
+          xcrun iTMSTransporter \
+            -m upload \
+            -assetFile "$STROY_IPA_PATH" \
+            -apiKey "$ASC_KEY_ID" \
+            -apiIssuer "$ASC_ISSUER_ID" \
+            -v informational
 
       - name: Report successful upload
         if: success()
@@ -134,4 +121,4 @@ jobs:
 
       - name: Remove temporary API key
         if: always()
-        run: rm -rf "$RUNNER_TEMP/private_keys"
+        run: rm -rf "$HOME/.appstoreconnect/private_keys"
