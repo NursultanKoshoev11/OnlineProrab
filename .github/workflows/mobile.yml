@@ -598,6 +598,17 @@ jobs:
           openssl pkey -in "$KEY_PATH" -noout
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
+      - name: Install Apple Transporter CLI
+        run: |
+          set -euo pipefail
+          installer_path="$RUNNER_TEMP/iTMSTransporter.pkg"
+          curl --fail --silent --show-error --location \
+            'https://itunesconnect.apple.com/WebObjects/iTunesConnect.woa/ra/resources/download/public/Transporter__OSX/bin/' \
+            --output "$installer_path"
+          sudo installer -pkg "$installer_path" -target /
+          test -x /usr/local/itms/bin/iTMSTransporter
+          /usr/local/itms/bin/iTMSTransporter -version
+
       - name: Upload IPA to App Store Connect with Transporter
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -606,7 +617,7 @@ jobs:
           set -euo pipefail
           IPA_PATH="$(find "$RUNNER_TEMP/stroy-ipa" -maxdepth 1 -name '*.ipa' -print -quit)"
           test -n "$IPA_PATH"
-          xcrun iTMSTransporter \
+          /usr/local/itms/bin/iTMSTransporter \
             -m upload \
             -assetFile "$IPA_PATH" \
             -apiKey "$ASC_KEY_ID" \
