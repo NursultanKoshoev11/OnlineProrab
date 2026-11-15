@@ -34,18 +34,19 @@ jobs:
         id: simulator
         run: |
           set -euo pipefail
+          xcrun simctl list devices available
           SIMULATOR_ID="$(xcrun simctl list devices available --json | python3 -c '
           import json
           import sys
           data = json.load(sys.stdin)
-          devices = [d for group in data["devices"].values() for d in group if d.get("isAvailable")]
-          for wanted in ("iPhone 16 Pro", "iPhone 15 Pro"):
-              match = next((d for d in devices if d.get("name") == wanted), None)
-              if match:
-                  print(match["udid"])
-                  break
-          else:
-              raise SystemExit("No iPhone 16 Pro or iPhone 15 Pro simulator is available")
+          devices = [d for group in data["devices"].values() for d in group if d.get("isAvailable", True)]
+          names = [d.get("name", "") for d in devices]
+          print("Available iPhone simulators:", ", ".join(name for name in names if name.startswith("iPhone")), file=sys.stderr)
+          preferred = ("iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro", "iPhone 17", "iPhone 16", "iPhone 15")
+          match = next((d for wanted in preferred for d in devices if d.get("name") == wanted), None)
+          if not match:
+              raise SystemExit("No supported Dynamic Island iPhone simulator found")
+          print(match["udid"])
           ')"
           echo "udid=$SIMULATOR_ID" >> "$GITHUB_OUTPUT"
           xcrun simctl boot "$SIMULATOR_ID" || true
