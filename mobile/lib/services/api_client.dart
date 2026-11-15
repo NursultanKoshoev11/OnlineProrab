@@ -54,11 +54,29 @@ class ApiClient {
   Future<Map<String, dynamic>> requestSMSCode(String phone) =>
       _postJson('/api/v1/auth/sms/request', {'phone': phone}, retry: false);
 
-  Future<void> registerPushToken(String token, String platform) async {
+  Future<void> registerPushInstallationId(
+    String installationId,
+    String platform,
+  ) async {
     await _postJson('/api/v1/push-tokens', {
-      'token': token,
+      'installation_id': installationId,
+      'target_type': 'fid',
       'platform': platform,
     });
+  }
+
+  Future<void> unregisterPushInstallationId(String installationId) async {
+    final response = await _send(
+      () => _httpClient.delete(
+        ApiConfig.endpoint('/api/v1/push-tokens'),
+        headers: _headers(),
+        body: jsonEncode({
+          'installation_id': installationId,
+          'target_type': 'fid',
+        }),
+      ),
+    );
+    _decodeAny(response);
   }
 
   Future<Map<String, dynamic>> verifySMSCode(String phone, String code) async {

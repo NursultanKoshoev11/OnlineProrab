@@ -83,6 +83,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     _authRepository = AuthRepository(
       apiClient: _apiClient,
       sessionStore: SessionStore(),
+      unregisterPushInstallation: _pushNotificationService.unregisterForSession,
     );
     _projectRepository = ProjectRepository(apiClient: _apiClient);
     _costItemRepository = CostItemRepository(apiClient: _apiClient);

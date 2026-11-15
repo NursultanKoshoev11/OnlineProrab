@@ -7,8 +7,10 @@ class AuthRepository {
   AuthRepository({
     required ApiClient apiClient,
     required SessionStore sessionStore,
+    Future<void> Function()? unregisterPushInstallation,
   }) : _apiClient = apiClient,
-       _sessionStore = sessionStore {
+       _sessionStore = sessionStore,
+       _unregisterPushInstallation = unregisterPushInstallation {
     _apiClient.setSessionHandlers(
       onTokensUpdated: _saveRotatedTokens,
       onSessionExpired: _handleExpiredSession,
@@ -17,6 +19,7 @@ class AuthRepository {
 
   final ApiClient _apiClient;
   final SessionStore _sessionStore;
+  final Future<void> Function()? _unregisterPushInstallation;
   final StreamController<void> _sessionExpiredController =
       StreamController<void>.broadcast();
   SessionData? _currentSession;
@@ -66,13 +69,23 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    await _removePushInstallation();
     await _apiClient.logoutSession();
     await _clearLocalSession(notify: false);
   }
 
   Future<void> deleteAccount() async {
+    await _removePushInstallation();
     await _apiClient.deleteAccount();
     await _clearLocalSession(notify: true);
+  }
+
+  Future<void> _removePushInstallation() async {
+    try {
+      await _unregisterPushInstallation?.call();
+    } catch (_) {
+      // Push cleanup must not prevent account sign-out or deletion.
+    }
   }
 
   Future<void> _handleExpiredSession() async {
