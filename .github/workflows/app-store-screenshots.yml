@@ -1,0 +1,117 @@
+name: App Store Screenshot Capture
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture demo screenshots on iPhone simulator
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Select an Apple screenshot-size simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          SIMULATOR_ID="$(xcrun simctl list devices available --json | python3 -c '
+          import json
+          import sys
+          data = json.load(sys.stdin)
+          devices = [d for group in data["devices"].values() for d in group if d.get("isAvailable")]
+          for wanted in ("iPhone 16 Pro", "iPhone 15 Pro"):
+              match = next((d for d in devices if d.get("name") == wanted), None)
+              if match:
+                  print(match["udid"])
+                  break
+          else:
+              raise SystemExit("No iPhone 16 Pro or iPhone 15 Pro simulator is available")
+          ')"
+          echo "udid=$SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcrun simctl status_bar "$SIMULATOR_ID" override \
+            --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+
+      - name: Create screenshot collector driver
+        run: |
+          mkdir -p test_driver
+          cat > test_driver/app_store_screenshot_driver.dart <<'DART'
+          import 'dart:io';
+          import 'package:integration_test/integration_test_driver_extended.dart';
+
+          Future<void> main() async {
+            final output = Directory('${Platform.environment['RUNNER_TEMP']}/stroy-app-store-screenshots');
+            await output.create(recursive: true);
+            await integrationDriver(
+              onScreenshot: (String name, List<int> image, [Map<String, Object?>? args]) async {
+                final safeName = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+                await File('${output.path}/$safeName.png').writeAsBytes(image, flush: true);
+                return image.length > 8;
+              },
+              writeResponseOnFailure: true,
+            );
+          }
+          DART
+
+      - name: Capture app screens using offline demo data
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          flutter drive \
+            --driver=test_driver/app_store_screenshot_driver.dart \
+            --target=integration_test/offline_design_test.dart \
+            --device-id="$SIMULATOR_ID" \
+            --dart-define=OFFLINE_DEMO=true \
+            --dart-define=SCREENSHOT_PREFIX=STROY-
+
+      - name: Validate screenshots and Apple dimensions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import struct
+
+          directory = Path(os.environ["RUNNER_TEMP"]) / "stroy-app-store-screenshots"
+          files = sorted(directory.glob("*.png"))
+          if len(files) != 10:
+              raise SystemExit(f"Expected 10 screenshots, got {len(files)}: {[p.name for p in files]}")
+          accepted = {(1179, 2556), (1206, 2622)}
+          for path in files:
+              data = path.read_bytes()
+              if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) < 24:
+                  raise SystemExit(f"Invalid PNG: {path.name}")
+              width, height = struct.unpack(">II", data[16:24])
+              if (width, height) not in accepted:
+                  raise SystemExit(f"{path.name}: unsupported screenshot dimensions {width}x{height}")
+              print(f"{path.name}: {width}x{height}")
+          PY
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-app-store-screenshots-${{ github.run_number }}
+          path: ${{ runner.temp }}/stroy-app-store-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 14
