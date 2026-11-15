@@ -95,8 +95,14 @@ jobs:
 
           directory = Path(os.environ["RUNNER_TEMP"]) / "stroy-app-store-screenshots"
           files = sorted(directory.glob("*.png"))
+          if len(files) == 11:
+              empty_state = directory / "STROY-02-empty-search.png"
+              if not empty_state.is_file():
+                  raise SystemExit(f"Missing expected optional screenshot: {empty_state.name}")
+              empty_state.unlink()
+          files = sorted(directory.glob("*.png"))
           if len(files) != 10:
-              raise SystemExit(f"Expected 10 screenshots, got {len(files)}: {[p.name for p in files]}")
+              raise SystemExit(f"Expected 10 App Store screenshots, got {len(files)}: {[p.name for p in files]}")
           accepted = {(1179, 2556), (1206, 2622)}
           for path in files:
               data = path.read_bytes()
