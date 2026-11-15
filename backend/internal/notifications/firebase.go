@@ -18,7 +18,15 @@ const fcmScope = "https://www.googleapis.com/auth/firebase.messaging"
 // Sender is the small interface used by the API. Keeping it narrow makes the
 // HTTP handlers testable without requiring Firebase credentials.
 type Sender interface {
-	Send(ctx context.Context, tokens []string, title, body string, data map[string]string) error
+	Send(ctx context.Context, targets []Target, title, body string, data map[string]string) error
+}
+
+// Target identifies one FCM destination. Firebase Installation IDs (FIDs)
+// are used by current Firebase clients; legacy registration tokens remain
+// supported so already registered devices keep receiving notifications.
+type Target struct {
+	ID   string
+	Type string
 }
 
 type FirebaseSender struct {
@@ -47,7 +55,8 @@ type fcmRequest struct {
 }
 
 type fcmMessage struct {
-	Token        string            `json:"token"`
+	Token        string            `json:"token,omitempty"`
+	FID          string            `json:"fid,omitempty"`
 	Notification fcmNotification   `json:"notification"`
 	Data         map[string]string `json:"data,omitempty"`
 	Android      *fcmAndroidConfig `json:"android,omitempty"`
@@ -67,35 +76,47 @@ type fcmAPNSConfig struct {
 	Headers map[string]string `json:"headers"`
 }
 
-func (s *FirebaseSender) Send(ctx context.Context, tokens []string, title, body string, data map[string]string) error {
+func (s *FirebaseSender) Send(ctx context.Context, targets []Target, title, body string, data map[string]string) error {
 	if s == nil || s.client == nil {
 		return fmt.Errorf("Firebase sender is not configured")
 	}
-	seen := make(map[string]struct{}, len(tokens))
-	for _, token := range tokens {
-		token = strings.TrimSpace(token)
-		if token == "" {
+	seen := make(map[Target]struct{}, len(targets))
+	for _, target := range targets {
+		target.ID = strings.TrimSpace(target.ID)
+		target.Type = strings.TrimSpace(target.Type)
+		if target.ID == "" {
 			continue
 		}
-		if _, ok := seen[token]; ok {
+		if target.Type == "" {
+			target.Type = "token"
+		}
+		if target.Type != "token" && target.Type != "fid" {
+			return fmt.Errorf("unsupported Firebase target type %q", target.Type)
+		}
+		if _, ok := seen[target]; ok {
 			continue
 		}
-		seen[token] = struct{}{}
-		if err := s.sendOne(ctx, token, title, body, data); err != nil {
+		seen[target] = struct{}{}
+		if err := s.sendOne(ctx, target, title, body, data); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *FirebaseSender) sendOne(ctx context.Context, token, title, body string, data map[string]string) error {
-	payload, err := json.Marshal(fcmRequest{Message: fcmMessage{
-		Token:        token,
+func (s *FirebaseSender) sendOne(ctx context.Context, target Target, title, body string, data map[string]string) error {
+	message := fcmMessage{
 		Notification: fcmNotification{Title: title, Body: body},
 		Data:         data,
 		Android:      &fcmAndroidConfig{Priority: "HIGH"},
 		APNS:         &fcmAPNSConfig{Headers: map[string]string{"apns-priority": "10"}},
-	}})
+	}
+	if target.Type == "fid" {
+		message.FID = target.ID
+	} else {
+		message.Token = target.ID
+	}
+	payload, err := json.Marshal(fcmRequest{Message: message})
 	if err != nil {
 		return fmt.Errorf("marshal FCM request: %w", err)
 	}

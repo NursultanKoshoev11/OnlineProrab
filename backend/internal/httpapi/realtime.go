@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/notifications"
 )
 
 type realtimeEvent struct {
@@ -160,26 +162,26 @@ func notifyProjectMembers(ctx context.Context, projectID string, userIDs map[str
 	if len(ids) == 0 {
 		return
 	}
-	rows, err := appState.DB.Pool.Query(ctx, `SELECT token FROM push_tokens WHERE user_id = ANY($1::uuid[])`, ids)
+	rows, err := appState.DB.Pool.Query(ctx, `SELECT token, target_type FROM push_tokens WHERE user_id = ANY($1::uuid[])`, ids)
 	if err != nil {
 		slog.Error("push_token_lookup_failed", "project_id", projectID, "error", err)
 		return
 	}
 	defer rows.Close()
-	tokens := make([]string, 0)
+	targets := make([]notifications.Target, 0)
 	for rows.Next() {
-		var token string
-		if rows.Scan(&token) == nil {
-			tokens = append(tokens, token)
+		var target notifications.Target
+		if rows.Scan(&target.ID, &target.Type) == nil {
+			targets = append(targets, target)
 		}
 	}
-	if err := rows.Err(); err != nil || len(tokens) == 0 {
+	if err := rows.Err(); err != nil || len(targets) == 0 {
 		return
 	}
 	title, body := costItemPushMessage(ctx, projectID, entityID)
 	pushCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	if err := appState.PushSender.Send(pushCtx, tokens, title, body, map[string]string{
+	if err := appState.PushSender.Send(pushCtx, targets, title, body, map[string]string{
 		"type":         "cost_item_created",
 		"project_id":   projectID,
 		"cost_item_id": entityID,
