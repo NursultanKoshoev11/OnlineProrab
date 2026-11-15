@@ -7,6 +7,41 @@ import 'package:online_prorab/services/api_client.dart';
 
 void main() {
   test(
+    'push registration uses Firebase Installation ID target format',
+    () async {
+      final client = ApiClient(
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/api/v1/push-tokens');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['installation_id'], 'Abcdefghijklmnopqrstuv');
+          expect(body['target_type'], 'fid');
+          expect(body['platform'], 'ios');
+          return http.Response('', 204);
+        }),
+      )..setAccessToken('fixture-value');
+
+      await client.registerPushInstallationId('Abcdefghijklmnopqrstuv', 'ios');
+    },
+  );
+
+  test('push unregistration removes the authenticated FID', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.method, 'DELETE');
+        expect(request.url.path, '/api/v1/push-tokens');
+        expect(request.headers['Authorization'], 'Bearer fixture-value');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['installation_id'], 'Abcdefghijklmnopqrstuv');
+        expect(body['target_type'], 'fid');
+        return http.Response('', 204);
+      }),
+    )..setAccessToken('fixture-value');
+
+    await client.unregisterPushInstallationId('Abcdefghijklmnopqrstuv');
+  });
+
+  test(
     'verifySMSCode stores access credential from backend response',
     () async {
       final client = ApiClient(

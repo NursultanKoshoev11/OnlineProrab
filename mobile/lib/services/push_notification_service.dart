@@ -21,11 +21,12 @@ class PushNotificationService {
   final ApiClient _apiClient;
   StreamSubscription<String>? _registrationSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
+  String? _installationId;
   bool _initialized = false;
   bool _initializing = false;
 
   Future<void> initializeForSession() async {
-    if (_initialized || _initializing || kIsWeb) return;
+    if (_initializing || kIsWeb) return;
     if (defaultTargetPlatform != TargetPlatform.android &&
         defaultTargetPlatform != TargetPlatform.iOS) {
       return;
@@ -33,59 +34,77 @@ class PushNotificationService {
 
     _initializing = true;
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      final firstInitialization = !_initialized;
+      if (firstInitialization) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      }
       final messaging = FirebaseMessaging.instance;
+      if (firstInitialization) {
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
 
-      // Listen before requesting permission or registering. On iOS Firebase
-      // can emit the FID as soon as APNs registration completes; attaching the
-      // listener later can lose that first event and leave the device absent
-      // from the server registry.
-      _registrationSubscription = messaging.onRegistered.listen(
-        _registerRegistration,
-      );
+        // Listen before requesting permission or registering. On iOS Firebase
+        // can emit the FID as APNs registration completes.
+        _registrationSubscription = messaging.onRegistered.listen(
+          _registerRegistration,
+        );
 
-      await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-      );
-      await messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+        await messaging.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+          provisional: false,
+        );
+        await messaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+        _messageSubscription = FirebaseMessaging.onMessage.listen((_) {
+          // The SSE stream refreshes the open workspace immediately.
+        });
+        _initialized = true;
+      }
 
-      // firebase_messaging 17 switched Android and iOS to Firebase
-      // Installation IDs (FIDs). With the installation-ID manifest flag
-      // enabled, getToken() is intentionally disabled; onRegistered is the
-      // supported callback and the FCM HTTP v1 API accepts the FID directly.
-      // On iOS, register() can race APNs registration on a fresh install, so
-      // wait briefly for the APNs device token and retry the FID registration.
-      await _registerWithRetry(messaging);
-      _messageSubscription = FirebaseMessaging.onMessage.listen((_) {
-        // The existing SSE stream refreshes the open workspace immediately.
-        // Foreground notification presentation is enabled above for a visible
-        // system notification on both platforms.
-      });
-      _initialized = true;
+      // register() emits the current FID every time. Rebind it after every
+      // authenticated session so server-side delivery recovers after an API
+      // outage and follows account changes on a shared device.
+      await _registerWithRetry(messaging, waitForAPNs: firstInitialization);
     } catch (error, stackTrace) {
       // Push is additive: a Firebase/permission failure must not block login.
-      // Keep _initialized false so a later session initialization can retry.
       debugPrint('STROY push initialization failed: $error');
       debugPrintStack(stackTrace: stackTrace);
-      await _registrationSubscription?.cancel();
-      _registrationSubscription = null;
+      if (!_initialized) {
+        await _registrationSubscription?.cancel();
+        _registrationSubscription = null;
+        await _messageSubscription?.cancel();
+        _messageSubscription = null;
+      }
     } finally {
       _initializing = false;
     }
   }
 
-  Future<void> _registerWithRetry(FirebaseMessaging messaging) async {
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
+  Future<void> unregisterForSession() async {
+    final installationId = _installationId?.trim();
+    if (!_initialized || installationId == null || installationId.isEmpty) {
+      return;
+    }
+    try {
+      await _apiClient.unregisterPushInstallationId(installationId);
+    } catch (_) {
+      // Logout and account deletion must continue when push cleanup is down.
+    }
+  }
+
+  Future<void> _registerWithRetry(
+    FirebaseMessaging messaging, {
+    required bool waitForAPNs,
+  }) async {
+    if (waitForAPNs && defaultTargetPlatform == TargetPlatform.iOS) {
       // Firebase Messaging exposes no APNs-token stream. Polling for a short
       // bounded window avoids the first-launch race without delaying login
       // indefinitely when APNs is unavailable or permission is denied.
@@ -122,14 +141,14 @@ class PushNotificationService {
   Future<void> _registerRegistration(String registrationId) async {
     final value = registrationId.trim();
     if (value.isEmpty) return;
+    _installationId = value;
     final platform = defaultTargetPlatform == TargetPlatform.iOS
         ? 'ios'
         : 'android';
     try {
-      await _apiClient.registerPushToken(value, platform);
+      await _apiClient.registerPushInstallationId(value, platform);
     } catch (_) {
-      // A later FID refresh will retry registration; push delivery must not
-      // block authentication or workspace rendering.
+      // The next authenticated session re-registers this FID.
     }
   }
 

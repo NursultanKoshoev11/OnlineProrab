@@ -162,6 +162,7 @@ void main() {
   test(
     'AuthRepository signOut revokes session and clears secure storage',
     () async {
+      var pushInstallationRemoved = false;
       final store = SessionStore(storage: MemorySecureStore());
       await store.save(
         const SessionData(
@@ -172,6 +173,7 @@ void main() {
       );
       final apiClient = ApiClient(
         httpClient: MockClient((request) async {
+          expect(pushInstallationRemoved, isTrue);
           expect(request.url.path, '/api/v1/auth/session/logout');
           return http.Response(jsonEncode({'status': 'logged_out'}), 200);
         }),
@@ -179,6 +181,9 @@ void main() {
       final repository = AuthRepository(
         apiClient: apiClient,
         sessionStore: store,
+        unregisterPushInstallation: () async {
+          pushInstallationRemoved = true;
+        },
       );
       await repository.loadSession();
 
@@ -187,6 +192,7 @@ void main() {
       expect(apiClient.accessToken, isNull);
       expect(apiClient.refreshToken, isNull);
       expect(await store.load(), isNull);
+      expect(pushInstallationRemoved, isTrue);
     },
   );
 
