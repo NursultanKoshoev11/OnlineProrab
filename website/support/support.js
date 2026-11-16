@@ -33,7 +33,11 @@ if (supportForm instanceof HTMLFormElement) {
         const result = await response.json().catch(() => ({}));
         if (!response.ok || result.status !== "sent") {
           throw new Error(
-            response.status === 429 ? "rate-limited" : "send-failed",
+            response.status === 429
+              ? "rate-limited"
+              : response.status === 503
+                ? "unavailable"
+                : "send-failed",
           );
         }
         supportForm.reset();
@@ -44,10 +48,19 @@ if (supportForm instanceof HTMLFormElement) {
       })
       .catch((error) => {
         if (supportStatus instanceof HTMLElement) {
-          supportStatus.textContent =
-            error instanceof Error && error.message === "rate-limited"
-              ? "Вы отправили несколько обращений. Попробуйте позже."
-              : "Не удалось отправить обращение. Проверьте соединение и попробуйте ещё раз.";
+          if (error instanceof Error && error.message === "rate-limited") {
+            supportStatus.textContent =
+              "Вы отправили несколько обращений. Попробуйте позже.";
+          } else if (error instanceof Error && error.message === "unavailable") {
+            supportStatus.textContent =
+              "Форма поддержки временно недоступна. Попробуйте позже.";
+          } else if (error instanceof TypeError) {
+            supportStatus.textContent =
+              "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.";
+          } else {
+            supportStatus.textContent =
+              "Не удалось отправить сообщение. Попробуйте позже.";
+          }
           supportStatus.classList.add("is-error");
         }
       })
