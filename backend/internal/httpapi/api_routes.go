@@ -27,6 +27,10 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/audit-logs", requireSubscribed(AuditLogs))
 	mux.HandleFunc(api+"/support/channels", requireSubscribed(SupportChannels))
 	mux.HandleFunc(api+"/support/tickets", requireSubscribed(SupportTickets))
+	mux.HandleFunc(
+		api+"/support/public-tickets",
+		withPublicSupportRateLimit(PublicSupportTickets),
+	)
 	mux.HandleFunc(api+"/auth/sms/request", withSMSRequestRateLimit(RequestSMSCode))
 	mux.HandleFunc(api+"/auth/sms/verify", withSMSVerifyRateLimit(VerifySMSCode))
 	mux.HandleFunc(api+"/account/deletion/verify", withSMSVerifyRateLimit(VerifyAccountDeletionSMSCode))

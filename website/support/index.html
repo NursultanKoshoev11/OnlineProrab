@@ -19,7 +19,7 @@
       type="image/png"
       href="../assets/stroy-favicon-user.png?v=20261028-icon-transparent"
     />
-    <link rel="stylesheet" href="../styles.css?v=20261116-support-layout-2" />
+    <link rel="stylesheet" href="../styles.css?v=20261116-support-telegram-3" />
     <script src="support.js" defer></script>
   </head>
   <body class="legal-page min-h-screen">
@@ -107,19 +107,25 @@
             <span>Описание</span>
             <textarea
               name="description"
-              maxlength="4000"
+              maxlength="1200"
               rows="7"
               placeholder="Кратко опишите, что произошло"
               required
             ></textarea>
           </label>
           <button class="legal-action support-submit" type="submit">
-            Отправить сообщение <span aria-hidden="true">↗</span>
+            <span data-submit-label>Отправить сообщение</span>
+            <span aria-hidden="true">↗</span>
           </button>
           <p class="support-form-note">
-            Откроется почтовое приложение с готовым письмом — останется нажать
-            «Отправить».
+            Обращение сразу поступит команде поддержки в Telegram.
           </p>
+          <p
+            class="support-form-status"
+            data-support-status
+            role="status"
+            aria-live="polite"
+          ></p>
         </form>
       </div>
     </main>
