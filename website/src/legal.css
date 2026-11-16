@@ -145,40 +145,114 @@
 .legal-steps li::marker {
   @apply text-[#7f9a5c] font-semibold;
 }
-.support-contact-card {
-  @apply flex items-center gap-4;
-  margin: 26px 0 35px;
-  padding: 23px 20px;
-  border: 1px solid #dfe6d2;
-  @apply rounded-[10px] bg-[#f3f6ed];
-}
-.support-icon {
-  @apply grid place-items-center w-[43px] h-[43px] bg-ink text-lime rounded-lg text-[20px] shrink-0;
-}
-.support-label {
-  @apply block mb-[5px] text-[12px] tracking-[1px] text-[#8b967c];
-}
-.support-email {
-  @apply text-[18px];
-}
-.support-contact-card p {
-  margin: 4px 0 0;
-  @apply text-[14px] text-[#8b967c];
-}
 .support-main {
+  @apply flex items-center;
   min-height: calc(100vh - 170px);
-  display: grid;
-  align-content: center;
+  padding: 76px 0 92px;
 }
-.support-form-wrap {
-  width: min(760px, calc(100% - 96px));
+.support-layout {
+  width: min(1160px, calc(100% - 96px));
   @apply mx-auto;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(420px, 1.05fr);
+  align-items: center;
+  gap: 72px;
+}
+.support-eyebrow {
+  @apply inline-flex items-center gap-3 text-[13px] font-semibold tracking-[1.6px] text-[#728562];
+}
+.support-eyebrow span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a8c86b;
+  box-shadow: 0 0 0 5px #a8c86b22;
+}
+.support-intro h1 {
+  max-width: 570px;
+  margin: 25px 0 20px;
+  font-size: clamp(48px, 5vw, 68px);
+  line-height: 1.04;
+  letter-spacing: -3px;
+  font-weight: 500;
+}
+.support-intro h1 span {
+  color: #71904d;
+}
+.support-lead {
+  max-width: 480px;
+  color: #70796e;
+  font-size: 18px;
+  line-height: 1.75;
+}
+.support-topics {
+  max-width: 490px;
+  margin-top: 30px;
+  border-top: 1px solid var(--color-line);
+}
+.support-topic {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+.support-topic-index,
+.support-form-step {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--color-lime);
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.support-topic strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+.support-topic p {
+  margin-top: 3px;
+  color: #7b8670;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .support-form {
-  @apply grid gap-6 rounded-[14px] border border-line bg-white p-8;
+  @apply grid gap-5 rounded-[18px] border border-line bg-white p-8;
+  box-shadow: 0 18px 55px #203c320d;
+}
+.support-form-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+.support-form-heading h2 {
+  margin: 3px 0 5px;
+  font-size: 25px;
+  line-height: 1.2;
+  letter-spacing: -0.7px;
+  font-weight: 600;
+}
+.support-form-heading p {
+  color: #7b8670;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.support-form-step svg {
+  width: 19px;
+  height: 19px;
+  stroke: var(--color-ink);
+  stroke-width: 1.7px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .support-field {
-  @apply grid gap-2 text-[16px] font-semibold;
+  @apply grid gap-2 text-[15px] font-semibold;
 }
 .support-field input,
 .support-field textarea {
@@ -187,17 +261,35 @@
   border-radius: 8px;
   background: #fff;
   color: var(--color-ink);
-  padding: 13px 15px;
+  padding: 14px 15px;
   font: inherit;
+  font-size: 15px;
   font-weight: 400;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.support-field input::placeholder,
+.support-field textarea::placeholder {
+  color: #9aa391;
+}
+.support-field input:focus,
+.support-field textarea:focus {
+  border-color: #9bb669;
+  outline: 0;
+  box-shadow: 0 0 0 3px #a8c86b33;
 }
 .support-field textarea {
-  min-height: 220px;
+  min-height: 190px;
   resize: vertical;
 }
 .support-submit {
   justify-self: start;
+  margin: 2px 0 0;
   cursor: pointer;
+}
+.support-form-note {
+  color: #7b8670;
+  font-size: 12px;
+  line-height: 1.55;
 }
 .legal-footer {
   padding: 31px 0;
@@ -246,6 +338,14 @@
   .legal-footer-links {
     @apply gap-4;
   }
+  .support-layout {
+    grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+    @apply gap-9;
+  }
+  .support-intro h1 {
+    font-size: clamp(43px, 5vw, 56px);
+    letter-spacing: -2.3px;
+  }
 }
 @media (max-width: 800px) {
   .legal-nav nav {
@@ -273,6 +373,26 @@
   }
   .legal-main h1 {
     @apply text-[52px] tracking-[-2px];
+  }
+  .support-main {
+    min-height: auto;
+    padding: 48px 0 68px;
+  }
+  .support-layout {
+    width: calc(100% - 64px);
+    grid-template-columns: minmax(0, 1fr);
+    @apply gap-9;
+  }
+  .support-intro h1 {
+    max-width: 620px;
+    font-size: clamp(44px, 8vw, 58px);
+    letter-spacing: -2.3px;
+  }
+  .support-topics {
+    max-width: none;
+  }
+  .support-form {
+    @apply p-7;
   }
   .legal-lead {
     @apply text-[18px];
@@ -328,20 +448,38 @@
     padding: 12px 14px;
     @apply gap-3;
   }
-  .support-contact-card {
-    @apply p-4.5 flex-col items-start;
-  }
-  .support-email {
-    @apply text-[18px];
-  }
-  .support-contact-card p {
-    @apply text-[14px];
-  }
-  .support-form-wrap {
+  .support-layout {
     width: calc(100% - 40px);
   }
+  .support-intro h1 {
+    margin: 20px 0 16px;
+    font-size: clamp(39px, 11vw, 48px);
+    letter-spacing: -1.8px;
+  }
+  .support-lead {
+    font-size: 16px;
+  }
+  .support-topics {
+    margin-top: 24px;
+  }
+  .support-topic {
+    gap: 11px;
+    padding: 12px 0;
+  }
+  .support-topic-index,
+  .support-form-step {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+  }
   .support-form {
-    @apply gap-5 p-5;
+    @apply gap-4 p-5;
+  }
+  .support-form-heading h2 {
+    font-size: 22px;
+  }
+  .support-field textarea {
+    min-height: 155px;
   }
   .support-submit {
     width: 100%;
