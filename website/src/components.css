@@ -80,6 +80,8 @@
 }
 .brand img {
   @apply object-contain;
+  width: 38.4px;
+  height: 38.4px;
 }
 .desktop-nav {
   @apply flex items-center gap-8.5 text-[16px] text-[#5e675f] ml-15;
@@ -1467,7 +1469,8 @@ dialog form > .form-note {
     @apply text-[25px];
   }
   .brand img {
-    @apply w-[48px] h-[48px];
+    width: 38.4px;
+    height: 38.4px;
   }
   .desktop-nav {
     @apply hidden;
