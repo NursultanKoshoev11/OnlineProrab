@@ -9,12 +9,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type supportTicketRequest struct {
-	Channel string
-	Subject string
-	Message string
+	Channel string `json:"channel"`
+	Subject string `json:"subject"`
+	Message string `json:"message"`
 }
 
 type supportTicket struct {
@@ -96,10 +97,66 @@ func SupportTickets(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PublicSupportTickets accepts website support requests and delivers them to
+// the same Telegram channel used by authenticated in-app support.
+func PublicSupportTickets(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "support is temporarily unavailable")
+		return
+	}
+	if !telegramSupportConfigured() {
+		Error(w, http.StatusServiceUnavailable, "support messaging is not configured")
+		return
+	}
+
+	var req supportTicketRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8*1024))
+	if err := decoder.Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Subject = strings.TrimSpace(req.Subject)
+	req.Message = strings.TrimSpace(req.Message)
+	if req.Subject == "" ||
+		utf8.RuneCountInString(req.Subject) > 120 ||
+		strings.ContainsAny(req.Subject, "\r\n") {
+		Error(w, http.StatusBadRequest, "subject must contain 1 to 120 characters")
+		return
+	}
+	if req.Message == "" || utf8.RuneCountInString(req.Message) > 1200 {
+		Error(w, http.StatusBadRequest, "message must contain 1 to 1200 characters")
+		return
+	}
+	req.Channel = "telegram"
+
+	ticket, err := createSupportTicket(r.Context(), "", req)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to save support request")
+		return
+	}
+	status, deliveryErr := deliverSupportTicket(r.Context(), "", ticket)
+	ticket.DeliveryStatus = status
+	if deliveryErr != "" {
+		_ = updateSupportDelivery(r.Context(), ticket.ID, status, deliveryErr)
+		Error(w, http.StatusBadGateway, "failed to send support request")
+		return
+	}
+	_ = updateSupportDelivery(r.Context(), ticket.ID, status, "")
+	JSON(w, http.StatusCreated, map[string]string{"status": "sent"})
+}
+
 func createSupportTicket(ctx context.Context, userID string, req supportTicketRequest) (supportTicket, error) {
 	const query = "INSERT INTO support_tickets (user_id, channel, subject, message) VALUES ($1, $2, $3, $4) RETURNING id::text, created_at"
 	ticket := supportTicket{Channel: req.Channel, Subject: req.Subject, Message: req.Message}
-	err := appState.DB.Pool.QueryRow(ctx, query, userID, req.Channel, req.Subject, req.Message).
+	var dbUserID any
+	if userID != "" {
+		dbUserID = userID
+	}
+	err := appState.DB.Pool.QueryRow(ctx, query, dbUserID, req.Channel, req.Subject, req.Message).
 		Scan(&ticket.ID, &ticket.CreatedAt)
 	if err != nil {
 		return supportTicket{}, err
@@ -125,9 +182,14 @@ func whatsappSupportConfigured() bool {
 }
 
 func deliverSupportTicket(ctx context.Context, userID string, ticket supportTicket) (string, string) {
-	var phone string
-	_ = appState.DB.Pool.QueryRow(ctx, "SELECT COALESCE(phone, '') FROM users WHERE id = $1", userID).Scan(&phone)
-	text := fmt.Sprintf("STROY support\nUser: %s\nPhone: %s\nSubject: %s\n\n%s", userID, phone, ticket.Subject, ticket.Message)
+	var text string
+	if userID == "" {
+		text = fmt.Sprintf("STROY website support\nSubject: %s\n\n%s", ticket.Subject, ticket.Message)
+	} else {
+		var phone string
+		_ = appState.DB.Pool.QueryRow(ctx, "SELECT COALESCE(phone, '') FROM users WHERE id = $1", userID).Scan(&phone)
+		text = fmt.Sprintf("STROY support\nUser: %s\nPhone: %s\nSubject: %s\n\n%s", userID, phone, ticket.Subject, ticket.Message)
+	}
 	switch ticket.Channel {
 	case "telegram":
 		if !telegramSupportConfigured() {

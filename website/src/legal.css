@@ -291,6 +291,20 @@
   font-size: 12px;
   line-height: 1.55;
 }
+.support-form-status:empty {
+  display: none;
+}
+.support-form-status {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.support-form-status.is-success {
+  color: #3f7344;
+}
+.support-form-status.is-error {
+  color: #ad4637;
+}
 .legal-footer {
   padding: 31px 0;
   border-top: 1px solid var(--color-line);
