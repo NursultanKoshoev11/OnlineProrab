@@ -19,7 +19,7 @@
       type="image/png"
       href="../assets/stroy-favicon-user.png?v=20261028-icon-transparent"
     />
-    <link rel="stylesheet" href="../styles.css?v=20261116-support-form" />
+    <link rel="stylesheet" href="../styles.css?v=20261116-support-layout-2" />
     <script src="support.js" defer></script>
   </head>
   <body class="legal-page min-h-screen">
@@ -41,9 +41,57 @@
       </div>
     </header>
     <main class="legal-main support-main">
-      <h1 class="sr-only">Поддержка STROY</h1>
-      <div class="support-form-wrap">
+      <div class="support-layout">
+        <section class="support-intro" aria-labelledby="support-title">
+          <p class="support-eyebrow">
+            <span aria-hidden="true"></span>ЦЕНТР ПОДДЕРЖКИ
+          </p>
+          <h1 id="support-title">
+            Есть вопрос<br />
+            по STROY?<br />
+            <span>Поможем разобраться.</span>
+          </h1>
+          <p class="support-lead">
+            Расскажите, что случилось. Команда поддержки подскажет, как решить
+            вопрос и продолжить работу.
+          </p>
+          <div class="support-topics" aria-label="С чем можем помочь">
+            <div class="support-topic">
+              <span class="support-topic-index">01</span>
+              <div>
+                <strong>Вход и SMS-код</strong>
+                <p>Код не приходит или не получается войти</p>
+              </div>
+            </div>
+            <div class="support-topic">
+              <span class="support-topic-index">02</span>
+              <div>
+                <strong>Проекты и команда</strong>
+                <p>Объекты, участники и приглашения</p>
+              </div>
+            </div>
+            <div class="support-topic">
+              <span class="support-topic-index">03</span>
+              <div>
+                <strong>Расходы и документы</strong>
+                <p>Чеки, фотографии и отчёты</p>
+              </div>
+            </div>
+          </div>
+        </section>
         <form class="support-form" data-support-form>
+          <div class="support-form-heading">
+            <span class="support-form-step" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+                <path d="m4.5 7 7.5 6 7.5-6" />
+              </svg>
+            </span>
+            <div>
+              <h2>Напишите нам</h2>
+              <p>Опишите вопрос — этого достаточно, чтобы начать.</p>
+            </div>
+          </div>
           <label class="support-field">
             <span>Тема</span>
             <input
@@ -51,6 +99,7 @@
               name="subject"
               maxlength="120"
               autocomplete="off"
+              placeholder="Например, не приходит SMS-код"
               required
             />
           </label>
@@ -59,13 +108,18 @@
             <textarea
               name="description"
               maxlength="4000"
-              rows="8"
+              rows="7"
+              placeholder="Кратко опишите, что произошло"
               required
             ></textarea>
           </label>
           <button class="legal-action support-submit" type="submit">
-            Отправить
+            Отправить сообщение <span aria-hidden="true">↗</span>
           </button>
+          <p class="support-form-note">
+            Откроется почтовое приложение с готовым письмом — останется нажать
+            «Отправить».
+          </p>
         </form>
       </div>
     </main>
