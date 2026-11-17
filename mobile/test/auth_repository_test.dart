@@ -34,7 +34,10 @@ void main() {
         if (request.url.path == '/api/v1/auth/session') {
           expect(request.headers['Authorization'], 'Bearer token-123');
           return http.Response(
-            jsonEncode({'refresh_token': 'refresh-123'}),
+            jsonEncode({
+              'access_token': 'session-token-123',
+              'refresh_token': 'refresh-123',
+            }),
             201,
           );
         }
@@ -51,14 +54,14 @@ void main() {
     final session = await repository.verifyCode('+996700000000', '123456');
 
     expect(session.phone, '+996700000000');
-    expect(session.accessToken, 'token-123');
+    expect(session.accessToken, 'session-token-123');
     expect(session.refreshToken, 'refresh-123');
-    expect(apiClient.accessToken, 'token-123');
+    expect(apiClient.accessToken, 'session-token-123');
     expect(apiClient.refreshToken, 'refresh-123');
 
     final restored = await SessionStore(storage: storage).load();
     expect(restored, isNotNull);
-    expect(restored!.accessToken, 'token-123');
+    expect(restored!.accessToken, 'session-token-123');
     expect(restored.refreshToken, 'refresh-123');
   });
 
@@ -175,6 +178,7 @@ void main() {
         httpClient: MockClient((request) async {
           expect(pushInstallationRemoved, isTrue);
           expect(request.url.path, '/api/v1/auth/session/logout');
+          expect(request.headers['Authorization'], 'Bearer token-abc');
           return http.Response(jsonEncode({'status': 'logged_out'}), 200);
         }),
       )..setTokens(accessToken: 'token-abc', refreshToken: 'refresh-abc');

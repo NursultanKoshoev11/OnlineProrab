@@ -91,6 +91,19 @@ class ExpenseSearchQuery {
   final int? month;
   final int? year;
 
+  String? get fromDate {
+    if (year == null) return null;
+    return _isoDate(DateTime(year!, month ?? 1));
+  }
+
+  String? get toDate {
+    if (year == null) return null;
+    final end = month == null
+        ? DateTime(year! + 1)
+        : DateTime(year!, month! + 1);
+    return _isoDate(end);
+  }
+
   bool matches(RemoteCostItem item) {
     final normalizedTerm = term.trim().toLowerCase();
     final matchesText =
@@ -108,6 +121,11 @@ class ExpenseSearchQuery {
     return true;
   }
 }
+
+String _isoDate(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
 
 ExpenseSearchQuery parseExpenseSearchQuery(
   String query, {

@@ -341,7 +341,8 @@ class _ExpensesTabState extends State<_ExpensesTab> {
             'Если нажать «Найти расходы», распознанный запрос и сведения о '
             'расходах выбранного объекта (названия, описания, суммы, валюты, '
             'поставщики и даты) сервер STROY отправит настроенному внешнему '
-            'AI-провайдеру, если он включён (например, Google Gemini, Groq или OpenRouter). '
+            'AI-провайдеру, если он включён (например, DeepSeek, Google Gemini, Groq или OpenRouter). '
+            'При ошибке одного сервиса запрос может перейти к резервному провайдеру. '
             'Не диктуйте пароли, коды и другие чувствительные данные.',
           ),
           actions: [
@@ -394,8 +395,9 @@ class _ExpensesTabState extends State<_ExpensesTab> {
             'Сервер STROY передаст ваш запрос и сведения о расходах этого '
             'объекта (названия, описания, суммы, валюты, поставщики и даты) '
             'настроенному внешнему AI-провайдеру, если он включён '
-            '(например, Google Gemini, Groq или OpenRouter). Не вводите пароли, коды и другие '
-            'чувствительные данные.',
+            '(например, DeepSeek, Google Gemini, Groq или OpenRouter). При ошибке '
+            'одного сервиса запрос может перейти к резервному провайдеру. '
+            'Не вводите пароли, коды и другие чувствительные данные.',
           ),
           actions: [
             TextButton(
@@ -418,9 +420,15 @@ class _ExpensesTabState extends State<_ExpensesTab> {
       _aiReportOpen = true;
     });
     try {
+      final dateRange = parseExpenseSearchQuery(query, now: DateTime.now());
       final result = await widget.repository.searchWithAI(
         projectId: widget.project.id,
         query: query.trim(),
+        searchQuery: dateRange.fromDate == null
+            ? null
+            : (dateRange.term.isEmpty ? 'расходы' : dateRange.term),
+        fromDate: dateRange.fromDate,
+        toDate: dateRange.toDate,
       );
       if (!mounted) return;
       setState(() {

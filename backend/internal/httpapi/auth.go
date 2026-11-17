@@ -43,6 +43,7 @@ var accountIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 // developmentSMSCode is available only when local development explicitly
 // enables it, binds the server to loopback, and has no configured SMS sender.
 const developmentSMSCode = "111111"
+const sessionBootstrapTTL = 2 * time.Minute
 
 func isReviewPhone(phone string) bool {
 	if !appState.ReviewOnlyMode {
@@ -335,14 +336,31 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "failed to complete login code")
 		return
 	}
-	if err := tx.Commit(ctx); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to complete login")
+	bootstrapID, err := newSessionBootstrapID()
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to create session token")
 		return
 	}
-
-	token, err := signAccessToken(userID)
+	token, err := signSessionBootstrapToken(userID, bootstrapID)
 	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to sign token")
+		Error(w, http.StatusInternalServerError, "failed to sign session token")
+		return
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM auth_session_bootstrap_tokens WHERE expires_at <= now()
+	`); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to clean up login session tokens")
+		return
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO auth_session_bootstrap_tokens (token_hash, user_id, expires_at)
+		VALUES ($1, $2, now() + make_interval(secs => $3::double precision))
+	`, hashSessionBootstrapID(bootstrapID), userID, sessionBootstrapTTL.Seconds()); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to save login session token")
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to complete login")
 		return
 	}
 
@@ -350,7 +368,7 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		Status:      "verified",
 		AccessToken: token,
 		TokenType:   "Bearer",
-		ExpiresIn:   int64(appState.AccessTokenTTL.Seconds()),
+		ExpiresIn:   int64(sessionBootstrapTTL.Seconds()),
 		UserID:      userID,
 	})
 }
@@ -362,15 +380,28 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			Error(w, http.StatusUnauthorized, "missing bearer token")
 			return
 		}
-		userID, err := parseAccessToken(strings.TrimPrefix(header, "Bearer "))
+		identity, err := parseAuthenticatedToken(strings.TrimPrefix(header, "Bearer "))
 		if err != nil {
 			Error(w, http.StatusUnauthorized, "invalid token")
 			return
 		}
-		if !requireActiveAccount(w, r, userID) {
+		if identity.BootstrapID != "" {
+			if r.Method != http.MethodPost || r.URL.Path != "/api/v1/auth/session" {
+				Error(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+			if !requireActiveAccount(w, r, identity.UserID) {
+				return
+			}
+			r = r.WithContext(withSessionBootstrapID(r.Context(), identity.BootstrapID))
+		} else if !requireActiveSession(w, r, identity.UserID, identity.SessionID) {
 			return
 		}
-		next(w, r.WithContext(withUserID(r.Context(), userID)))
+		ctx := withUserID(r.Context(), identity.UserID)
+		if identity.SessionID != "" {
+			ctx = withSessionID(ctx, identity.SessionID)
+		}
+		next(w, r.WithContext(ctx))
 	}
 }
 
@@ -410,6 +441,39 @@ func requireActiveAccount(w http.ResponseWriter, r *http.Request, userID string)
 	return true
 }
 
+func requireActiveSession(w http.ResponseWriter, r *http.Request, userID, sessionID string) bool {
+	if !accountIDRe.MatchString(userID) || !accountIDRe.MatchString(sessionID) {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	if appState.DB == nil || appState.DB.Pool == nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	var active bool
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM refresh_sessions s
+			JOIN users u ON u.id = s.user_id
+			WHERE s.id = $1::uuid AND s.user_id = $2::uuid
+			  AND s.revoked_at IS NULL AND s.expires_at > now()
+		)
+	`, sessionID, userID).Scan(&active)
+	if err != nil {
+		Error(w, http.StatusServiceUnavailable, "authentication service is unavailable")
+		return false
+	}
+	if !active {
+		Error(w, http.StatusUnauthorized, "invalid token")
+		return false
+	}
+	return true
+}
+
 func signAccessToken(userID string) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": userID,
@@ -417,6 +481,73 @@ func signAccessToken(userID string) (string, error) {
 		"iat": time.Now().Unix(),
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(appState.JWTSecret))
+}
+
+func signSessionAccessToken(userID, sessionID string) (string, error) {
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"sid": sessionID,
+		"exp": time.Now().Add(appState.AccessTokenTTL).Unix(),
+		"iat": time.Now().Unix(),
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(appState.JWTSecret))
+}
+
+func signSessionBootstrapToken(userID, bootstrapID string) (string, error) {
+	claims := jwt.MapClaims{
+		"sub":   userID,
+		"scope": "session_bootstrap",
+		"jti":   bootstrapID,
+		"exp":   time.Now().Add(sessionBootstrapTTL).Unix(),
+		"iat":   time.Now().Unix(),
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(appState.JWTSecret))
+}
+
+type authenticatedTokenIdentity struct {
+	UserID      string
+	SessionID   string
+	BootstrapID string
+}
+
+func parseAuthenticatedToken(rawToken string) (authenticatedTokenIdentity, error) {
+	token, err := jwt.Parse(
+		rawToken,
+		func(token *jwt.Token) (any, error) {
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return []byte(appState.JWTSecret), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
+	if err != nil || !token.Valid {
+		return authenticatedTokenIdentity{}, fmt.Errorf("invalid token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return authenticatedTokenIdentity{}, fmt.Errorf("invalid claims")
+	}
+	userID, ok := claims["sub"].(string)
+	if !ok || userID == "" {
+		return authenticatedTokenIdentity{}, fmt.Errorf("missing subject")
+	}
+	switch claims["scope"] {
+	case nil:
+		sessionID, ok := claims["sid"].(string)
+		if !ok || sessionID == "" {
+			return authenticatedTokenIdentity{}, fmt.Errorf("missing session")
+		}
+		return authenticatedTokenIdentity{UserID: userID, SessionID: sessionID}, nil
+	case "session_bootstrap":
+		bootstrapID, ok := claims["jti"].(string)
+		if !ok || bootstrapID == "" {
+			return authenticatedTokenIdentity{}, fmt.Errorf("missing bootstrap id")
+		}
+		return authenticatedTokenIdentity{UserID: userID, BootstrapID: bootstrapID}, nil
+	default:
+		return authenticatedTokenIdentity{}, fmt.Errorf("unsupported token scope")
+	}
 }
 
 func parseAccessToken(rawToken string) (string, error) {

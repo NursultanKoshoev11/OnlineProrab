@@ -226,10 +226,16 @@ class CostItemRepository {
   Future<RemoteExpenseAiResult> searchWithAI({
     required String projectId,
     required String query,
+    String? searchQuery,
+    String? fromDate,
+    String? toDate,
   }) async {
     final data = await _apiClient.searchExpensesWithAI(
       projectId: projectId,
       query: query,
+      searchQuery: searchQuery,
+      fromDate: fromDate,
+      toDate: toDate,
     );
     return RemoteExpenseAiResult.fromJson(data);
   }

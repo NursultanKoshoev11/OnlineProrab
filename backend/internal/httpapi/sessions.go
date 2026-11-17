@@ -42,6 +42,11 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
 	}
+	bootstrapID := sessionBootstrapIDFromContext(r.Context())
+	if bootstrapID == "" {
+		Error(w, http.StatusUnauthorized, "valid login session token is required")
+		return
+	}
 
 	var req createSessionRequest
 	if r.Body != nil {
@@ -68,6 +73,21 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "stroy:sessions:user:"+userID); err != nil {
+		Error(w, http.StatusServiceUnavailable, "session service is temporarily unavailable")
+		return
+	}
+
+	var consumedUserID string
+	err = tx.QueryRow(ctx, `
+		DELETE FROM auth_session_bootstrap_tokens
+		WHERE token_hash = $1 AND user_id = $2 AND expires_at > now()
+		RETURNING user_id::text
+	`, hashSessionBootstrapID(bootstrapID), userID).Scan(&consumedUserID)
+	if err != nil || consumedUserID != userID {
+		Error(w, http.StatusUnauthorized, "login session token is expired or already used")
+		return
+	}
 
 	_, _ = tx.Exec(ctx, `
 		DELETE FROM refresh_sessions
@@ -92,12 +112,19 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec(ctx, `
+	var sessionID string
+	err = tx.QueryRow(ctx, `
 		INSERT INTO refresh_sessions (user_id, token_hash, device_name, expires_at)
 		VALUES ($1, $2, NULLIF($3, ''), $4)
-	`, userID, hashRefreshToken(refreshToken), req.DeviceName, time.Now().UTC().Add(refreshTokenTTL))
+		RETURNING id::text
+	`, userID, hashRefreshToken(refreshToken), req.DeviceName, time.Now().UTC().Add(refreshTokenTTL)).Scan(&sessionID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to save session")
+		return
+	}
+	accessToken, err := signSessionAccessToken(userID, sessionID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to sign access token")
 		return
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -106,9 +133,10 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusCreated, sessionResponse{
+		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(refreshTokenTTL.Seconds()),
+		ExpiresIn:    int64(appState.AccessTokenTTL.Seconds()),
 	})
 }
 
@@ -170,7 +198,7 @@ func RefreshSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := signAccessToken(userID)
+	accessToken, err := signSessionAccessToken(userID, sessionID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to sign access token")
 		return
@@ -211,12 +239,39 @@ func LogoutSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	_, _ = appState.DB.Pool.Exec(ctx, `
-		UPDATE refresh_sessions
-		SET revoked_at = COALESCE(revoked_at, now())
-		WHERE token_hash = $1
-	`, hashRefreshToken(req.RefreshToken))
+	var err error
+	identity, tokenErr := parseAuthenticatedToken(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") && tokenErr == nil && identity.SessionID != "" {
+		_, err = appState.DB.Pool.Exec(ctx, `
+			UPDATE refresh_sessions
+			SET revoked_at = COALESCE(revoked_at, now())
+			WHERE id = $1 AND user_id = $2
+		`, identity.SessionID, identity.UserID)
+	} else {
+		_, err = appState.DB.Pool.Exec(ctx, `
+			UPDATE refresh_sessions
+			SET revoked_at = COALESCE(revoked_at, now())
+			WHERE token_hash = $1
+		`, hashRefreshToken(req.RefreshToken))
+	}
+	if err != nil {
+		Error(w, http.StatusServiceUnavailable, "session service is temporarily unavailable")
+		return
+	}
 	JSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+func newSessionBootstrapID() (string, error) {
+	buffer := make([]byte, 32)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buffer), nil
+}
+
+func hashSessionBootstrapID(id string) string {
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:])
 }
 
 func newRefreshToken() (string, error) {

@@ -217,7 +217,10 @@ class DemoDataState {
       return _json({'access_token': 'demo-access-token'});
     }
     if (method == 'POST' && path == '/api/v1/auth/session') {
-      return _json({'refresh_token': 'demo-refresh-token'});
+      return _json({
+        'access_token': 'demo-session-access-token',
+        'refresh_token': 'demo-refresh-token',
+      });
     }
     if (method == 'POST' && path == '/api/v1/auth/session/logout') {
       return _json({'status': 'logged_out'});

@@ -64,7 +64,15 @@ func TestDeleteAccountImmediatelyRevokesAccessToken(t *testing.T) {
 	}
 
 	userID := seedAccountDeletionUser(t, db)
-	token, err := signAccessToken(userID)
+	var sessionID string
+	if err := db.Pool.QueryRow(context.Background(), `
+		INSERT INTO refresh_sessions (user_id, token_hash, expires_at)
+		VALUES ($1, 'account-deletion-access-test', now() + interval '1 day')
+		RETURNING id::text
+	`, userID).Scan(&sessionID); err != nil {
+		t.Fatalf("create refresh session: %v", err)
+	}
+	token, err := signSessionAccessToken(userID, sessionID)
 	if err != nil {
 		t.Fatalf("sign access token: %v", err)
 	}

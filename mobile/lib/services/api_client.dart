@@ -89,28 +89,29 @@ class ApiClient {
     return data;
   }
 
-  Future<String> createRefreshSession({String deviceName = 'mobile'}) async {
+  Future<ApiSessionTokens> createRefreshSession({
+    String deviceName = 'mobile',
+  }) async {
     final data = await _postJson('/api/v1/auth/session', {
       'device_name': deviceName,
     }, retry: false);
+    final access = data['access_token']?.toString() ?? '';
     final token = data['refresh_token']?.toString() ?? '';
-    if (token.isEmpty) {
-      throw const ApiException(500, 'Сервер не вернул токен обновления сессии');
+    if (access.isEmpty || token.isEmpty) {
+      throw const ApiException(500, 'Сервер не вернул токены сессии');
     }
+    accessToken = access;
     refreshToken = token;
-    return token;
+    return ApiSessionTokens(accessToken: access, refreshToken: token);
   }
 
   Future<void> logoutSession() async {
     final token = refreshToken;
     if (token != null && token.isNotEmpty) {
       try {
-        await _postJson(
-          '/api/v1/auth/session/logout',
-          {'refresh_token': token},
-          retry: false,
-          includeBearer: false,
-        );
+        await _postJson('/api/v1/auth/session/logout', {
+          'refresh_token': token,
+        });
       } catch (_) {
         // Local logout must still complete when the server is unavailable.
       }
@@ -219,12 +220,23 @@ class ApiClient {
   Future<Map<String, dynamic>> searchExpensesWithAI({
     required String projectId,
     required String query,
+    String? searchQuery,
+    String? fromDate,
+    String? toDate,
   }) async {
     final response = await _send(
       () => _httpClient.post(
         ApiConfig.endpoint('/api/v1/expense-ai/search'),
         headers: _headers(),
-        body: jsonEncode({'project_id': projectId, 'query': query}),
+        body: jsonEncode({
+          'project_id': projectId,
+          'query': query,
+          if (searchQuery != null) 'search_query': searchQuery,
+          if (fromDate != null && toDate != null) ...{
+            'from_date': fromDate,
+            'to_date': toDate,
+          },
+        }),
       ),
       timeout: const Duration(seconds: 90),
     );
@@ -634,4 +646,14 @@ class ApiException implements Exception {
 
   @override
   String toString() => 'ApiException($statusCode): $message';
+}
+
+class ApiSessionTokens {
+  const ApiSessionTokens({
+    required this.accessToken,
+    required this.refreshToken,
+  });
+
+  final String accessToken;
+  final String refreshToken;
 }

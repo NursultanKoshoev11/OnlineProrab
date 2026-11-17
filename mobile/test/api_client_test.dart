@@ -62,6 +62,30 @@ void main() {
     },
   );
 
+  test('AI expense search sends parsed date bounds and search terms', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/expense-ai/search');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['project_id'], 'project-1');
+        expect(body['query'], 'Сколько потратили на окна за май 2026?');
+        expect(body['search_query'], 'окна');
+        expect(body['from_date'], '2026-05-01');
+        expect(body['to_date'], '2026-06-01');
+        return http.Response(jsonEncode({'items': [], 'totals': {}}), 200);
+      }),
+    );
+
+    await client.searchExpensesWithAI(
+      projectId: 'project-1',
+      query: 'Сколько потратили на окна за май 2026?',
+      searchQuery: 'окна',
+      fromDate: '2026-05-01',
+      toDate: '2026-06-01',
+    );
+  });
+
   test(
     'createProject sends bearer header, accept header and JSON body',
     () async {

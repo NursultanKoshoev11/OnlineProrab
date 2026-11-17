@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,11 +20,16 @@ const (
 	expenseAISearchTimeout       = 90 * time.Second
 	expenseAIChunkSize           = 100
 	maxExpenseAIConcurrentChunks = 4
+	maxExpenseAIItemsPerSearch   = 500
+	maxExpenseAISearchRecords    = 5000
 )
 
 type expenseAISearchRequest struct {
-	ProjectID string `json:"project_id"`
-	Query     string `json:"query"`
+	ProjectID   string `json:"project_id"`
+	Query       string `json:"query"`
+	SearchQuery string `json:"search_query"`
+	FromDate    string `json:"from_date"`
+	ToDate      string `json:"to_date"`
 }
 
 type expenseAIModelItem struct {
@@ -78,12 +84,26 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 	}
 	req.ProjectID = strings.TrimSpace(req.ProjectID)
 	req.Query = strings.TrimSpace(req.Query)
+	req.SearchQuery = strings.TrimSpace(req.SearchQuery)
 	if req.ProjectID == "" || req.Query == "" {
 		Error(w, http.StatusBadRequest, "project_id and query are required")
 		return
 	}
 	if len([]rune(req.Query)) > maxExpenseAIQueryLength {
 		Error(w, http.StatusBadRequest, "query is too long")
+		return
+	}
+	searchQuery := req.SearchQuery
+	if searchQuery == "" {
+		searchQuery = req.Query
+	}
+	if len([]rune(searchQuery)) > maxExpenseAIQueryLength {
+		Error(w, http.StatusBadRequest, "search query is too long")
+		return
+	}
+	fromDate, toDate, err := validateExpenseAISearchRange(req.FromDate, req.ToDate)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "invalid date range")
 		return
 	}
 
@@ -94,14 +114,34 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := loadExpenseAIItems(ctx, req.ProjectID)
+	aggregateQuery := isExpenseAggregateQuery(searchQuery)
+	providersConfigured := len(configuredExpenseAIProviders()) > 0
+	userID := userIDFromContext(r.Context())
+	items, totalCount, err := loadExpenseAIItems(ctx, req.ProjectID, fromDate, toDate)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to load cost items")
 		return
 	}
-
-	aggregateQuery := isExpenseAggregateQuery(req.Query)
-	selected := localExpenseMatches(items, req.Query)
+	if totalCount > maxExpenseAISearchRecords {
+		Error(w, http.StatusRequestEntityTooLarge, "Слишком много расходов для одного поиска. Уточните период, например выберите месяц и год.")
+		return
+	}
+	if !aggregateQuery && providersConfigured {
+		quotaCtx, quotaCancel := context.WithTimeout(ctx, 2*time.Second)
+		retryAfter, err := reserveExpenseAISearch(quotaCtx, userID)
+		quotaCancel()
+		if err != nil {
+			slog.ErrorContext(ctx, "expense_ai_quota_check_failed", "error_type", fmt.Sprintf("%T", err))
+			Error(w, http.StatusServiceUnavailable, "expense search is temporarily unavailable")
+			return
+		}
+		if retryAfter > 0 {
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			Error(w, http.StatusTooManyRequests, "Достигнут часовой лимит AI-поиска. Попробуйте позже.")
+			return
+		}
+	}
+	selected := localExpenseMatches(items, searchQuery)
 	mode := "local"
 	note := "AI-провайдеры не настроены на сервере; показан обычный поиск по всем расходам."
 	modelSummary := ""
@@ -112,21 +152,27 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		// An overall total is a deterministic database calculation. Do not
 		// call an external provider for a query that has no semantic filter.
 		note = fmt.Sprintf("Общий итог рассчитан сервером по всем %d расходам.", len(items))
-	} else if len(configuredExpenseAIProviders()) > 0 {
-		selection, provider, model, analyzedCount, callErr := askExpenseAIForAllExpenseIDs(ctx, req.Query, items)
+	} else if providersConfigured {
+		analysisItems, limited := expenseAIItemsForAnalysis(items)
+		selection, provider, model, analyzedCount, callErr := askExpenseAIForAllExpenseIDs(ctx, searchQuery, analysisItems)
 		aiAnalyzedCount = analyzedCount
-		if callErr != nil {
-			// Keep successful chunks and add deterministic matches. A single
-			// provider/network failure must not erase valid AI selections.
-			slog.Warn("expense_ai_chunks_incomplete", "analyzed_count", analyzedCount, "total_count", len(items), "error_type", fmt.Sprintf("%T", callErr))
+		if callErr != nil || limited {
+			// Preserve deterministic matches across the full result set while
+			// bounding external provider calls to a recent, visible sample.
+			if callErr != nil {
+				slog.WarnContext(ctx, "expense_ai_chunks_incomplete", "error_type", fmt.Sprintf("%T", callErr))
+			}
 			selected = mergeExpenseSelections(
 				items,
 				validExpenseSelection(items, selection.SelectedIDs),
-				localExpenseMatches(items, req.Query),
+				localExpenseMatches(items, searchQuery),
 			)
-			note = fmt.Sprintf("AI проанализировал %d из %d расходов; показаны подтверждённые совпадения, резервный поиск добавлен.", analyzedCount, len(items))
+			note = fmt.Sprintf("AI проанализировал %d из %d расходов; обычный поиск проверил все записи и добавил совпадения.", analyzedCount, len(items))
 			modelSummary = strings.TrimSpace(selection.Summary)
 			modelName = model
+			if callErr == nil {
+				mode = provider
+			}
 		} else {
 			selected = validExpenseSelection(items, selection.SelectedIDs)
 			mode = provider
@@ -146,7 +192,7 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 		Totals:          make(map[string]float64),
 		Items:           make([]CostItemDTO, 0, len(selected)),
 		Model:           modelName,
-		TotalCount:      len(items),
+		TotalCount:      totalCount,
 		AIAnalyzedCount: aiAnalyzedCount,
 		AIComplete:      aiComplete,
 	}
@@ -169,16 +215,59 @@ func ExpenseAISearch(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, response)
 }
 
-func loadExpenseAIItems(ctx context.Context, projectID string) ([]CostItemDTO, error) {
+func expenseAIItemsForAnalysis(items []CostItemDTO) ([]CostItemDTO, bool) {
+	if len(items) <= maxExpenseAIItemsPerSearch {
+		return items, false
+	}
+	return items[:maxExpenseAIItemsPerSearch], true
+}
+
+func validateExpenseAISearchRange(fromDate, toDate string) (string, string, error) {
+	fromDate = strings.TrimSpace(fromDate)
+	toDate = strings.TrimSpace(toDate)
+	if fromDate == "" && toDate == "" {
+		return "", "", nil
+	}
+	if fromDate == "" || toDate == "" {
+		return "", "", fmt.Errorf("both date range bounds are required")
+	}
+	from, err := time.Parse("2006-01-02", fromDate)
+	if err != nil || from.Format("2006-01-02") != fromDate {
+		return "", "", fmt.Errorf("invalid range start")
+	}
+	to, err := time.Parse("2006-01-02", toDate)
+	if err != nil || to.Format("2006-01-02") != toDate || !to.After(from) {
+		return "", "", fmt.Errorf("invalid range end")
+	}
+	return fromDate, toDate, nil
+}
+
+func loadExpenseAIItems(ctx context.Context, projectID, fromDate, toDate string) ([]CostItemDTO, int, error) {
+	var totalCount int
+	if err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM cost_items
+		WHERE project_id = $1 AND deleted_at IS NULL
+		  AND ($2 = '' OR spent_at >= NULLIF($2, '')::date)
+		  AND ($3 = '' OR spent_at < NULLIF($3, '')::date)
+	`, projectID, fromDate, toDate).Scan(&totalCount); err != nil {
+		return nil, 0, err
+	}
+	if totalCount > maxExpenseAISearchRecords {
+		return nil, totalCount, nil
+	}
 	rows, err := appState.DB.Pool.Query(ctx, `
 		SELECT id::text, project_id::text, title, COALESCE(description, ''), category, amount::float8, currency,
 		       COALESCE(vendor, ''), COALESCE(receipt_file_id::text, ''), spent_at::text, created_at::text
 		FROM cost_items
 		WHERE project_id = $1 AND deleted_at IS NULL
+		  AND ($2 = '' OR spent_at >= NULLIF($2, '')::date)
+		  AND ($3 = '' OR spent_at < NULLIF($3, '')::date)
 		ORDER BY spent_at DESC, created_at DESC
-	`, projectID)
+		LIMIT $4
+	`, projectID, fromDate, toDate, maxExpenseAISearchRecords+1)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -186,11 +275,17 @@ func loadExpenseAIItems(ctx context.Context, projectID string) ([]CostItemDTO, e
 	for rows.Next() {
 		var item CostItemDTO
 		if err := rows.Scan(&item.ID, &item.ProjectID, &item.Title, &item.Description, &item.Category, &item.Amount, &item.Currency, &item.Vendor, &item.ReceiptFileID, &item.SpentAt, &item.CreatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if len(items) > maxExpenseAISearchRecords {
+		return nil, maxExpenseAISearchRecords + 1, nil
+	}
+	return items, totalCount, nil
 }
 
 func askExpenseAIForAllExpenseIDs(ctx context.Context, query string, items []CostItemDTO) (expenseAIModelResponse, string, string, int, error) {
@@ -365,9 +460,9 @@ func askGeminiForExpenseIDs(ctx context.Context, query string, items []CostItemD
 		return expenseAIModelResponse{}, err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	response, err := (&http.Client{Timeout: 15 * time.Second}).Do(request)
+	response, err := newOutboundHTTPClient(15 * time.Second).Do(request)
 	if err != nil {
-		return expenseAIModelResponse{}, err
+		return expenseAIModelResponse{}, fmt.Errorf("gemini request failed")
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {

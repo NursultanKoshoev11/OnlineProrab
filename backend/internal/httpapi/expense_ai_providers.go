@@ -283,9 +283,9 @@ func postExpenseAIJSON(ctx context.Context, provider expenseAIProviderConfig, en
 	for key, value := range headers {
 		request.Header.Set(key, value)
 	}
-	response, err := (&http.Client{Timeout: expenseAIProviderTimeout}).Do(request)
+	response, err := newOutboundHTTPClient(expenseAIProviderTimeout).Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %v", err)
+		return nil, fmt.Errorf("request failed")
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
