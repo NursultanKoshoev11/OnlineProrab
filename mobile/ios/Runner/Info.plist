@@ -6,6 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>ru</string>
+	</array>
 	<!-- STROY uses only Apple-provided TLS/HTTPS encryption; no non-exempt cryptography. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
