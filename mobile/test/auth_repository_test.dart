@@ -344,10 +344,7 @@ void main() {
         (_) => expiredCount++,
       );
 
-      await expectLater(
-        apiClient.listProjects(),
-        throwsA(isA<ApiException>()),
-      );
+      await expectLater(apiClient.listProjects(), throwsA(isA<ApiException>()));
       await Future<void>.delayed(Duration.zero);
 
       expect(expiredCount, 0);
