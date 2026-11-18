@@ -38,7 +38,9 @@ type authResponse struct {
 	UserID      string `json:"user_id,omitempty"`
 }
 
-var phoneRe = regexp.MustCompile(`^\+?[0-9]{9,15}$`)
+// phoneRe validates the canonical form produced by phone.Normalize: E.164
+// digits after "+", never starting with 0 (no country code starts with 0).
+var phoneRe = regexp.MustCompile(`^\+[1-9][0-9]{8,14}$`)
 var accountIDRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // developmentSMSCode is available only when local development explicitly

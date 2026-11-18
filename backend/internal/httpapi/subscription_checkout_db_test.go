@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -123,5 +125,79 @@ func TestOBankPaidResultActivatesLocallyCanceledOrder(t *testing.T) {
 	result.AmountKopecks = 1
 	if err := applyOBankResult(ctx, result); err == nil {
 		t.Fatalf("mismatched paid result was accepted")
+	}
+}
+
+func TestConcurrentCheckoutsCreateOneOBankInvoice(t *testing.T) {
+	db := openMigratedTestDB(t)
+	previousState := appState
+	previousCreate := createOBankInvoiceFunc
+	defer func() {
+		appState = previousState
+		createOBankInvoiceFunc = previousCreate
+	}()
+	appState = State{DB: db}
+
+	var calls atomic.Int32
+	createOBankInvoiceFunc = func(ctx context.Context, order subscriptionPaymentOrder) (obank.Invoice, error) {
+		n := calls.Add(1)
+		// Keep the bank call slow enough that every request reaches the lock
+		// while the first one is still waiting for the bank.
+		time.Sleep(300 * time.Millisecond)
+		return obank.Invoice{
+			ID:         fmt.Sprintf("inv-%d", n),
+			PaymentURL: fmt.Sprintf("https://pay.example/inv-%d", n),
+		}, nil
+	}
+
+	ctx := context.Background()
+	var userID string
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO users (phone) VALUES ('+996700000124') RETURNING id::text`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	order := subscriptionPaymentOrder{
+		OrderID: "order-concurrent-checkout", UserID: userID, IdempotencyKey: "idem-key-concurrent-01",
+		PlanID: "standard", BillingPeriod: "month", AmountKGS: 500, AmountKopecks: 50000,
+		Currency: "KGS", Status: "pending",
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO subscription_payment_orders (
+			order_id, user_id, idempotency_key, plan_code, billing_period,
+			amount_kgs, amount_kopecks, currency, status
+		) VALUES ($1, $2, $3, 'standard', 'month', 500, 50000, 'KGS', 'pending')
+	`, order.OrderID, userID, order.IdempotencyKey); err != nil {
+		t.Fatalf("seed order: %v", err)
+	}
+
+	const requests = 5
+	results := make([]subscriptionPaymentOrder, requests)
+	errs := make([]error, requests)
+	var wg sync.WaitGroup
+	for i := range requests {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = ensureOBankInvoice(ctx, order)
+		}()
+	}
+	wg.Wait()
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("bank invoice created %d times, want exactly once", got)
+	}
+	for i := range requests {
+		if errs[i] != nil {
+			t.Fatalf("request %d: %v", i, errs[i])
+		}
+		if results[i].InvoiceID != "inv-1" || results[i].PaymentURL != "https://pay.example/inv-1" {
+			t.Fatalf("request %d got invoice %q url %q, want the single saved invoice", i, results[i].InvoiceID, results[i].PaymentURL)
+		}
+	}
+	var savedInvoice string
+	if err := db.Pool.QueryRow(ctx, `SELECT provider_invoice_id FROM subscription_payment_orders WHERE order_id = $1`, order.OrderID).Scan(&savedInvoice); err != nil {
+		t.Fatalf("load order: %v", err)
+	}
+	if savedInvoice != "inv-1" {
+		t.Fatalf("saved invoice %q, want inv-1", savedInvoice)
 	}
 }
