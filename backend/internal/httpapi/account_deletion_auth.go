@@ -169,7 +169,16 @@ func requireAccountDeletionAuth(next http.HandlerFunc) http.HandlerFunc {
 		rawToken := strings.TrimPrefix(header, "Bearer ")
 		userID, err := parseAccountDeletionToken(rawToken)
 		if err != nil {
-			userID, err = parseAccessToken(rawToken)
+			identity, accessErr := parseAuthenticatedToken(rawToken)
+			if accessErr != nil || identity.SessionID == "" {
+				Error(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+			userID = identity.UserID
+			if !requireActiveSession(w, r, identity.UserID, identity.SessionID) {
+				return
+			}
+			err = nil
 		}
 		if err != nil {
 			Error(w, http.StatusUnauthorized, "invalid token")

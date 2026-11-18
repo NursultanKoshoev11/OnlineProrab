@@ -259,6 +259,17 @@ func pruneAuthHistory(ctx context.Context) error {
 	`, smsCodeRetention); err != nil {
 		return fmt.Errorf("SMS login codes: %w", err)
 	}
+	if err := deleteExpiredAuthRows(ctx, `
+		DELETE FROM expense_ai_search_attempts
+		WHERE id IN (
+			SELECT id FROM expense_ai_search_attempts
+			WHERE created_at < now() - make_interval(secs => $1)
+			ORDER BY created_at
+			LIMIT $2
+		)
+	`, expenseAISearchRetention); err != nil {
+		return fmt.Errorf("AI search attempts: %w", err)
+	}
 	return nil
 }
 

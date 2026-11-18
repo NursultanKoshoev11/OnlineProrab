@@ -304,26 +304,19 @@ class _ProjectWorkspaceState extends State<_ProjectWorkspace> {
           : null,
     );
     try {
-      final downloaded = await service.download(
+      final directory = await getTemporaryDirectory();
+      final stored = await service.downloadToFile(
         fileId: file.id,
         fallbackFileName: file.originalName,
         fallbackContentType: file.contentType,
+        directory: Directory('${directory.path}/project_files'),
       );
-      final directory = await getTemporaryDirectory();
-      final safeName = _safeFileName(downloaded.fileName);
-      final localFile = File('${directory.path}/$safeName');
-      await localFile.writeAsBytes(downloaded.bytes, flush: true);
-      await OpenFilex.open(localFile.path);
+      await OpenFilex.open(stored.file.path);
     } catch (error) {
       if (mounted) _toast(context, _errorText(error));
     } finally {
       service.close();
     }
-  }
-
-  String _safeFileName(String value) {
-    final cleaned = value.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    return cleaned.isEmpty ? 'online_prorab_file' : cleaned;
   }
 }
 

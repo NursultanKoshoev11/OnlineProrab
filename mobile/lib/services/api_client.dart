@@ -89,28 +89,29 @@ class ApiClient {
     return data;
   }
 
-  Future<String> createRefreshSession({String deviceName = 'mobile'}) async {
+  Future<ApiSessionTokens> createRefreshSession({
+    String deviceName = 'mobile',
+  }) async {
     final data = await _postJson('/api/v1/auth/session', {
       'device_name': deviceName,
     }, retry: false);
+    final access = data['access_token']?.toString() ?? '';
     final token = data['refresh_token']?.toString() ?? '';
-    if (token.isEmpty) {
-      throw const ApiException(500, 'Сервер не вернул токен обновления сессии');
+    if (access.isEmpty || token.isEmpty) {
+      throw const ApiException(500, 'Сервер не вернул токены сессии');
     }
+    accessToken = access;
     refreshToken = token;
-    return token;
+    return ApiSessionTokens(accessToken: access, refreshToken: token);
   }
 
   Future<void> logoutSession() async {
     final token = refreshToken;
     if (token != null && token.isNotEmpty) {
       try {
-        await _postJson(
-          '/api/v1/auth/session/logout',
-          {'refresh_token': token},
-          retry: false,
-          includeBearer: false,
-        );
+        await _postJson('/api/v1/auth/session/logout', {
+          'refresh_token': token,
+        });
       } catch (_) {
         // Local logout must still complete when the server is unavailable.
       }
@@ -131,7 +132,7 @@ class ApiClient {
       );
 
   Future<Map<String, dynamic>> getProject(String projectId) async {
-    final data = await getJson('/api/v1/projects/' + projectId);
+    final data = await getJson('/api/v1/projects/${_segment(projectId)}');
     if (data is Map<String, dynamic>) return data;
     throw const ApiException(500, 'Сервер вернул некорректные данные объекта');
   }
@@ -200,17 +201,17 @@ class ApiClient {
     String? startDate,
     double? budgetAmount,
     String? currency,
-  }) => patchJson('/api/v1/projects/$projectId', {
+  }) => patchJson('/api/v1/projects/${_segment(projectId)}', {
     'name': name,
     'address': address,
     'status': status,
-    if (startDate != null) 'start_date': startDate,
-    if (budgetAmount != null) 'budget_amount': budgetAmount,
-    if (currency != null) 'currency': currency,
+    'start_date': ?startDate,
+    'budget_amount': ?budgetAmount,
+    'currency': ?currency,
   });
 
   Future<void> deleteProject(String projectId) async {
-    await deleteJson('/api/v1/projects/$projectId');
+    await deleteJson('/api/v1/projects/${_segment(projectId)}');
   }
 
   Future<List<dynamic>> listCostItems(String projectId) async =>
@@ -219,12 +220,23 @@ class ApiClient {
   Future<Map<String, dynamic>> searchExpensesWithAI({
     required String projectId,
     required String query,
+    String? searchQuery,
+    String? fromDate,
+    String? toDate,
   }) async {
     final response = await _send(
       () => _httpClient.post(
         ApiConfig.endpoint('/api/v1/expense-ai/search'),
         headers: _headers(),
-        body: jsonEncode({'project_id': projectId, 'query': query}),
+        body: jsonEncode({
+          'project_id': projectId,
+          'query': query,
+          'search_query': ?searchQuery,
+          if (fromDate != null && toDate != null) ...{
+            'from_date': fromDate,
+            'to_date': toDate,
+          },
+        }),
       ),
       timeout: const Duration(seconds: 90),
     );
@@ -250,7 +262,7 @@ class ApiClient {
     'currency': currency,
     'vendor': vendor,
     'spent_at': spentAt,
-    if (receiptFileId != null) 'receipt_file_id': receiptFileId,
+    'receipt_file_id': ?receiptFileId,
   });
 
   Future<Map<String, dynamic>> updateCostItem({
@@ -263,7 +275,7 @@ class ApiClient {
     String currency = 'KGS',
     String vendor = '',
     String? receiptFileId,
-  }) => patchJson('/api/v1/cost-items/$costItemId', {
+  }) => patchJson('/api/v1/cost-items/${_segment(costItemId)}', {
     'title': title,
     'amount': amount,
     'description': description,
@@ -271,11 +283,11 @@ class ApiClient {
     'currency': currency,
     'vendor': vendor,
     'spent_at': spentAt,
-    if (receiptFileId != null) 'receipt_file_id': receiptFileId,
+    'receipt_file_id': ?receiptFileId,
   });
 
   Future<void> deleteCostItem(String costItemId) async {
-    await deleteJson('/api/v1/cost-items/$costItemId');
+    await deleteJson('/api/v1/cost-items/${_segment(costItemId)}');
   }
 
   Future<List<dynamic>> listDailyReports(String projectId) async => _asList(
@@ -293,7 +305,7 @@ class ApiClient {
     'summary': summary,
     'workers_count': workersCount,
     'issues': issues,
-    if (reportDate != null) 'report_date': reportDate,
+    'report_date': ?reportDate,
   });
 
   Future<Map<String, dynamic>> updateDailyReport({
@@ -302,15 +314,15 @@ class ApiClient {
     required int workersCount,
     String issues = '',
     String? reportDate,
-  }) => patchJson('/api/v1/daily-reports/$reportId', {
+  }) => patchJson('/api/v1/daily-reports/${_segment(reportId)}', {
     'summary': summary,
     'workers_count': workersCount,
     'issues': issues,
-    if (reportDate != null) 'report_date': reportDate,
+    'report_date': ?reportDate,
   });
 
   Future<void> deleteDailyReport(String reportId) async {
-    await deleteJson('/api/v1/daily-reports/$reportId');
+    await deleteJson('/api/v1/daily-reports/${_segment(reportId)}');
   }
 
   Future<List<dynamic>> listTasks(String projectId) async =>
@@ -327,7 +339,7 @@ class ApiClient {
     'title': title,
     'description': description,
     'status': status,
-    if (dueDate != null) 'due_date': dueDate,
+    'due_date': ?dueDate,
   });
 
   Future<Map<String, dynamic>> updateTask({
@@ -336,15 +348,15 @@ class ApiClient {
     String description = '',
     String status = 'open',
     String? dueDate,
-  }) => patchJson('/api/v1/tasks/$taskId', {
+  }) => patchJson('/api/v1/tasks/${_segment(taskId)}', {
     'title': title,
     'description': description,
     'status': status,
-    if (dueDate != null) 'due_date': dueDate,
+    'due_date': ?dueDate,
   });
 
   Future<void> deleteTask(String taskId) async {
-    await deleteJson('/api/v1/tasks/$taskId');
+    await deleteJson('/api/v1/tasks/${_segment(taskId)}');
   }
 
   Future<List<dynamic>> listFiles(String projectId) async =>
@@ -399,7 +411,7 @@ class ApiClient {
   }
 
   Future<void> deleteFile(String fileId) async {
-    await deleteJson('/api/v1/files/$fileId');
+    await deleteJson('/api/v1/files/${_segment(fileId)}');
   }
 
   Future<List<dynamic>> listAuditLogs(String projectId) async =>
@@ -448,11 +460,12 @@ class ApiClient {
 
   Future<Map<String, dynamic>> patchJson(
     String path,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, [
+    Map<String, String>? query,
+  ]) async {
     final response = await _send(
       () => _httpClient.patch(
-        ApiConfig.endpoint(path),
+        ApiConfig.endpoint(path, query),
         headers: _headers(),
         body: jsonEncode(body),
       ),
@@ -468,9 +481,12 @@ class ApiClient {
     return _decodeAny(response);
   }
 
-  Future<dynamic> deleteJson(String path) async {
+  Future<dynamic> deleteJson(String path, [Map<String, String>? query]) async {
     final response = await _send(
-      () => _httpClient.delete(ApiConfig.endpoint(path), headers: _headers()),
+      () => _httpClient.delete(
+        ApiConfig.endpoint(path, query),
+        headers: _headers(),
+      ),
     );
     return _decodeAny(response);
   }
@@ -480,9 +496,20 @@ class ApiClient {
     bool retry = true,
     Duration? timeout,
   }) async {
+    final sentAccessToken = accessToken;
     final response = await _perform(request, timeout: timeout);
     if (response.statusCode != 401 || !retry) return response;
 
+    // Another request already rotated the tokens while this one was in
+    // flight: retry with the new access token instead of refreshing again.
+    final current = accessToken;
+    if (current != null && current.isNotEmpty && current != sentAccessToken) {
+      final retried = await _perform(request, timeout: timeout);
+      if (retried.statusCode == 401) await _expireSession();
+      return retried;
+    }
+
+    // Throws ApiException on transient failures, which keeps the session.
     final refreshed = await _refreshTokens();
     if (!refreshed) {
       await _expireSession();
@@ -518,33 +545,54 @@ class ApiClient {
     return future.whenComplete(() => _refreshInFlight = null);
   }
 
+  /// Returns false only when the server definitively rejected the refresh
+  /// token (400/401/403). Network errors, timeouts, rate limits and server
+  /// errors throw [ApiException] so callers keep the stored session.
   Future<bool> _doRefreshTokens() async {
     final token = refreshToken;
     if (token == null || token.isEmpty) return false;
 
-    try {
-      final response = await _perform(
-        () => _httpClient.post(
-          ApiConfig.endpoint('/api/v1/auth/session/refresh'),
-          headers: _headers(includeBearer: false),
-          body: jsonEncode({'refresh_token': token}),
-        ),
+    final response = await _perform(
+      () => _httpClient.post(
+        ApiConfig.endpoint('/api/v1/auth/session/refresh'),
+        headers: _headers(includeBearer: false),
+        body: jsonEncode({'refresh_token': token}),
+      ),
+    );
+    if (_isRefreshRejected(response.statusCode)) return false;
+    if (response.statusCode >= 400) {
+      throw ApiException(
+        response.statusCode,
+        'Не удалось обновить сессию. Попробуйте ещё раз.',
       );
-      if (response.statusCode >= 400) return false;
-      final data = _decodeObject(response);
-      final newAccess = data['access_token']?.toString() ?? '';
-      final newRefresh = data['refresh_token']?.toString() ?? '';
-      if (newAccess.isEmpty || newRefresh.isEmpty) return false;
-
-      accessToken = newAccess;
-      refreshToken = newRefresh;
-      final handler = _onTokensUpdated;
-      if (handler != null) await handler(newAccess, newRefresh);
-      return true;
-    } catch (_) {
-      return false;
     }
+    final Map<String, dynamic> data;
+    try {
+      data = _decodeObject(response);
+    } catch (_) {
+      throw const ApiException(
+        502,
+        'Сервер вернул некорректный ответ. Попробуйте ещё раз.',
+      );
+    }
+    final newAccess = data['access_token']?.toString() ?? '';
+    final newRefresh = data['refresh_token']?.toString() ?? '';
+    if (newAccess.isEmpty || newRefresh.isEmpty) {
+      throw const ApiException(
+        502,
+        'Сервер вернул некорректный ответ. Попробуйте ещё раз.',
+      );
+    }
+
+    accessToken = newAccess;
+    refreshToken = newRefresh;
+    final handler = _onTokensUpdated;
+    if (handler != null) await handler(newAccess, newRefresh);
+    return true;
   }
+
+  static bool _isRefreshRejected(int statusCode) =>
+      statusCode == 400 || statusCode == 401 || statusCode == 403;
 
   Future<void> _expireSession() async {
     accessToken = null;
@@ -552,6 +600,9 @@ class ApiClient {
     final handler = _onSessionExpired;
     if (handler != null) await handler();
   }
+
+  /// Percent-encodes a single path segment such as a resource id.
+  static String _segment(String value) => Uri.encodeComponent(value);
 
   Map<String, String> _headers({bool includeBearer = true}) => {
     'Content-Type': 'application/json',
@@ -581,9 +632,13 @@ class ApiClient {
       final message = data is Map<String, dynamic>
           ? data['error']?.toString()
           : null;
+      final code = data is Map<String, dynamic>
+          ? data['code']?.toString()
+          : null;
       final error = ApiException(
         response.statusCode,
         message ?? 'Не удалось выполнить запрос',
+        code: code,
       );
       if (error.isSubscriptionExpired) {
         _subscriptionExpiredController.add(null);
@@ -621,17 +676,37 @@ class ApiClient {
 }
 
 class ApiException implements Exception {
-  const ApiException(this.statusCode, this.message);
+  const ApiException(this.statusCode, this.message, {this.code});
+
+  /// Machine-readable error code sent by the backend as `{"code": ...}`.
+  static const subscriptionExpiredCode = 'subscription_expired';
 
   final int statusCode;
   final String message;
+  final String? code;
 
   bool get isNetworkError => statusCode == 0 || statusCode == 408;
   bool get isUnauthorized => statusCode == 401;
-  bool get isSubscriptionExpired =>
-      statusCode == 403 &&
-      message.toLowerCase().contains('subscription is expired');
+  bool get isSubscriptionExpired {
+    if (statusCode != 403) return false;
+    final errorCode = code;
+    if (errorCode != null && errorCode.isNotEmpty) {
+      return errorCode == subscriptionExpiredCode;
+    }
+    // Fallback for backends that only send the English message text.
+    return message.toLowerCase().contains('subscription is expired');
+  }
 
   @override
   String toString() => 'ApiException($statusCode): $message';
+}
+
+class ApiSessionTokens {
+  const ApiSessionTokens({
+    required this.accessToken,
+    required this.refreshToken,
+  });
+
+  final String accessToken;
+  final String refreshToken;
 }

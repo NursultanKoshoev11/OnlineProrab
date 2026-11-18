@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -42,6 +43,11 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database is not available")
 		return
 	}
+	bootstrapID := sessionBootstrapIDFromContext(r.Context())
+	if bootstrapID == "" {
+		Error(w, http.StatusUnauthorized, "valid login session token is required")
+		return
+	}
 
 	var req createSessionRequest
 	if r.Body != nil {
@@ -68,8 +74,23 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "stroy:sessions:user:"+userID); err != nil {
+		Error(w, http.StatusServiceUnavailable, "session service is temporarily unavailable")
+		return
+	}
 
-	_, _ = tx.Exec(ctx, `
+	var consumedUserID string
+	err = tx.QueryRow(ctx, `
+		DELETE FROM auth_session_bootstrap_tokens
+		WHERE token_hash = $1 AND user_id = $2 AND expires_at > now()
+		RETURNING user_id::text
+	`, hashSessionBootstrapID(bootstrapID), userID).Scan(&consumedUserID)
+	if err != nil || consumedUserID != userID {
+		Error(w, http.StatusUnauthorized, "login session token is expired or already used")
+		return
+	}
+
+	bestEffortTxExec(ctx, tx, "refresh_session_cleanup", `
 		DELETE FROM refresh_sessions
 		WHERE expires_at < now() - make_interval(days => $1)
 		   OR (revoked_at IS NOT NULL AND revoked_at < now() - make_interval(days => $1))
@@ -92,12 +113,19 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec(ctx, `
+	var sessionID string
+	err = tx.QueryRow(ctx, `
 		INSERT INTO refresh_sessions (user_id, token_hash, device_name, expires_at)
 		VALUES ($1, $2, NULLIF($3, ''), $4)
-	`, userID, hashRefreshToken(refreshToken), req.DeviceName, time.Now().UTC().Add(refreshTokenTTL))
+		RETURNING id::text
+	`, userID, hashRefreshToken(refreshToken), req.DeviceName, time.Now().UTC().Add(refreshTokenTTL)).Scan(&sessionID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to save session")
+		return
+	}
+	accessToken, err := signSessionAccessToken(userID, sessionID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to sign access token")
 		return
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -106,11 +134,16 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusCreated, sessionResponse{
+		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(refreshTokenTTL.Seconds()),
+		ExpiresIn:    int64(appState.AccessTokenTTL.Seconds()),
 	})
 }
+
+// refreshReuseGrace lets a client retry a refresh whose response was lost
+// (timeout, dropped connection) without being treated as token theft.
+var refreshReuseGrace = 2 * time.Minute
 
 func RefreshSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -142,6 +175,7 @@ func RefreshSession(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(ctx)
 
+	presentedHash := hashRefreshToken(req.RefreshToken)
 	var sessionID string
 	var userID string
 	err = tx.QueryRow(ctx, `
@@ -149,10 +183,37 @@ func RefreshSession(w http.ResponseWriter, r *http.Request) {
 		FROM refresh_sessions
 		WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
 		FOR UPDATE
-	`, hashRefreshToken(req.RefreshToken)).Scan(&sessionID, &userID)
+	`, presentedHash).Scan(&sessionID, &userID)
 	if err != nil {
-		Error(w, http.StatusUnauthorized, "invalid or expired refresh token")
-		return
+		var retryWithinGrace bool
+		reuseErr := tx.QueryRow(ctx, `
+			SELECT id::text, user_id::text,
+			       COALESCE(last_used_at > now() - make_interval(secs => $2), false)
+			FROM refresh_sessions
+			WHERE previous_token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
+			FOR UPDATE
+		`, presentedHash, refreshReuseGrace.Seconds()).Scan(&sessionID, &userID, &retryWithinGrace)
+		if reuseErr != nil {
+			Error(w, http.StatusUnauthorized, "invalid or expired refresh token")
+			return
+		}
+		if !retryWithinGrace {
+			// A rotated-out token came back after the grace window: someone
+			// else holds a copy. Revoke the whole session so neither copy works.
+			if _, revokeErr := tx.Exec(ctx, `UPDATE refresh_sessions SET revoked_at = now() WHERE id = $1`, sessionID); revokeErr != nil {
+				Error(w, http.StatusServiceUnavailable, "session service is temporarily unavailable")
+				return
+			}
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				Error(w, http.StatusServiceUnavailable, "session service is temporarily unavailable")
+				return
+			}
+			slog.Warn("refresh_token_reuse_detected", "session_id", sessionID, "user_id", userID)
+			Error(w, http.StatusUnauthorized, "invalid or expired refresh token")
+			return
+		}
+		// The client retried a refresh whose response it never received.
+		// Rotate again; the token issued by the lost response stops working.
 	}
 
 	newToken, err := newRefreshToken()
@@ -162,15 +223,15 @@ func RefreshSession(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = tx.Exec(ctx, `
 		UPDATE refresh_sessions
-		SET token_hash = $2, expires_at = $3, last_used_at = now()
+		SET previous_token_hash = $4, token_hash = $2, expires_at = $3, last_used_at = now()
 		WHERE id = $1
-	`, sessionID, hashRefreshToken(newToken), time.Now().UTC().Add(refreshTokenTTL))
+	`, sessionID, hashRefreshToken(newToken), time.Now().UTC().Add(refreshTokenTTL), presentedHash)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to rotate session")
 		return
 	}
 
-	accessToken, err := signAccessToken(userID)
+	accessToken, err := signSessionAccessToken(userID, sessionID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to sign access token")
 		return
@@ -211,12 +272,39 @@ func LogoutSession(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	_, _ = appState.DB.Pool.Exec(ctx, `
-		UPDATE refresh_sessions
-		SET revoked_at = COALESCE(revoked_at, now())
-		WHERE token_hash = $1
-	`, hashRefreshToken(req.RefreshToken))
+	var err error
+	identity, tokenErr := parseAuthenticatedToken(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") && tokenErr == nil && identity.SessionID != "" {
+		_, err = appState.DB.Pool.Exec(ctx, `
+			UPDATE refresh_sessions
+			SET revoked_at = COALESCE(revoked_at, now())
+			WHERE id = $1 AND user_id = $2
+		`, identity.SessionID, identity.UserID)
+	} else {
+		_, err = appState.DB.Pool.Exec(ctx, `
+			UPDATE refresh_sessions
+			SET revoked_at = COALESCE(revoked_at, now())
+			WHERE token_hash = $1
+		`, hashRefreshToken(req.RefreshToken))
+	}
+	if err != nil {
+		Error(w, http.StatusServiceUnavailable, "session service is temporarily unavailable")
+		return
+	}
 	JSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+func newSessionBootstrapID() (string, error) {
+	buffer := make([]byte, 32)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buffer), nil
+}
+
+func hashSessionBootstrapID(id string) string {
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:])
 }
 
 func newRefreshToken() (string, error) {

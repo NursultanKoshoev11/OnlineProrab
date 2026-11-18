@@ -30,6 +30,8 @@ void main() {
 
       expect(query.month, 5);
       expect(query.year, 2026);
+      expect(query.fromDate, '2026-05-01');
+      expect(query.toDate, '2026-06-01');
       expect(query.term, 'окна');
       expect(
         query.matches(cost(title: 'Окна первый этаж', spentAt: '2026-05-20')),
@@ -51,16 +53,32 @@ void main() {
     expect(query.term, 'электрику');
     expect(query.month, 9);
     expect(query.year, 2026);
+    expect(query.fromDate, '2026-09-01');
+    expect(query.toDate, '2026-10-01');
     expect(
       query.matches(cost(title: 'Электрику оплатили', spentAt: '2026-09-02')),
       isTrue,
     );
   });
 
+  test('converts an explicit year into an exclusive API date range', () {
+    final query = parseExpenseSearchQuery(
+      'Покажи расходы за 2024 год',
+      now: now,
+    );
+
+    expect(query.year, 2024);
+    expect(query.month, isNull);
+    expect(query.fromDate, '2024-01-01');
+    expect(query.toDate, '2025-01-01');
+  });
+
   test('keeps a material name as free text search', () {
     final query = parseExpenseSearchQuery('Покажи расходы на цемент', now: now);
 
     expect(query.term, 'цемент');
+    expect(query.fromDate, isNull);
+    expect(query.toDate, isNull);
     expect(
       query.matches(cost(title: 'Цемент М500', spentAt: '2026-09-01')),
       isTrue,

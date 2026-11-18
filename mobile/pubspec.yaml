@@ -1,4 +1,4 @@
-﻿name: online_prorab
+name: online_prorab
 description: Mobile app for construction project control.
 publish_to: none
 version: 1.0.1+459
@@ -27,6 +27,7 @@ dependencies:
 
 dev_dependencies:
   flutter_launcher_icons: ^0.14.4
+  flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
 

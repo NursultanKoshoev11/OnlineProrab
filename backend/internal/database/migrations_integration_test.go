@@ -32,6 +32,32 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 	if err := db.ApplyMigrations(ctx); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
+	var supportUserID string
+	if err := db.Pool.QueryRow(ctx, `
+		INSERT INTO users (phone) VALUES ('+996700000099') RETURNING id::text
+	`).Scan(&supportUserID); err != nil {
+		t.Fatalf("seed user for support error redaction: %v", err)
+	}
+	const legacyProviderError = "https://api.telegram.org/botsecret-token/sendMessage"
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO support_tickets (user_id, channel, subject, message, delivery_status, delivery_error)
+		VALUES ($1, 'telegram', 'test', 'test', 'failed', $2)
+	`, supportUserID, legacyProviderError); err != nil {
+		t.Fatalf("seed legacy support provider error: %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM schema_migrations WHERE version = 33`); err != nil {
+		t.Fatalf("prepare support redaction migration replay: %v", err)
+	}
+	if err := db.ApplyMigrations(ctx); err != nil {
+		t.Fatalf("reapply support error redaction migration: %v", err)
+	}
+	var redactedError *string
+	if err := db.Pool.QueryRow(ctx, `SELECT delivery_error FROM support_tickets WHERE user_id = $1`, supportUserID).Scan(&redactedError); err != nil {
+		t.Fatalf("read redacted support error: %v", err)
+	}
+	if redactedError != nil {
+		t.Fatalf("legacy support error was not removed: %q", *redactedError)
+	}
 	if err := db.ApplyMigrations(ctx); err != nil {
 		t.Fatalf("reapply migrations: %v", err)
 	}
@@ -57,6 +83,9 @@ func TestApplyMigrationsOnCleanDatabase(t *testing.T) {
 		"refresh_sessions",
 		"project_invites",
 		"auth_attempts",
+		"support_tickets",
+		"expense_ai_search_attempts",
+		"auth_session_bootstrap_tokens",
 		"file_storage_deletions",
 	} {
 		var exists bool

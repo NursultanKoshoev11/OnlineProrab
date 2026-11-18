@@ -265,6 +265,7 @@ class _CreateExpenseSheetState extends State<_CreateExpenseSheet> {
           path: path,
         );
       }
+      if (!mounted) return;
       if (file.path.isEmpty) {
         _toast(context, 'Выбранный файл недоступен');
         return;

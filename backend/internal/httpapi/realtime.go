@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -148,7 +149,11 @@ func publishProjectEventForActor(projectID, entityType, entityID, action, actorI
 	projectRealtime.publish(projectID, userIDs, payload)
 	if entityType == "cost_item" && action == "created" && appState.PushSender != nil {
 		// Push delivery must not add provider latency to the cost-item response.
-		go notifyProjectMembers(context.Background(), projectID, userIDs, actorID, entityID)
+		go func() {
+			lookupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			notifyProjectMembers(lookupCtx, projectID, userIDs, actorID, entityID)
+		}()
 	}
 }
 
@@ -291,11 +296,28 @@ func RealtimeEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, no-store")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	_, _ = fmt.Fprint(w, "retry: 2000\n\n")
-	flusher.Flush()
 
-	keepAlive := time.NewTicker(20 * time.Second)
+	// The server-wide WriteTimeout would cut every stream after 30s and drop
+	// events published while the client reconnects. Extend the deadline before
+	// each write instead, so only a stalled client is disconnected.
+	controller := http.NewResponseController(w)
+	send := func(format string, args ...any) bool {
+		if err := controller.SetWriteDeadline(time.Now().Add(realtimeWriteTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			return false
+		}
+		if _, err := fmt.Fprintf(w, format, args...); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if !send("retry: 2000\n\n") {
+		return
+	}
+
+	keepAlive := time.NewTicker(realtimeKeepAliveInterval)
 	defer keepAlive.Stop()
 	for {
 		select {
@@ -305,11 +327,19 @@ func RealtimeEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			_, _ = fmt.Fprintf(w, "event: change\ndata: %s\n\n", payload)
-			flusher.Flush()
+			if !send("event: change\ndata: %s\n\n", payload) {
+				return
+			}
 		case <-keepAlive.C:
-			_, _ = fmt.Fprint(w, ": keep-alive\n\n")
-			flusher.Flush()
+			if !send(": keep-alive\n\n") {
+				return
+			}
 		}
 	}
 }
+
+// Variables so tests can shorten them.
+var (
+	realtimeKeepAliveInterval = 20 * time.Second
+	realtimeWriteTimeout      = 30 * time.Second
+)

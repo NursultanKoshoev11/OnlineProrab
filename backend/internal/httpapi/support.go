@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -245,14 +246,13 @@ func postSupportJSON(ctx context.Context, endpoint, authorization string, payloa
 	if authorization != "" {
 		req.Header.Set("Authorization", authorization)
 	}
-	response, err := (&http.Client{Timeout: 12 * time.Second}).Do(req)
+	response, err := newOutboundHTTPClient(12 * time.Second).Do(req)
 	if err != nil {
-		return err
+		return errors.New("support provider request failed")
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
 		return nil
 	}
-	responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
-	return fmt.Errorf("support provider returned %s: %s", response.Status, strings.TrimSpace(string(responseBody)))
+	return fmt.Errorf("support provider returned HTTP status %d", response.StatusCode)
 }

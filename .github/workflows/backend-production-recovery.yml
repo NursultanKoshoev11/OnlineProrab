@@ -6,6 +6,12 @@ on:
 permissions:
   contents: read
 
+# Share the deploy workflow's queue so a recovery can never interleave with an
+# in-flight deployment, rollback or rescue of the same production API.
+concurrency:
+  group: production-api
+  cancel-in-progress: false
+
 jobs:
   recover:
     runs-on: [self-hosted, stroy-prod]
@@ -27,11 +33,21 @@ jobs:
           set -Eeuo pipefail
           [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_PATH" && -n "$COMPOSE_PROJECT" ]]
           [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/api_recovery"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/api_recovery_known_hosts"
-          chmod 600 "$HOME/.ssh/api_recovery" "$HOME/.ssh/api_recovery_known_hosts"
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_recovery_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_recovery")
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ && "$DEPLOY_PATH" != "/" && "$DEPLOY_PATH" != */ ]]
+          [[ "$DEPLOY_PATH" != *"//"* && "$DEPLOY_PATH" != *"/../"* && "$DEPLOY_PATH" != */.. ]]
+          [[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]]
+          # Per-job credentials under RUNNER_TEMP, never the persistent runner home directory.
+          ssh_dir="$RUNNER_TEMP/api-recovery-ssh"
+          rm -rf -- "$ssh_dir"
+          install -m 700 -d "$ssh_dir"
+          trap 'rm -rf -- "$ssh_dir"' EXIT
+          (
+            umask 077
+            printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/id_deploy"
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          )
+          chmod 600 "$ssh_dir/id_deploy" "$ssh_dir/known_hosts"
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$ssh_dir/id_deploy")
           printf -v remote_command 'bash -s -- %q %q' "$DEPLOY_PATH" "$COMPOSE_PROJECT"
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" <<'REMOTE'
           set -Eeuo pipefail
@@ -82,4 +98,4 @@ jobs:
         continue-on-error: false
       - name: Remove SSH credentials
         if: always()
-        run: rm -f "$HOME/.ssh/api_recovery" "$HOME/.ssh/api_recovery_known_hosts"
+        run: rm -rf -- "$RUNNER_TEMP/api-recovery-ssh"

@@ -104,17 +104,24 @@ jobs:
         run: |
           set -euo pipefail
           [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/website_deploy"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/website_deploy" "$HOME/.ssh/known_hosts"
+          # Per-job credentials under RUNNER_TEMP; the persistent runner home
+          # directory (and its shared known_hosts) is never touched.
+          ssh_dir="$RUNNER_TEMP/website-deploy-ssh"
+          rm -rf -- "$ssh_dir"
+          install -m 700 -d "$ssh_dir"
+          (
+            umask 077
+            printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/id_deploy"
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          )
+          chmod 600 "$ssh_dir/id_deploy" "$ssh_dir/known_hosts"
 
       - name: Transfer image and deployment source
         if: steps.revision.outputs.deploy == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/website-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/website-deploy-ssh/id_deploy")
           scp "${ssh_options[@]}" \
             "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.image.tar.gz" \
             "$RUNNER_TEMP/stroy-website-$DEPLOY_SHA.source.tar.gz" \
@@ -127,7 +134,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/website-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/website-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" deploy
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
 
@@ -137,7 +144,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/website-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/website-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" deploy
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-billing-remote.sh
 
@@ -191,7 +198,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/website-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/website-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" rollback
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-remote.sh
 
@@ -204,7 +211,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/website-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/website-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" rollback
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-billing-remote.sh
 
@@ -217,7 +224,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/website_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/website-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/website-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" finalize
           ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < website/deploy-billing-remote.sh
           printf -v remote_command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$DEPLOY_PATH" finalize
@@ -226,4 +233,4 @@ jobs:
       - name: Remove SSH credentials
         if: always()
         shell: bash
-        run: rm -f "$HOME/.ssh/website_deploy" "$HOME/.ssh/known_hosts"
+        run: rm -rf -- "$RUNNER_TEMP/website-deploy-ssh"

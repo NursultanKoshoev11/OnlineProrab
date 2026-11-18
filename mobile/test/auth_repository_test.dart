@@ -34,7 +34,10 @@ void main() {
         if (request.url.path == '/api/v1/auth/session') {
           expect(request.headers['Authorization'], 'Bearer token-123');
           return http.Response(
-            jsonEncode({'refresh_token': 'refresh-123'}),
+            jsonEncode({
+              'access_token': 'session-token-123',
+              'refresh_token': 'refresh-123',
+            }),
             201,
           );
         }
@@ -51,14 +54,14 @@ void main() {
     final session = await repository.verifyCode('+996700000000', '123456');
 
     expect(session.phone, '+996700000000');
-    expect(session.accessToken, 'token-123');
+    expect(session.accessToken, 'session-token-123');
     expect(session.refreshToken, 'refresh-123');
-    expect(apiClient.accessToken, 'token-123');
+    expect(apiClient.accessToken, 'session-token-123');
     expect(apiClient.refreshToken, 'refresh-123');
 
     final restored = await SessionStore(storage: storage).load();
     expect(restored, isNotNull);
-    expect(restored!.accessToken, 'token-123');
+    expect(restored!.accessToken, 'session-token-123');
     expect(restored.refreshToken, 'refresh-123');
   });
 
@@ -175,6 +178,7 @@ void main() {
         httpClient: MockClient((request) async {
           expect(pushInstallationRemoved, isTrue);
           expect(request.url.path, '/api/v1/auth/session/logout');
+          expect(request.headers['Authorization'], 'Bearer token-abc');
           return http.Response(jsonEncode({'status': 'logged_out'}), 200);
         }),
       )..setTokens(accessToken: 'token-abc', refreshToken: 'refresh-abc');
@@ -301,5 +305,82 @@ void main() {
     expect(apiClient.accessToken, isNull);
     expect(apiClient.refreshToken, isNull);
     await repository.dispose();
+  });
+
+  for (final failure in <String, Future<http.Response> Function()>{
+    'network error': () async => throw http.ClientException('offline'),
+    'server error': () async =>
+        http.Response(jsonEncode({'error': 'unavailable'}), 503),
+    'rate limit': () async =>
+        http.Response(jsonEncode({'error': 'too many requests'}), 429),
+  }.entries) {
+    test('refresh ${failure.key} keeps the stored session', () async {
+      final store = SessionStore(storage: MemorySecureStore());
+      await store.save(
+        const SessionData(
+          phone: '+996700000000',
+          accessToken: 'expired-access',
+          refreshToken: 'refresh-keep',
+        ),
+      );
+      final apiClient = ApiClient(
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/v1/projects') {
+            return http.Response(jsonEncode({'error': 'invalid token'}), 401);
+          }
+          if (request.url.path == '/api/v1/auth/session/refresh') {
+            return failure.value();
+          }
+          return http.Response(jsonEncode({'error': 'not found'}), 404);
+        }),
+      );
+      final repository = AuthRepository(
+        apiClient: apiClient,
+        sessionStore: store,
+      );
+      await repository.loadSession();
+      var expiredCount = 0;
+      final subscription = repository.sessionExpired.listen(
+        (_) => expiredCount++,
+      );
+
+      await expectLater(apiClient.listProjects(), throwsA(isA<ApiException>()));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(expiredCount, 0);
+      expect(apiClient.refreshToken, 'refresh-keep');
+      final saved = await store.load();
+      expect(saved?.refreshToken, 'refresh-keep');
+      await subscription.cancel();
+      await repository.dispose();
+    });
+  }
+
+  test('401 after a concurrent rotation retries without refreshing', () async {
+    var refreshCalls = 0;
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/v1/auth/session/refresh') {
+          refreshCalls++;
+          return http.Response(jsonEncode({'error': 'reused'}), 401);
+        }
+        if (request.url.path == '/api/v1/projects') {
+          if (request.headers['Authorization'] == 'Bearer access-old') {
+            return http.Response(jsonEncode({'error': 'invalid token'}), 401);
+          }
+          return http.Response(jsonEncode([]), 200);
+        }
+        return http.Response(jsonEncode({'error': 'not found'}), 404);
+      }),
+    )..setTokens(accessToken: 'access-old', refreshToken: 'refresh-old');
+
+    // Simulate another request rotating the tokens while this one is in
+    // flight: the 401 arrives after the access token already changed.
+    final pending = apiClient.listProjects();
+    apiClient.setTokens(accessToken: 'access-new', refreshToken: 'refresh-new');
+
+    expect(await pending, isEmpty);
+    expect(refreshCalls, 0);
+    expect(apiClient.refreshToken, 'refresh-new');
   });
 }

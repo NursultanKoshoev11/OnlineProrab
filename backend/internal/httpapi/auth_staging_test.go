@@ -169,6 +169,40 @@ func openSMSAuthTestDB(t *testing.T) *database.DB {
 		t.Fatalf("create isolated user table: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
+		CREATE TABLE refresh_sessions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash TEXT NOT NULL UNIQUE,
+			previous_token_hash TEXT,
+			device_name TEXT,
+			expires_at TIMESTAMPTZ NOT NULL,
+			revoked_at TIMESTAMPTZ,
+			last_used_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+		CREATE TABLE auth_session_bootstrap_tokens (
+			token_hash TEXT PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+	`); err != nil {
+		t.Fatalf("create isolated refresh session tables: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		CREATE TABLE expense_ai_search_attempts (
+			id BIGSERIAL PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+		CREATE INDEX idx_test_expense_ai_search_attempts_user_created
+			ON expense_ai_search_attempts(user_id, created_at DESC);
+		CREATE INDEX idx_test_expense_ai_search_attempts_created
+			ON expense_ai_search_attempts(created_at);
+	`); err != nil {
+		t.Fatalf("create isolated AI search table: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
 		CREATE TABLE project_invites (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			project_id UUID NOT NULL,

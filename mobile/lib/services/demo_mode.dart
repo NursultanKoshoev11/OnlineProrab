@@ -217,7 +217,10 @@ class DemoDataState {
       return _json({'access_token': 'demo-access-token'});
     }
     if (method == 'POST' && path == '/api/v1/auth/session') {
-      return _json({'refresh_token': 'demo-refresh-token'});
+      return _json({
+        'access_token': 'demo-session-access-token',
+        'refresh_token': 'demo-refresh-token',
+      });
     }
     if (method == 'POST' && path == '/api/v1/auth/session/logout') {
       return _json({'status': 'logged_out'});
@@ -496,7 +499,12 @@ class DemoDataState {
   String? _idAfter(String path, String prefix) {
     if (!path.startsWith(prefix)) return null;
     final value = path.substring(prefix.length);
-    return value.isEmpty || value.contains('/') ? null : value;
+    if (value.isEmpty || value.contains('/')) return null;
+    try {
+      return Uri.decodeComponent(value);
+    } on ArgumentError {
+      return null;
+    }
   }
 
   Map<String, dynamic>? _find(List<Map<String, dynamic>> items, String id) {

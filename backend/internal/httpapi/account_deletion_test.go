@@ -64,7 +64,15 @@ func TestDeleteAccountImmediatelyRevokesAccessToken(t *testing.T) {
 	}
 
 	userID := seedAccountDeletionUser(t, db)
-	token, err := signAccessToken(userID)
+	var sessionID string
+	if err := db.Pool.QueryRow(context.Background(), `
+		INSERT INTO refresh_sessions (user_id, token_hash, expires_at)
+		VALUES ($1, 'account-deletion-access-test', now() + interval '1 day')
+		RETURNING id::text
+	`, userID).Scan(&sessionID); err != nil {
+		t.Fatalf("create refresh session: %v", err)
+	}
+	token, err := signSessionAccessToken(userID, sessionID)
 	if err != nil {
 		t.Fatalf("sign access token: %v", err)
 	}
@@ -146,6 +154,23 @@ func createAccountDeletionFilesTable(t *testing.T, db *database.DB) {
 	`); err != nil {
 		t.Fatalf("create isolated file table: %v", err)
 	}
+	if _, err := db.Pool.Exec(context.Background(), `
+		CREATE TABLE projects (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			deleted_at TIMESTAMPTZ,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+		CREATE TABLE project_members (
+			project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			role TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			PRIMARY KEY (project_id, user_id)
+		)
+	`); err != nil {
+		t.Fatalf("create isolated project tables: %v", err)
+	}
 }
 
 func seedAccountDeletionUser(t *testing.T, db *database.DB) string {
@@ -175,5 +200,89 @@ func assertAccountDeletionRows(t *testing.T, db *database.DB, userID string, wan
 	}
 	if users != wantUsers || files != wantFiles {
 		t.Fatalf("unexpected deletion state: users=%d files=%d, want users=%d files=%d", users, files, wantUsers, wantFiles)
+	}
+}
+
+func TestDeleteAccountHandsSharedProjectsToTheirTeam(t *testing.T) {
+	db := openMigratedTestDB(t)
+	oldState := appState
+	defer func() { appState = oldState }()
+	appState = State{DB: db}
+	ctx := context.Background()
+
+	seedUser := func(phone string) string {
+		var id string
+		if err := db.Pool.QueryRow(ctx, `INSERT INTO users (phone) VALUES ($1) RETURNING id::text`, phone).Scan(&id); err != nil {
+			t.Fatalf("seed user %s: %v", phone, err)
+		}
+		return id
+	}
+	seedProject := func(ownerID string, members map[string]string) string {
+		var id string
+		if err := db.Pool.QueryRow(ctx, `INSERT INTO projects (owner_id, name) VALUES ($1, 'Объект') RETURNING id::text`, ownerID).Scan(&id); err != nil {
+			t.Fatalf("seed project: %v", err)
+		}
+		if _, err := db.Pool.Exec(ctx, `INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, 'owner')`, id, ownerID); err != nil {
+			t.Fatalf("seed owner membership: %v", err)
+		}
+		for userID, role := range members {
+			if _, err := db.Pool.Exec(ctx, `INSERT INTO project_members (project_id, user_id, role, created_at) VALUES ($1, $2, $3, now() - interval '1 day')`, id, userID, role); err != nil {
+				t.Fatalf("seed member: %v", err)
+			}
+		}
+		return id
+	}
+
+	owner := seedUser("+996700000401")
+	manager := seedUser("+996700000402")
+	worker := seedUser("+996700000403")
+	viewer := seedUser("+996700000404")
+	sharedWithManager := seedProject(owner, map[string]string{worker: "worker", manager: "manager"})
+	sharedWithViewer := seedProject(owner, map[string]string{viewer: "viewer"})
+	solo := seedProject(owner, nil)
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO cost_items (project_id, created_by, title, amount, currency, spent_at)
+		VALUES ($1, $2, 'Цемент', 1000, 'KGS', now())
+	`, sharedWithManager, owner); err != nil {
+		t.Fatalf("seed cost item: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/account", nil)
+	request = request.WithContext(withUserID(request.Context(), owner))
+	response := httptest.NewRecorder()
+	DeleteAccount(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("delete account: %d %s", response.Code, response.Body.String())
+	}
+
+	assertOwner := func(projectID, wantOwner string) {
+		t.Helper()
+		var ownerID, role string
+		if err := db.Pool.QueryRow(ctx, `
+			SELECT p.owner_id::text, pm.role FROM projects p
+			JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = p.owner_id
+			WHERE p.id = $1
+		`, projectID).Scan(&ownerID, &role); err != nil {
+			t.Fatalf("load project %s: %v", projectID, err)
+		}
+		if ownerID != wantOwner || role != "owner" {
+			t.Fatalf("project %s owner=%s role=%s, want %s/owner", projectID, ownerID, role, wantOwner)
+		}
+	}
+	assertOwner(sharedWithManager, manager)
+	assertOwner(sharedWithViewer, viewer)
+
+	var soloCount, costItems int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM projects WHERE id = $1`, solo).Scan(&soloCount); err != nil {
+		t.Fatalf("count solo project: %v", err)
+	}
+	if soloCount != 0 {
+		t.Fatalf("project without other members should be deleted with the account")
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM cost_items WHERE project_id = $1 AND created_by IS NULL`, sharedWithManager).Scan(&costItems); err != nil {
+		t.Fatalf("count cost items: %v", err)
+	}
+	if costItems != 1 {
+		t.Fatalf("shared project data must survive with an anonymised author, got %d rows", costItems)
 	}
 }

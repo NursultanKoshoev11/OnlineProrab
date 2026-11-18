@@ -62,6 +62,30 @@ void main() {
     },
   );
 
+  test('AI expense search sends parsed date bounds and search terms', () async {
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/expense-ai/search');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['project_id'], 'project-1');
+        expect(body['query'], 'Сколько потратили на окна за май 2026?');
+        expect(body['search_query'], 'окна');
+        expect(body['from_date'], '2026-05-01');
+        expect(body['to_date'], '2026-06-01');
+        return http.Response(jsonEncode({'items': [], 'totals': {}}), 200);
+      }),
+    );
+
+    await client.searchExpensesWithAI(
+      projectId: 'project-1',
+      query: 'Сколько потратили на окна за май 2026?',
+      searchQuery: 'окна',
+      fromDate: '2026-05-01',
+      toDate: '2026-06-01',
+    );
+  });
+
   test(
     'createProject sends bearer header, accept header and JSON body',
     () async {
@@ -229,4 +253,86 @@ void main() {
       );
     },
   );
+
+  test('encodes resource ids as single path segments', () async {
+    final paths = <String>[];
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        paths.add(request.url.toString());
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await client.deleteFile('a/b?c');
+    await client.getProject('проект 1');
+
+    expect(paths[0], endsWith('/api/v1/files/a%2Fb%3Fc'));
+    expect(
+      paths[1],
+      endsWith('/api/v1/projects/%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%201'),
+    );
+  });
+
+  test('patch and delete pass query parameters separately', () async {
+    final urls = <Uri>[];
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        urls.add(request.url);
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await client.patchJson(
+      '/api/v1/project-members/u1',
+      {'role': 'viewer'},
+      {'project_id': 'p1'},
+    );
+    await client.deleteJson('/api/v1/project-members/u1', {'project_id': 'p1'});
+
+    for (final url in urls) {
+      expect(url.path, '/api/v1/project-members/u1');
+      expect(url.queryParameters['project_id'], 'p1');
+    }
+  });
+
+  group('subscription expiry detection', () {
+    Future<bool> expires(Map<String, dynamic> body) async {
+      final client = ApiClient(
+        httpClient: MockClient(
+          (request) async => http.Response(jsonEncode(body), 403),
+        ),
+      );
+      var signalled = false;
+      client.subscriptionExpired.listen((_) => signalled = true);
+      try {
+        await client.listProjects();
+      } on ApiException catch (error) {
+        await Future<void>.delayed(Duration.zero);
+        expect(error.isSubscriptionExpired, signalled);
+      }
+      return signalled;
+    }
+
+    test('prefers the machine-readable code', () async {
+      expect(
+        await expires({'error': 'expired', 'code': 'subscription_expired'}),
+        isTrue,
+      );
+      expect(
+        await expires({
+          'error': 'subscription is expired; choose a paid plan',
+          'code': 'plan_limit',
+        }),
+        isFalse,
+      );
+    });
+
+    test('falls back to the legacy English message', () async {
+      expect(
+        await expires({'error': 'subscription is expired; choose a paid plan'}),
+        isTrue,
+      );
+      expect(await expires({'error': 'forbidden'}), isFalse);
+    });
+  });
 }

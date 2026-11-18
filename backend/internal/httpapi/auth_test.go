@@ -148,7 +148,7 @@ func TestRequireAuthFailsClosedWhenDatabaseIsUnavailable(t *testing.T) {
 	}
 	defer func() { appState = oldState }()
 
-	token, err := signAccessToken("7cbcf034-8122-4d2d-92fd-f704dcdf8752")
+	token, err := signSessionAccessToken("7cbcf034-8122-4d2d-92fd-f704dcdf8752", "7cbcf034-8122-4d2d-92fd-f704dcdf8753")
 	if err != nil {
 		t.Fatalf("sign access token: %v", err)
 	}

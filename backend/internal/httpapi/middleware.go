@@ -167,6 +167,12 @@ func (w *statusRecorder) Flush() {
 	}
 }
 
+// Unwrap lets http.ResponseController reach the underlying connection, for
+// example to extend the write deadline of long-lived SSE streams.
+func (w *statusRecorder) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 func requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

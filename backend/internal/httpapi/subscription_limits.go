@@ -169,7 +169,7 @@ func ensureSubscription(ctx context.Context, db subscriptionQuerier, userID stri
 func subscriptionHTTPError(err error) (int, string, bool) {
 	switch {
 	case errors.Is(err, errSubscriptionExpired):
-		return http.StatusForbidden, "subscription is expired; choose a paid plan", true
+		return http.StatusForbidden, subscriptionExpiredMessage, true
 	case errors.Is(err, errProjectPlanLimit):
 		return http.StatusForbidden, "Достигнут лимит активных объектов тарифа. Архивируйте другой объект или смените тариф.", true
 	case errors.Is(err, errMemberPlanLimit):

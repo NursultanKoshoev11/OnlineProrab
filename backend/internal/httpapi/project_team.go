@@ -118,6 +118,10 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusForbidden, "project management permission required")
 		return
 	}
+	if !canChangeTeamMember(projectMemberRole(ctx, actorID, req.ProjectID), "", req.Role) {
+		Error(w, http.StatusForbidden, "only the project owner can assign the manager role")
+		return
+	}
 
 	var exists bool
 	if err := appState.DB.Pool.QueryRow(ctx, `
@@ -342,7 +346,7 @@ func AcceptProjectInvite(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "failed to complete invitation")
 		return
 	}
-	_, _ = tx.Exec(ctx, `
+	bestEffortTxExec(ctx, tx, "audit_log", `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
 		VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3::text))
 	`, userID, projectID, role)
@@ -383,6 +387,7 @@ func ProjectMember(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusConflict, "project owner cannot be modified or removed")
 		return
 	}
+	actorRole := projectMemberRole(ctx, actorID, projectID)
 
 	switch r.Method {
 	case http.MethodPatch:
@@ -394,6 +399,10 @@ func ProjectMember(w http.ResponseWriter, r *http.Request) {
 		req.Role = strings.ToLower(strings.TrimSpace(req.Role))
 		if !isAssignableProjectRole(req.Role) {
 			Error(w, http.StatusBadRequest, "invalid project role")
+			return
+		}
+		if !canChangeTeamMember(actorRole, currentRole, req.Role) {
+			Error(w, http.StatusForbidden, "only the project owner can change managers")
 			return
 		}
 		_, err := appState.DB.Pool.Exec(ctx, `UPDATE project_members SET role = $3 WHERE project_id = $1 AND user_id = $2`, projectID, memberID, req.Role)
@@ -408,6 +417,11 @@ func ProjectMember(w http.ResponseWriter, r *http.Request) {
 		publishProjectEvent(projectID, "project_member", memberID, "role_updated")
 		JSON(w, http.StatusOK, map[string]string{"status": "updated", "role": req.Role})
 	case http.MethodDelete:
+		// Any manager may leave a project themselves.
+		if memberID != actorID && !canChangeTeamMember(actorRole, currentRole, "") {
+			Error(w, http.StatusForbidden, "only the project owner can remove managers")
+			return
+		}
 		result, err := appState.DB.Pool.Exec(ctx, `DELETE FROM project_members WHERE project_id = $1 AND user_id = $2`, projectID, memberID)
 		if err != nil {
 			Error(w, http.StatusInternalServerError, "failed to remove project member")

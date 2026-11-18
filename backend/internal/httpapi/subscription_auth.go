@@ -32,9 +32,31 @@ func requireCurrentSubscription(w http.ResponseWriter, r *http.Request, userID s
 		return false
 	}
 	if state.Status != "trialing" && state.Status != "active" {
+		// An invited member without a plan of their own may still work in
+		// projects whose owner pays; per-project checks enforce the owner's
+		// subscription (see ownerSubscriptionCurrentSQL).
+		if memberOfPaidProject(ctx, userID) {
+			return true
+		}
 		status, message, _ := subscriptionHTTPError(errSubscriptionExpired)
 		Error(w, status, message)
 		return false
 	}
 	return true
+}
+
+func memberOfPaidProject(ctx context.Context, userID string) bool {
+	var ok bool
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM project_members pm
+			JOIN projects p ON p.id = pm.project_id
+			WHERE pm.user_id = $1
+			  AND p.owner_id <> $1
+			  AND p.deleted_at IS NULL
+			  AND `+ownerSubscriptionCurrentSQL+`
+		)
+	`, userID).Scan(&ok)
+	return err == nil && ok
 }

@@ -2,9 +2,9 @@
 
 ## Production API deployment
 
-The Backend Production Deploy workflow runs automatically for backend changes merged to main after the production storage cutover is complete. It runs backend checks, builds a revision-tagged Docker image, transfers it over SSH with strict host-key verification, waits for the API readiness check, and probes the public account-deletion route. A failed container health check or public route probe restores the previous managed release. A push before cutover reports the blocker and leaves the active API unchanged. A confirmed `workflow_dispatch` remains available for recovery.
+The Backend Production Deploy workflow runs automatically for backend changes merged to main after the production storage cutover is complete. It runs gofmt, vet and the race test suite in a separate job on a GitHub-hosted runner (the self-hosted production runner never starts a test database or runs Go tests), then on the production runner builds a revision-tagged Docker image, transfers it over SSH with strict host-key verification, waits for the API readiness check, and probes the public account-deletion route. A failed container health check or public route probe restores the previous managed release. A push before cutover reports the blocker and leaves the active API unchanged. A confirmed `workflow_dispatch` remains available for recovery.
 
-Prepare the API host after provisioning the private AWS S3 buckets, CloudWatch log group, and IAM policies; backing up PostgreSQL and uploaded files; migrating existing files to S3; and verifying their checksums. The API Compose project must publish port 8080 only on loopback and Caddy must proxy api.stroy.com.kg to 127.0.0.1:8080.
+Prepare the API host after provisioning the private AWS S3 buckets, CloudWatch log group, and IAM policies; backing up PostgreSQL and uploaded files; migrating existing files to S3; and verifying their checksums. The production Compose file (`backend/docker-compose.prod.yml`) publishes no host port: the API only `expose`s 8080 on the external Docker network `stroy_default`. Caddy must be attached to `stroy_default` and proxy api.stroy.com.kg to `stroy-api:8080`; port 8080 is not reachable from the host or the internet. After a successful deploy the script keeps the active release, its rollback target, `baseline` and the five most recent releases, and prunes older release directories and unused `stroy-api:<sha>` images.
 
 Create an API deployment root, for example /opt/stroy-api, with a host-managed .env file owned by the deployment user and mode 0600. Set `API_LOG_GROUP` to the `ApiLogGroupName` stack output. Keep database, JWT, SMS, and application S3 credentials in that file or use the API's IAM role. The Docker daemon separately needs credentials with `ApiLogWriterPolicyArn` so its `awslogs` driver can create streams and publish log events; use the host instance profile or the root user's standard AWS credentials file, and do not mount Docker credentials into the API container. Do not put production values in GitHub. See backend/PRODUCTION.md for required application settings and the storage cutover procedure.
 
@@ -41,10 +41,11 @@ The production container image is built from backend/Dockerfile. For a manual re
     docker build --pull --file Dockerfile --tag stroy-api:production .
     API_IMAGE=stroy-api:production docker compose --env-file /opt/stroy-api/.env -f docker-compose.prod.yml up --detach --no-build --pull never --wait api
 
-Check local API health:
+Check API health from the host (the production port is not published, so probe inside the container or through Caddy):
 
-    curl http://127.0.0.1:8080/health
-    curl http://127.0.0.1:8080/ready
+    docker exec stroy-api wget -qO- http://127.0.0.1:8080/health
+    docker exec stroy-api wget -qO- http://127.0.0.1:8080/ready
+    curl https://api.stroy.com.kg/health
 
 The public release probe expects GET https://api.stroy.com.kg/api/v1/account/deletion/verify to return 405 Method Not Allowed. This checks that the route is deployed without submitting a deletion request.
 

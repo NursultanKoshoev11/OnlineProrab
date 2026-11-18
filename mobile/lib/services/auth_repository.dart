@@ -53,11 +53,11 @@ class AuthRepository {
 
     _apiClient.setTokens(accessToken: accessToken, refreshToken: null);
     try {
-      final refreshToken = await _apiClient.createRefreshSession();
+      final tokens = await _apiClient.createRefreshSession();
       final session = SessionData(
         phone: phone,
-        accessToken: accessToken,
-        refreshToken: refreshToken,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       );
       _currentSession = session;
       await _sessionStore.save(session);

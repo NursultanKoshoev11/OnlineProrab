@@ -90,9 +90,17 @@ Compose-файл, а после успеха удаляет временное �
 Перед SSH-подключением workflow сверяет SHA с текущим `main` и пропускает
 запоздавший запуск CI. Workflow не меняет Caddy. Публичная проверка
 подтверждает, что proxy отдаёт страницы и security headers. Контейнер
-подключается к существующей Compose-сети `stroy-website_default`, где Caddy
-обращается к нему как `stroy-website:80`; порт `8090` остаётся только на
-loopback.
+подключается к сети по умолчанию своего Compose-проекта `stroy-website`
+(`stroy-website_default`), где Caddy обращается к нему как `stroy-website:80`;
+порт `8090` остаётся только на loopback. Страница оплаты
+(`website/docker-compose.billing.yml`, контейнер `stroy-obank-billing`, alias
+`billing`) и production API (`backend/docker-compose.prod.yml`, контейнер
+`stroy-api`) подключаются к другой, внешней сети `stroy_default`, поэтому Caddy
+должен быть подключён к обеим сетям. Staging-сервисы из
+`deploy/docker-compose.staging.yml` тоже входят в `stroy_default`, но все их
+имена сервисов и контейнеров имеют суффикс `-staging`
+(`stroy-obank-billing-staging`, `stroy-obank-staging-api`), чтобы staging не мог
+заменить production-контейнер или перехватить его DNS-имя.
 
 Создайте GitHub Environment `production-website` и разрешите deployment только
 из `main`. Добавьте Variables:
@@ -109,8 +117,11 @@ loopback.
 
 На сервере установите Docker Engine и Docker Compose v2 с поддержкой `up
 --wait`, добавьте deploy-пользователя в группу Docker, создайте каталог deploy
-с его владельцем и проверьте, что Caddy подключён к Compose-сети
-`stroy-website_default` и проксирует на `stroy-website:80`.
+с его владельцем и проверьте, что Caddy подключён к Compose-сетям
+`stroy-website_default` (проксирует на `stroy-website:80`) и `stroy_default`
+(страница оплаты — контейнер `stroy-obank-billing`, alias `billing`, порт 80;
+API — `stroy-api:8080`). Конфигурация Caddy не
+хранится в репозитории; сверяйте её вручную.
 Каталог из `WEBSITE_DEPLOY_PATH` должен уже существовать как обычный каталог;
 deploy-скрипт отклоняет сам каталог и компоненты пути, заданные через symlink.
 Для существующего контейнера `stroy-website` перед первым запуском сохраните

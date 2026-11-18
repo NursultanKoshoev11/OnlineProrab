@@ -76,7 +76,17 @@ test("public pages and resources comply with the production CSP", () => {
     /add_header Strict-Transport-Security "max-age=31536000" always;/,
   );
   assert.match(privacy, /аудио.*серверы Apple для распознавания/s);
-  assert.match(privacy, /Google Gemini, Groq или\s+OpenRouter/);
+  assert.match(privacy, /DeepSeek, Google Gemini, Groq или\s+OpenRouter/);
+  assert.match(
+    privacy,
+    /Firebase Cloud\s+Messaging или Apple Push Notification service/,
+  );
+  assert.match(privacy, /имя участника, название расхода, сумму и валюту/);
+  assert.match(privacy, /идентификатор аккаунта и время запроса/);
+  assert.match(
+    privacy,
+    /примерно\s+через 48 часов плановой\s+очисткой каждые 6 часов/,
+  );
   assert.match(privacy, /суммы, валюты,\s+поставщиков и даты/);
   assert.match(privacy, /бессрочно храним в закрытом журнале/);
   assert.match(

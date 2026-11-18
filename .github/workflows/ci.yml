@@ -76,7 +76,14 @@ jobs:
           import sys
 
           with open(sys.argv[1], encoding="utf-8") as config_file:
-              service = json.load(config_file)["services"]["api"]
+              config = json.load(config_file)
+          service = config["services"]["api-staging"]
+          # Staging joins the production network; its names must never
+          # collide with production services, aliases or containers.
+          production_names = {"api", "billing", "stroy-api", "stroy-obank-billing", "stroy-website"}
+          for name, staging_service in config["services"].items():
+              assert name not in production_names, name
+              assert staging_service.get("container_name") not in production_names, name
           environment = service["environment"]
           assert environment["APP_ENV"] == "staging"
           assert "sslmode=verify-full" in environment["DATABASE_URL"]
@@ -204,7 +211,9 @@ jobs:
         run: npm ci
 
       - name: Audit website build dependencies
-        run: npm audit --audit-level=high
+        # Same gate as `npm audit --audit-level=high`, with expiring,
+        # documented exceptions listed in website/scripts/audit.js.
+        run: node scripts/audit.js
 
       - name: Test account deletion flow
         run: npm test
