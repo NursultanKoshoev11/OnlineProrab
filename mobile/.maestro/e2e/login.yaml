@@ -11,6 +11,7 @@ appId: kg.com.stroy.app
     text: "Номер телефона"
 - eraseText: 20
 - inputText: ${PHONE}
+- hideKeyboard
 - tapOn:
     text: "Получить код"
 - extendedWaitUntil:
@@ -19,6 +20,7 @@ appId: kg.com.stroy.app
 - tapOn:
     text: "Код из SMS"
 - inputText: "111111"
+- hideKeyboard
 - tapOn:
     text: "Войти"
 - extendedWaitUntil:
