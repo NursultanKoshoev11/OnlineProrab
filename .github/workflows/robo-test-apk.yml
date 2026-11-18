@@ -1,0 +1,55 @@
+name: Firebase Test Lab Robo demo APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'mobile/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-robo-demo-apk:
+    name: Build Robo demo APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+          cache: true
+
+      - name: Prepare Android platform
+        run: python3 tool/prepare_android.py
+
+      - name: Install and verify Android NDK
+        run: python3 tool/install_android_ndk.py
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build Robo demo debug APK
+        run: >-
+          flutter build apk --debug
+          --dart-define=API_BASE_URL=http://127.0.0.1:8080
+          --dart-define=OFFLINE_DEMO=true
+          --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+
+      - name: Upload Robo demo APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-robo-demo-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

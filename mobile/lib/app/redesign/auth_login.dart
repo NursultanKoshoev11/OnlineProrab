@@ -75,27 +75,33 @@ class _LoginScreenState extends State<_LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 38),
-                TextField(
-                  controller: _phone,
-                  keyboardType: TextInputType.phone,
-                  enabled: !_busy && !_requested,
-                  decoration: const InputDecoration(
-                    labelText: 'Номер телефона',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                Semantics(
+                  identifier: 'login_phone_input',
+                  child: TextField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    enabled: !_busy && !_requested,
+                    decoration: const InputDecoration(
+                      labelText: 'Номер телефона',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
                   ),
                 ),
                 if (_requested) ...[
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _code,
-                    keyboardType: TextInputType.number,
-                    enabled: !_busy,
-                    autofocus: true,
-                    maxLength: 6,
-                    decoration: const InputDecoration(
-                      labelText: 'Код из SMS',
-                      counterText: '',
-                      prefixIcon: Icon(Icons.lock_outline),
+                  Semantics(
+                    identifier: 'login_code_input',
+                    child: TextField(
+                      controller: _code,
+                      keyboardType: TextInputType.number,
+                      enabled: !_busy,
+                      autofocus: true,
+                      maxLength: 6,
+                      decoration: const InputDecoration(
+                        labelText: 'Код из SMS',
+                        counterText: '',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
                     ),
                   ),
                   if (_devCode != null) ...[
@@ -136,18 +142,24 @@ class _LoginScreenState extends State<_LoginScreen> {
                   ),
                 ],
                 const SizedBox(height: 18),
-                FilledButton(
-                  onPressed: _busy ? null : _submit,
-                  child: _busy
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(_requested ? 'Войти' : 'Получить код'),
+                Semantics(
+                  identifier: _requested
+                      ? 'login_submit_button'
+                      : 'login_request_code_button',
+                  button: true,
+                  child: FilledButton(
+                    onPressed: _busy ? null : _submit,
+                    child: _busy
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(_requested ? 'Войти' : 'Получить код'),
+                  ),
                 ),
                 if (_requested) ...[
                   const SizedBox(height: 10),

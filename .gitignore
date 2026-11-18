@@ -22,6 +22,7 @@ mobile/build/
 mobile/ios/Pods/
 mobile/ios/.symlinks/
 mobile/android/.gradle/
+mobile/android/app/google-services.json
 mobile/tool/__pycache__/
 
 # IDE

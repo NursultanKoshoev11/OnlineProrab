@@ -161,6 +161,7 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
+				B2C3D4E5F60718293A4B5C6D /* Crashlytics Upload Symbols */,
 			);
 			buildRules = (
 			);
@@ -270,6 +271,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		B2C3D4E5F60718293A4B5C6D /* Crashlytics Upload Symbols */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}",
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${PRODUCT_NAME}",
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Info.plist",
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)",
+			);
+			name = "[firebase_crashlytics] Crashlytics Upload Symbols";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/sh\nset -e\n\n# Crashlytics accepts the Firebase App ID directly, so this project does not need\n# a GoogleService-Info.plist checked into the repository.\nif [ \"${CONFIGURATION}\" != \"Release\" ]; then\n  exit 0\nfi\n\nif [ -n \"${PODS_ROOT:-}\" ] && [ -x \"${PODS_ROOT}/FirebaseCrashlytics/run\" ]; then\n  PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT=\"${PODS_ROOT}/FirebaseCrashlytics/run\"\nelif [ -n \"${BUILD_DIR:-}\" ] && [ -x \"${BUILD_DIR}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\" ]; then\n  PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT=\"${BUILD_DIR}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\nelse\n  DERIVED_DATA_PATH=\$(echo \"${BUILD_ROOT:-}\" | sed -E 's|(.*DerivedData/[^/]+).*|\\1|')\n  PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT=\"${DERIVED_DATA_PATH}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"\n  if [ ! -x \"${PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT}\" ] && [ -n \"${BUILD_DIR:-}\" ]; then\n    PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT=\$(find \"${BUILD_DIR}\" \"${DERIVED_DATA_PATH}\" -type f -path '*firebase-ios-sdk/Crashlytics/run' -print -quit 2>/dev/null || true)\n  fi\nfi\n\nif [ -z \"${PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT:-}\" ] || [ ! -x \"${PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT}\" ]; then\n  echo \"error: Firebase Crashlytics upload-symbols script was not found\" >&2\n  exit 1\nfi\n\"${PATH_TO_CRASHLYTICS_UPLOAD_SCRIPT}\" -ai \"1:1092895503626:ios:5218c2f2e8958ebe15b6f3\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
