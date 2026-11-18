@@ -17,6 +17,7 @@ EXPECTED_DATA_TYPES = {
     "NSPrivacyCollectedDataTypeOtherFinancialInfo",
     "NSPrivacyCollectedDataTypePhotosorVideos",
     "NSPrivacyCollectedDataTypeAudioData",
+    "NSPrivacyCollectedDataTypeCrashData",
 }
 APP_FUNCTIONALITY = "NSPrivacyCollectedDataTypePurposeAppFunctionality"
 
@@ -54,7 +55,10 @@ def validate(value: dict) -> None:
             raise ValueError(f"tracking must be false for {data_type}")
         if entry.get("NSPrivacyCollectedDataTypePurposes") != [APP_FUNCTIONALITY]:
             raise ValueError(f"unexpected purpose for {data_type}")
-        expected_linked = data_type != "NSPrivacyCollectedDataTypeAudioData"
+        expected_linked = data_type not in {
+            "NSPrivacyCollectedDataTypeAudioData",
+            "NSPrivacyCollectedDataTypeCrashData",
+        }
         if entry.get("NSPrivacyCollectedDataTypeLinked") is not expected_linked:
             raise ValueError(f"unexpected user-linkage declaration for {data_type}")
 

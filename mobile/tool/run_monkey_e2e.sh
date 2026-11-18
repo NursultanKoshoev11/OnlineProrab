@@ -49,6 +49,11 @@ for phone in "${phones[@]}"; do
   prefix="$out/round-$round"
   echo "::group::Monkey round $round (seed $seed, $events events)"
 
+  # Random input from the previous round may have pulled down the
+  # notification shade or quick settings; close them so login sees STROY.
+  adb shell cmd statusbar collapse >/dev/null 2>&1 || true
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+
   if ! timeout --signal=TERM --kill-after=30s 600s maestro test \
       -e PHONE="$phone" mobile/.maestro/e2e/login.yaml >"$prefix-login.log" 2>&1; then
     echo "::error title=Monkey round $round::login before random input failed; see $prefix-login.log"

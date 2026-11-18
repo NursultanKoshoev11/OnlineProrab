@@ -17,6 +17,7 @@ import 'package:online_prorab/services/auth_repository.dart';
 import 'package:online_prorab/services/project_file_download_service.dart';
 import 'package:online_prorab/services/session_store.dart';
 import 'package:online_prorab/services/demo_mode.dart';
+import 'package:online_prorab/services/crashlytics_config.dart';
 import 'package:online_prorab/services/realtime_service.dart';
 import 'package:online_prorab/services/push_notification_service.dart';
 import 'package:open_filex/open_filex.dart';
@@ -52,7 +53,8 @@ const _brandSoft = Color(0xFFE8EEE8);
 const _line = Color(0xFFDDDFD8);
 const _warningSoft = Color(0xFFFFF0D6);
 const _warning = Color(0xFFC27A16);
-const _offlineDemo = bool.fromEnvironment('OFFLINE_DEMO', defaultValue: false);
+const _offlineDemo = offlineDemoEnabled;
+const _disablePushNotifications = pushNotificationsDisabled;
 
 class OnlineProrabRedesignApp extends StatefulWidget {
   const OnlineProrabRedesignApp({super.key});
@@ -80,7 +82,10 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     _demoHttpClient = _offlineDemo ? DemoHttpClient() : null;
     _apiClient = ApiClient(httpClient: _demoHttpClient);
     _realtimeService = RealtimeService(apiClient: _apiClient);
-    _pushNotificationService = PushNotificationService(apiClient: _apiClient);
+    _pushNotificationService = PushNotificationService(
+      apiClient: _apiClient,
+      disabled: _disablePushNotifications,
+    );
     _authRepository = AuthRepository(
       apiClient: _apiClient,
       sessionStore: SessionStore(),
