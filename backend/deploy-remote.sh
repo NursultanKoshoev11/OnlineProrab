@@ -285,6 +285,19 @@ if [[ "$mode" == "rollback" ]]; then
   # release records that same value in previous-release.  Permit rollback only
   # for that exact relationship; arbitrary stale release requests remain
   # rejected.
+  # A refresh of the already active revision (credential rotation) never moved
+  # the release pointer.  Recovering from it must recreate that same release,
+  # not downgrade production to the revision recorded in previous-release.
+  attempt_file="$deploy_path/releases/$deploy_sha/last-attempt"
+  if [[ -f "$attempt_file" && ! -L "$attempt_file" && "$(cat -- "$attempt_file")" == "refresh" ]]; then
+    if [[ "$release_ref" != "releases/$deploy_sha" ]]; then
+      echo "refusing rollback: refreshed revision is no longer the active release" >&2
+      exit 1
+    fi
+    echo "Last attempt only refreshed the active release; recreating it instead of rolling back."
+    rollback_to_previous "$release_ref"
+    exit 0
+  fi
   if [[ "$release_ref" != "releases/$deploy_sha" && "$release_ref" != "$previous_ref" ]]; then
     echo "refusing stale rollback: current release is unrelated to requested revision" >&2
     exit 1
@@ -318,9 +331,15 @@ fi
 chmod 600 -- "$fcm_secret_file"
 install -m 0600 -- "$fcm_secret_file" "$deploy_path/.fcm_service_account.json"
 
+# Re-running the active revision is how a rotated credential (.env or the FCM
+# service account installed above) reaches the API: the image and release
+# metadata stay untouched and only the container is recreated.  previous-release
+# keeps pointing at the real predecessor, and last-attempt tells a later
+# rollback request that this attempt must not downgrade the code.
+refresh_only=0
 if [[ "$release_ref" == "releases/$deploy_sha" ]]; then
-  echo "revision is already the active release" >&2
-  exit 1
+  refresh_only=1
+  echo "Revision $deploy_sha is already active; recreating the API to apply current configuration and credentials."
 fi
 
 running_ids="$(docker ps --quiet --filter "label=com.docker.compose.project=$compose_project" --filter 'label=com.docker.compose.service=api')"
@@ -386,6 +405,23 @@ if [[ -n "$release_ref" ]]; then
   active_container="$running_container"
 fi
 release_dir="$deploy_path/releases/$deploy_sha"
+attempt_file="$release_dir/last-attempt"
+if (( refresh_only == 1 )); then
+  if [[ -e "$attempt_file" && ( ! -f "$attempt_file" || -L "$attempt_file" ) ]]; then
+    echo "release attempt metadata must be a regular file" >&2
+    exit 1
+  fi
+  if ! cmp -s -- "/tmp/stroy-api-$deploy_sha.compose.yml" "$release_dir/backend/docker-compose.prod.yml"; then
+    echo "transferred Compose file differs from the active release of the same revision" >&2
+    exit 1
+  fi
+  image_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "stroy-api:$deploy_sha")"
+  if [[ "$image_revision" != "$deploy_sha" ]]; then
+    echo "active API image does not match the requested source revision" >&2
+    exit 1
+  fi
+  printf '%s\n' refresh > "$attempt_file"
+else
 if [[ -e "$release_dir" && ( ! -d "$release_dir" || -L "$release_dir" ) ]]; then
   echo "release path must be a real directory" >&2
   exit 1
@@ -399,7 +435,7 @@ if [[ "$(realpath -e -- "$release_dir")" != "$release_dir" || "$(realpath -e -- 
   echo "release path resolves outside the deployment root" >&2
   exit 1
 fi
-for metadata in "$release_dir/previous-release" "$release_dir/image-tag"; do
+for metadata in "$release_dir/previous-release" "$release_dir/image-tag" "$attempt_file"; do
   if [[ -e "$metadata" && ( ! -f "$metadata" || -L "$metadata" ) ]]; then
     echo "release metadata must be regular files" >&2
     exit 1
@@ -426,12 +462,14 @@ install -m 0644 -- "$backup_script" "$scripts_dir/backup.sh"
 install -m 0644 -- "$safe_path_script" "$scripts_dir/safe-path.sh"
 printf '%s\n' "$release_ref" > "$release_dir/previous-release"
 printf 'stroy-api:%s\n' "$deploy_sha" > "$release_dir/image-tag"
+printf '%s\n' release > "$attempt_file"
 gzip -t -- "/tmp/stroy-api-$deploy_sha.image.tar.gz"
 docker load --input "/tmp/stroy-api-$deploy_sha.image.tar.gz"
 image_revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "stroy-api:$deploy_sha")"
 if [[ "$image_revision" != "$deploy_sha" ]]; then
   echo "loaded API image does not match the requested source revision" >&2
   exit 1
+fi
 fi
 
 new_compose="$release_dir/backend/docker-compose.prod.yml"
@@ -506,6 +544,9 @@ echo "API release $deploy_sha is healthy and active."
 release_retention_count=5
 prune_old_releases() {
   local keep_previous="$release_ref"
+  if (( refresh_only == 1 )) && [[ -f "$release_dir/previous-release" && ! -L "$release_dir/previous-release" ]]; then
+    keep_previous="$(cat -- "$release_dir/previous-release")"
+  fi
   local -A keep=()
   keep["$deploy_sha"]=1
   if [[ "$keep_previous" =~ ^releases/([0-9a-f]{40})$ ]]; then

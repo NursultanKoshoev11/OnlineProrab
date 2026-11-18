@@ -347,6 +347,60 @@ if [[ "$(grep -c 'image rm' "$prune_log")" != 2 ]]; then
   exit 1
 fi
 
+# Re-deploying the active revision (credential rotation) recreates the API but
+# keeps the release history, and a recovery request afterwards must recreate the
+# same release instead of downgrading to previous-release.
+refresh_log="$temporary_dir/refresh.log"
+stage_artifacts
+printf '%s\n' '{"project_id":"stroy-notifications","private_key_id":"rotated"}' > "$fcm_secret_file"
+if ! FAKE_DOCKER_MODE=deploy VALID_SHA="$valid_sha" DOCKER_LOG="$refresh_log" \
+  FAKE_PREVIOUS_IMAGE="stroy-api:$valid_sha" \
+  bash "$deploy_script" deploy "$valid_sha" "$prune_root" api-production; then
+  echo "re-deploying the active revision must refresh it, not fail" >&2
+  exit 1
+fi
+if [[ "$(readlink -- "$prune_root/current")" != "releases/$valid_sha" ]]; then
+  echo "refresh moved the release pointer" >&2
+  exit 1
+fi
+if [[ "$(cat "$prune_root/releases/$valid_sha/previous-release")" != "releases/$active_sha" ]]; then
+  echo "refresh overwrote the recorded previous release" >&2
+  exit 1
+fi
+if [[ "$(cat "$prune_root/releases/$valid_sha/last-attempt")" != "refresh" ]]; then
+  echo "refresh did not record its attempt kind" >&2
+  exit 1
+fi
+if [[ ! -d "$prune_root/releases/$active_sha" ]]; then
+  echo "refresh pruned the release it would roll back to" >&2
+  exit 1
+fi
+if ! grep -Fq 'rm --force fake-api-container' "$refresh_log" || \
+  ! grep -Fq 'up --detach --no-build --pull never --wait --wait-timeout 180 api' "$refresh_log"; then
+  echo "refresh did not recreate the API container" >&2
+  exit 1
+fi
+if ! grep -Fq '"private_key_id":"rotated"' "$prune_root/.fcm_service_account.json"; then
+  echo "refresh did not install the rotated FCM credential" >&2
+  exit 1
+fi
+recover_log="$temporary_dir/refresh-recover.log"
+if ! FAKE_DOCKER_MODE=deploy VALID_SHA="$valid_sha" DOCKER_LOG="$recover_log" \
+  FAKE_PREVIOUS_IMAGE="stroy-api:$valid_sha" \
+  bash "$deploy_script" rollback "$valid_sha" "$prune_root" api-production >"$temporary_dir/refresh-recover.out" 2>&1; then
+  cat "$temporary_dir/refresh-recover.out" >&2
+  echo "recovery after a refresh failed" >&2
+  exit 1
+fi
+if [[ "$(readlink -- "$prune_root/current")" != "releases/$valid_sha" ]]; then
+  echo "recovery after a refresh downgraded the active release" >&2
+  exit 1
+fi
+if ! grep -Fq 'up --detach' "$recover_log"; then
+  echo "recovery after a refresh did not recreate the active release" >&2
+  exit 1
+fi
+
 # A transferred FCM credential that is not owned by the deploy user must be
 # refused before it is installed (only checkable when running as root).
 if [[ "$(id -u)" == 0 ]] && id nobody >/dev/null 2>&1; then
