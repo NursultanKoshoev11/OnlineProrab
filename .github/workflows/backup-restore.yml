@@ -65,10 +65,15 @@ jobs:
       - name: Check shell syntax
         run: bash -n deploy-remote.sh scripts/backup.sh scripts/safe-path.sh
 
-      - name: Install PostgreSQL client
+      - name: Install PostgreSQL client matching the server major version
+        # The distribution's default client can be newer than the PostgreSQL 16
+        # server; pg_dump/pg_restore 17+ emit settings PostgreSQL 16 rejects.
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client age
+          sudo apt-get install -y postgresql-common age
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-16
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
 
       - name: Create ephemeral age keypair for S3 backup verification
         run: |

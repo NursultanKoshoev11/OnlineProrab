@@ -256,6 +256,19 @@ if [ -L "$UPLOAD_DIR" ]; then
   exit 2
 fi
 
+# A pg_restore newer than the server emits settings the server rejects (for
+# example pg_restore 17+ against PostgreSQL 16 sends transaction_timeout), so
+# refuse with a clear message before touching the database.
+if command -v psql >/dev/null 2>&1; then
+  client_major="$(pg_restore --version | sed -n 's/.* \([0-9][0-9]*\)\..*/\1/p' | head -n 1)"
+  server_major="$(psql --no-psqlrc --tuples-only --no-align --dbname="$DATABASE_URL" \
+    --command="SELECT current_setting('server_version_num')::int / 10000")"
+  if [ -n "$client_major" ] && [ -n "$server_major" ] && [ "$client_major" -gt "$server_major" ]; then
+    echo "pg_restore $client_major is newer than PostgreSQL server $server_major; install postgresql-client-$server_major and put it first on PATH" >&2
+    exit 2
+  fi
+fi
+
 # --single-transaction makes the drop-and-recreate all-or-nothing: any error
 # rolls the database back to its pre-restore state instead of leaving it
 # half-cleaned.
