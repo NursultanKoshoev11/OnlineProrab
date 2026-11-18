@@ -1,0 +1,33 @@
+appId: kg.com.stroy.app
+# Signs in with ${PHONE} from a clean app state. Used before every monkey
+# round so random input starts inside the authenticated app.
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: ".*isn't responding.*"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "(?s).*Номер телефона.*"
+    timeout: 60000
+- tapOn:
+    text: "(?s).*Номер телефона.*"
+- eraseText: 20
+- inputText: ${PHONE}
+- hideKeyboard
+- tapOn:
+    text: "(?s).*Получить код.*"
+- extendedWaitUntil:
+    visible: "(?s).*Код из SMS.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Код из SMS.*"
+- inputText: "111111"
+- hideKeyboard
+- tapOn:
+    text: "(?s).*Войти.*"
+- extendedWaitUntil:
+    visible: "(?s).*Объекты.*"
+    timeout: 120000

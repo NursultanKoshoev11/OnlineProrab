@@ -101,6 +101,10 @@ func Run() {
 		if err != nil {
 			slog.Error("firebase_push_initialization_failed", "error", err)
 		} else {
+			if cfg.FCMAPIBaseURL != "" {
+				pushSender.WithAPIBaseURL(cfg.FCMAPIBaseURL)
+				slog.Warn("firebase_push_api_overridden", "base_url", cfg.FCMAPIBaseURL)
+			}
 			httpapi.SetPushSender(pushSender)
 		}
 	} else {
