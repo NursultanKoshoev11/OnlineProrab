@@ -20,6 +20,14 @@ for attempt in 1 2 3 4 5 6; do
 done
 test "$installed" -eq 1
 
+# A freshly booted CI emulator is still busy, and Android's own apps (the
+# launcher, Play services) sometimes stop responding. Their "isn't
+# responding" dialogs would cover STROY, so hide them and let the system
+# settle. Crashes of STROY are still detected from logcat.
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
+sleep 20
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+
 capture_diagnostics() {
   adb exec-out screencap -p >"$failure_png" 2>/dev/null || true
   adb shell uiautomator dump /sdcard/maestro-ui.xml >/dev/null 2>&1 || true

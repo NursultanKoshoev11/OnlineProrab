@@ -32,6 +32,14 @@ if [[ "$installed" -ne 1 ]]; then
   exit 1
 fi
 
+# A freshly booted CI emulator is still busy, and Android's own apps (the
+# launcher, Play services) sometimes stop responding. Their "isn't
+# responding" dialogs would cover STROY, so hide them and let the system
+# settle. Crashes of STROY are still detected from logcat.
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
+sleep 20
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+
 export MAESTRO_DRIVER_STARTUP_TIMEOUT="300000"
 problems=0
 round=0
