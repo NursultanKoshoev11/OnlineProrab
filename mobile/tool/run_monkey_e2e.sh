@@ -62,7 +62,9 @@ for phone in "${phones[@]}"; do
 
   # Signals of a real defect. Each is counted separately so the summary says
   # what kind of problem the round hit.
-  crashes=$(grep -c -E "FATAL EXCEPTION|// CRASH: $package" "$prefix-monkey.txt" "$prefix-logcat.txt" 2>/dev/null | awk -F: '{s+=$NF} END {print s+0}')
+  # Only crashes of the STROY process count; on a busy emulator Android's own
+  # system processes sometimes crash and are not our defect.
+  crashes=$(grep -c -E "// CRASH: $package|AndroidRuntime: Process: $package," "$prefix-monkey.txt" "$prefix-logcat.txt" 2>/dev/null | awk -F: '{s+=$NF} END {print s+0}')
   anrs=$(grep -c -E "ANR in $package|// NOT RESPONDING: $package" "$prefix-monkey.txt" "$prefix-logcat.txt" 2>/dev/null | awk -F: '{s+=$NF} END {print s+0}')
   unhandled=$(grep -c -E "E/flutter.*Unhandled Exception" "$prefix-logcat.txt" 2>/dev/null || true)
   framework=$(grep -c -E "EXCEPTION CAUGHT BY" "$prefix-logcat.txt" 2>/dev/null || true)
@@ -72,7 +74,7 @@ for phone in "${phones[@]}"; do
   if (( crashes + anrs + unhandled + framework > 0 )); then
     problems=$((problems + 1))
     echo "::error title=Monkey round $round (seed $seed)::crashes=$crashes ANRs=$anrs unhandled Dart exceptions=$unhandled Flutter framework exceptions=$framework"
-    grep -E -A 12 "FATAL EXCEPTION|ANR in $package|Unhandled Exception|EXCEPTION CAUGHT BY" "$prefix-logcat.txt" >"$prefix-excerpt.txt" 2>/dev/null || true
+    grep -E -B 1 -A 12 "AndroidRuntime: Process: $package,|ANR in $package|Unhandled Exception|EXCEPTION CAUGHT BY" "$prefix-logcat.txt" >"$prefix-excerpt.txt" 2>/dev/null || true
   fi
   echo "::endgroup::"
 done
