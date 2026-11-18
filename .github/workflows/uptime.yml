@@ -1,0 +1,41 @@
+name: Production Uptime
+
+# External availability check for the public API and website. A failed run
+# makes GitHub email the repository owner. Scheduled runs can start a few
+# minutes late, so this complements (not replaces) a dedicated uptime service.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production-uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe production endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check API and website
+        run: |
+          set -u
+          failed=0
+          check() {
+            url="$1"
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --location --retry 2 --retry-delay 10 --retry-all-errors --max-time 20 "$url" || true)"
+            echo "$url -> $status"
+            if [ "$status" != "200" ]; then
+              echo "::error title=Production endpoint down::$url returned $status"
+              failed=1
+            fi
+          }
+          check https://api.stroy.com.kg/health
+          check https://api.stroy.com.kg/ready
+          check https://stroy.com.kg/
+          check https://stroy.com.kg/billing/
+          exit "$failed"
