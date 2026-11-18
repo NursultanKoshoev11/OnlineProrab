@@ -9,67 +9,67 @@ appId: kg.com.stroy.app
     commands:
       - tapOn: "Wait"
 - extendedWaitUntil:
-    visible: "Номер телефона"
+    visible: "(?s).*Номер телефона.*"
     timeout: 60000
 - tapOn:
-    text: "Номер телефона"
+    text: "(?s).*Номер телефона.*"
 - eraseText: 20
 - inputText: "+996700000001"
 - hideKeyboard
 - tapOn:
-    text: "Получить код"
+    text: "(?s).*Получить код.*"
 - extendedWaitUntil:
-    visible: "Код из SMS"
+    visible: "(?s).*Код из SMS.*"
     timeout: 30000
 - tapOn:
-    text: "Код из SMS"
+    text: "(?s).*Код из SMS.*"
 - inputText: "111111"
 - hideKeyboard
 - tapOn:
-    text: "Войти"
+    text: "(?s).*Войти.*"
 - extendedWaitUntil:
-    visible: "Объекты"
+    visible: "(?s).*Объекты.*"
     timeout: 120000
-- assertVisible: "E2E owner project"
+- assertVisible: "(?s).*E2E owner project.*"
 
 # The seeded owner is on the standard plan, so this creates a second project.
 - tapOn:
-    text: "Добавить объект"
+    text: "(?s).*Добавить объект.*"
 - extendedWaitUntil:
-    visible: "Новый объект"
+    visible: "(?s).*Новый объект.*"
     timeout: 30000
 - tapOn:
-    text: "Например: Дом в Кок-Жаре"
+    text: "(?s).*Например: Дом в Кок-Жаре.*"
 - inputText: "Maestro объект"
 - hideKeyboard
 - tapOn:
-    text: "Например: с. Кок-Жар, ул. Центральная, 10"
+    text: "(?s).*Например: с. Кок-Жар, ул. Центральная, 10.*"
 - inputText: "Локальный адрес"
 - hideKeyboard
 - tapOn:
-    text: "Создать объект"
+    text: "(?s).*Создать объект.*"
 - extendedWaitUntil:
-    visible: "Maestro объект"
+    visible: "(?s).*Maestro объект.*"
     timeout: 60000
 - tapOn:
-    text: "Maestro объект"
+    text: "(?s).*Maestro объект.*"
 - extendedWaitUntil:
-    visible: "Обзор объекта"
+    visible: "(?s).*Обзор объекта.*"
     timeout: 60000
-- assertVisible: "Maestro объект"
+- assertVisible: "(?s).*Maestro объект.*"
 
 - tapOn:
-    text: "Расходы"
+    text: "(?s).*Расходы.*"
 - extendedWaitUntil:
-    visible: "Расходы объекта"
+    visible: "(?s).*Расходы объекта.*"
     timeout: 30000
 - tapOn:
-    text: "Добавить расход"
+    text: "(?s).*Добавить расход.*"
 - extendedWaitUntil:
-    visible: "Добавить расход"
+    visible: "(?s).*Добавить расход.*"
     timeout: 30000
 - tapOn:
-    text: "Например: Цемент М500"
+    text: "(?s).*Например: Цемент М500.*"
 - inputText: "Maestro расход"
 - hideKeyboard
 - tapOn:
@@ -77,61 +77,61 @@ appId: kg.com.stroy.app
 - inputText: "1250"
 - hideKeyboard
 - tapOn:
-    text: "Сохранить расход"
+    text: "(?s).*Сохранить расход.*"
 - extendedWaitUntil:
-    visible: "Maestro расход"
+    visible: "(?s).*Maestro расход.*"
     timeout: 60000
 
 - tapOn:
-    text: "Обзор"
+    text: "(?s).*Обзор.*"
 - tapOn:
-    text: "Команда"
+    text: "(?s).*Команда.*"
 - extendedWaitUntil:
-    visible: "Команда объекта"
+    visible: "(?s).*Команда объекта.*"
     timeout: 30000
 - tapOn:
-    text: "Добавить участника"
+    text: "(?s).*Добавить участника.*"
 - extendedWaitUntil:
-    visible: "Номер телефона"
+    visible: "(?s).*Номер телефона.*"
     timeout: 30000
 - tapOn:
-    text: "Номер телефона"
+    text: "(?s).*Номер телефона.*"
 - eraseText: 20
 - inputText: "+996700000002"
 - hideKeyboard
 - tapOn:
-    text: "Пригласить"
+    text: "(?s).*Пригласить.*"
 - extendedWaitUntil:
-    visible: "Доступ выдан"
+    visible: "(?s).*Доступ выдан.*"
     timeout: 60000
 - tapOn:
-    text: "Готово"
+    text: "(?s).*Готово.*"
 
 - back
 - tapOn:
-    text: "Ещё"
+    text: "(?s).*Ещё.*"
 - extendedWaitUntil:
-    visible: "Разделы объекта"
+    visible: "(?s).*Разделы объекта.*"
     timeout: 30000
 - tapOn:
-    text: "Подписка и доступ"
+    text: "(?s).*Подписка и доступ.*"
 - extendedWaitUntil:
-    visible: "Подписка"
+    visible: "(?s).*Подписка.*"
     timeout: 30000
-- assertVisible: "Стандартный"
+- assertVisible: "(?s).*Стандартный.*"
 - back
 - back
 
 - tapOn:
-    text: "Профиль"
+    text: "(?s).*Профиль.*"
 - extendedWaitUntil:
-    visible: "Выйти"
+    visible: "(?s).*Выйти.*"
     timeout: 30000
 - tapOn:
-    text: "Выйти"
+    text: "(?s).*Выйти.*"
 - waitForAnimationToEnd:
     timeout: 5000
 - launchApp
 - extendedWaitUntil:
-    visible: "Получить код"
+    visible: "(?s).*Получить код.*"
     timeout: 30000

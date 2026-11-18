@@ -10,24 +10,24 @@ appId: kg.com.stroy.app
     commands:
       - tapOn: "Wait"
 - extendedWaitUntil:
-    visible: "Номер телефона"
+    visible: "(?s).*Номер телефона.*"
     timeout: 60000
 - tapOn:
-    text: "Номер телефона"
+    text: "(?s).*Номер телефона.*"
 - eraseText: 20
 - inputText: ${PHONE}
 - hideKeyboard
 - tapOn:
-    text: "Получить код"
+    text: "(?s).*Получить код.*"
 - extendedWaitUntil:
-    visible: "Код из SMS"
+    visible: "(?s).*Код из SMS.*"
     timeout: 30000
 - tapOn:
-    text: "Код из SMS"
+    text: "(?s).*Код из SMS.*"
 - inputText: "111111"
 - hideKeyboard
 - tapOn:
-    text: "Войти"
+    text: "(?s).*Войти.*"
 - extendedWaitUntil:
-    visible: "Объекты"
+    visible: "(?s).*Объекты.*"
     timeout: 120000
