@@ -510,8 +510,22 @@ func applyOBankResult(ctx context.Context, result obank.Result) error {
 	if order.Status == "paid" {
 		return tx.Commit(ctx)
 	}
-	if order.Status == "canceled" && result.Status != 2 {
-		return errCheckoutState
+	if order.Status == "canceled" {
+		switch result.Status {
+		case 3:
+			// The bank captured the money after the order was canceled locally
+			// (expired invoice, earlier cancel callback or status poll). The
+			// signed, amount-matched result is authoritative: activate rather
+			// than reject the callback forever and leave a paid user without a
+			// subscription.
+			log.Printf("O!Dengi paid result for locally canceled order; activating order_id=%s transaction_id=%s", order.OrderID, result.TransactionID)
+		case 1, 2:
+			// Late processing/cancel notifications must not resurrect or
+			// re-cancel the order; acknowledge them so the bank stops retrying.
+			return tx.Commit(ctx)
+		default:
+			return errPaymentInvalid
+		}
 	}
 
 	switch result.Status {
@@ -588,7 +602,7 @@ func activateSubscriptionFromPayment(ctx context.Context, tx pgx.Tx, order subsc
 		    provider_transaction_id = $3,
 		    paid_at = now(),
 		    updated_at = now()
-		WHERE order_id = $1 AND status IN ('pending', 'processing')
+		WHERE order_id = $1 AND status IN ('pending', 'processing', 'canceled')
 	`, order.OrderID, invoiceID, transactionID)
 	if err != nil {
 		return err

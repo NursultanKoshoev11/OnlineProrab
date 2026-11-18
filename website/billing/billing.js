@@ -30,7 +30,9 @@
   let selectedPlan = "standard";
   let billingPeriod = "month";
   let plans = [];
+  const refreshTokenKey = "stroy.billing.refresh";
   let accessToken = sessionStorage.getItem(tokenKey) || "";
+  let refreshToken = sessionStorage.getItem(refreshTokenKey) || "";
   let pollingTimer = null;
   let resendTimer = null;
   let activeCheckoutID = sessionStorage.getItem("stroy.billing.order_id") || "";
@@ -102,6 +104,8 @@
 
   function clearSession() {
     accessToken = "";
+    refreshToken = "";
+    sessionStorage.removeItem(refreshTokenKey);
     updateNavigationTargets();
     checkoutAllowed = true;
     if (elements.yearlyPeriod) {
@@ -209,9 +213,23 @@
         method: "POST",
         body: JSON.stringify({ phone: elements.phone.value.trim(), code: elements.code.value.trim() }),
       });
-      accessToken = result.access_token || "";
-      if (!accessToken) throw new Error("Сервер не выдал токен входа. Попробуйте ещё раз.");
+      const bootstrapToken = result.access_token || "";
+      if (!bootstrapToken) throw new Error("Сервер не выдал токен входа. Попробуйте ещё раз.");
+      // /auth/sms/verify returns a short-lived single-use bootstrap token that
+      // the API accepts only on POST /auth/session; exchange it for a session.
+      accessToken = bootstrapToken;
+      const session = await request("/api/v1/auth/session", {
+        method: "POST",
+        body: JSON.stringify({ device_name: "STROY web billing" }),
+      });
+      accessToken = session.access_token || "";
+      refreshToken = session.refresh_token || "";
+      if (!accessToken || !refreshToken) {
+        clearSession();
+        throw new Error("Сервер не выдал токен входа. Попробуйте ещё раз.");
+      }
       sessionStorage.setItem(tokenKey, accessToken);
+      sessionStorage.setItem(refreshTokenKey, refreshToken);
       updateNavigationTargets();
       stopResendCooldown();
       await loadAccount();
@@ -427,6 +445,13 @@
   });
   elements.resendCode?.addEventListener("click", () => sendCode({ resend: true }));
   elements.logout.addEventListener("click", () => {
+    if (accessToken && refreshToken) {
+      // Revoke the server-side session; logout must not wait on the network.
+      request("/api/v1/auth/session/logout", {
+        method: "POST",
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }).catch(() => {});
+    }
     clearSession();
     elements.phone.value = "";
     showNotice("Вы вышли из аккаунта.");

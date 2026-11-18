@@ -43,6 +43,37 @@ echo "unexpected docker invocation: $*" >&2
 exit 98
 DOCKER
 chmod +x "$temporary_dir/bin/docker"
+cat > "$temporary_dir/bin/sudo" <<'SUDO'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'sudo %s
+' "$*" >> "${DOCKER_LOG:-/dev/null}"
+if [[ "$*" != "-n /usr/bin/systemctl start --wait onlineprorab-backup.service" ]]; then
+  echo "unexpected sudo invocation: $*" >&2
+  exit 97
+fi
+exit "${FAKE_BACKUP_EXIT:-0}"
+SUDO
+chmod +x "$temporary_dir/bin/sudo"
+cat > "$temporary_dir/bin/systemctl" <<'SYSTEMCTL'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  "show --property=Result --value onlineprorab-backup.service")
+    printf '%s
+' "${FAKE_BACKUP_RESULT:-success}"
+    ;;
+  "show --property=ConditionResult --value onlineprorab-backup.service")
+    printf '%s
+' "${FAKE_BACKUP_CONDITION:-yes}"
+    ;;
+  *)
+    echo "unexpected systemctl invocation: $*" >&2
+    exit 97
+    ;;
+esac
+SYSTEMCTL
+chmod +x "$temporary_dir/bin/systemctl"
 export PATH="$temporary_dir/bin:$PATH"
 
 valid_sha=0123456789abcdef0123456789abcdef01234567
@@ -105,12 +136,48 @@ for artifact in "$image_archive" "$compose_file" "$fcm_secret_file" "$backup_scr
   fi
 done
 trap 'rm -rf -- "$temporary_dir"; rm -f -- "$image_archive" "$compose_file" "$fcm_secret_file" "$backup_script" "$safe_path_script"' EXIT
-printf '%s' fake-image | gzip -c > "$image_archive"
-printf '%s\n' 'services: {}' > "$compose_file"
-printf '%s\n' '{"project_id":"stroy-notifications"}' > "$fcm_secret_file"
-cp "$script_dir/scripts/backup.sh" "$backup_script"
-cp "$script_dir/scripts/safe-path.sh" "$safe_path_script"
+stage_artifacts() {
+  printf '%s' fake-image | gzip -c > "$image_archive"
+  printf '%s\n' 'services: {}' > "$compose_file"
+  printf '%s\n' '{"project_id":"stroy-notifications"}' > "$fcm_secret_file"
+  cp "$script_dir/scripts/backup.sh" "$backup_script"
+  cp "$script_dir/scripts/safe-path.sh" "$safe_path_script"
+}
 docker_log="$temporary_dir/docker.log"
+
+expect_backup_gate() {
+  local label="$1" expected_message="$2"
+  shift 2
+  local root="$temporary_dir/backup-gate-$label"
+  local log="$temporary_dir/backup-gate-$label.log"
+  local output="$temporary_dir/backup-gate-$label.out"
+  stage_artifacts
+  mkdir -p "$root"
+  : > "$root/.env"
+  chmod 600 "$root/.env"
+  if env FAKE_DOCKER_MODE=deploy VALID_SHA="$valid_sha" DOCKER_LOG="$log" "$@" \
+    bash "$deploy_script" deploy "$valid_sha" "$root" api-production >"$output" 2>&1; then
+    echo "deployment continued after a $label pre-deployment backup" >&2
+    exit 1
+  fi
+  if ! grep -Fq "$expected_message" "$output"; then
+    cat "$output" >&2
+    echo "backup gate rejection did not explain the $label case" >&2
+    exit 1
+  fi
+  if grep -Fq 'up --detach' "$log"; then
+    echo "API release started even though the $label backup gate failed" >&2
+    exit 1
+  fi
+  if [[ -e "$root/current" ]]; then
+    echo "release pointer moved even though the $label backup gate failed" >&2
+    exit 1
+  fi
+}
+expect_backup_gate failed "pre-deployment backup failed" FAKE_BACKUP_EXIT=1
+expect_backup_gate skipped "pre-deployment backup did not complete" FAKE_BACKUP_CONDITION=no
+expect_backup_gate unsuccessful "pre-deployment backup did not complete" FAKE_BACKUP_RESULT=exit-code
+stage_artifacts
 if ! FAKE_DOCKER_MODE=deploy VALID_SHA="$valid_sha" DOCKER_LOG="$docker_log" \
   bash "$deploy_script" deploy "$valid_sha" "$successful_root" api-production; then
   echo "expected deployment fixture to succeed" >&2
@@ -132,6 +199,12 @@ if [[ "$(stat -c '%a' "$successful_root/releases/$valid_sha/backend/scripts/back
 fi
 if ! grep -Fq 'up --detach --no-build --pull never --wait --wait-timeout 180 api' "$docker_log"; then
   echo "successful deployment did not start the API release" >&2
+  exit 1
+fi
+backup_line="$(grep -n 'sudo -n /usr/bin/systemctl start --wait onlineprorab-backup.service' "$docker_log" | head -n 1 | cut -d: -f1)"
+up_line="$(grep -n 'up --detach' "$docker_log" | head -n 1 | cut -d: -f1)"
+if [[ -z "$backup_line" || "$backup_line" -ge "$up_line" ]]; then
+  echo "successful deployment did not back up the database before starting the release" >&2
   exit 1
 fi
 for artifact in "$image_archive" "$compose_file" "$fcm_secret_file" "$backup_script" "$safe_path_script"; do

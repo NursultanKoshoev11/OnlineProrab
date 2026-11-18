@@ -492,9 +492,20 @@ class ApiClient {
     bool retry = true,
     Duration? timeout,
   }) async {
+    final sentAccessToken = accessToken;
     final response = await _perform(request, timeout: timeout);
     if (response.statusCode != 401 || !retry) return response;
 
+    // Another request already rotated the tokens while this one was in
+    // flight: retry with the new access token instead of refreshing again.
+    final current = accessToken;
+    if (current != null && current.isNotEmpty && current != sentAccessToken) {
+      final retried = await _perform(request, timeout: timeout);
+      if (retried.statusCode == 401) await _expireSession();
+      return retried;
+    }
+
+    // Throws ApiException on transient failures, which keeps the session.
     final refreshed = await _refreshTokens();
     if (!refreshed) {
       await _expireSession();
@@ -530,33 +541,54 @@ class ApiClient {
     return future.whenComplete(() => _refreshInFlight = null);
   }
 
+  /// Returns false only when the server definitively rejected the refresh
+  /// token (400/401/403). Network errors, timeouts, rate limits and server
+  /// errors throw [ApiException] so callers keep the stored session.
   Future<bool> _doRefreshTokens() async {
     final token = refreshToken;
     if (token == null || token.isEmpty) return false;
 
-    try {
-      final response = await _perform(
-        () => _httpClient.post(
-          ApiConfig.endpoint('/api/v1/auth/session/refresh'),
-          headers: _headers(includeBearer: false),
-          body: jsonEncode({'refresh_token': token}),
-        ),
+    final response = await _perform(
+      () => _httpClient.post(
+        ApiConfig.endpoint('/api/v1/auth/session/refresh'),
+        headers: _headers(includeBearer: false),
+        body: jsonEncode({'refresh_token': token}),
+      ),
+    );
+    if (_isRefreshRejected(response.statusCode)) return false;
+    if (response.statusCode >= 400) {
+      throw ApiException(
+        response.statusCode,
+        'Не удалось обновить сессию. Попробуйте ещё раз.',
       );
-      if (response.statusCode >= 400) return false;
-      final data = _decodeObject(response);
-      final newAccess = data['access_token']?.toString() ?? '';
-      final newRefresh = data['refresh_token']?.toString() ?? '';
-      if (newAccess.isEmpty || newRefresh.isEmpty) return false;
-
-      accessToken = newAccess;
-      refreshToken = newRefresh;
-      final handler = _onTokensUpdated;
-      if (handler != null) await handler(newAccess, newRefresh);
-      return true;
-    } catch (_) {
-      return false;
     }
+    final Map<String, dynamic> data;
+    try {
+      data = _decodeObject(response);
+    } catch (_) {
+      throw const ApiException(
+        502,
+        'Сервер вернул некорректный ответ. Попробуйте ещё раз.',
+      );
+    }
+    final newAccess = data['access_token']?.toString() ?? '';
+    final newRefresh = data['refresh_token']?.toString() ?? '';
+    if (newAccess.isEmpty || newRefresh.isEmpty) {
+      throw const ApiException(
+        502,
+        'Сервер вернул некорректный ответ. Попробуйте ещё раз.',
+      );
+    }
+
+    accessToken = newAccess;
+    refreshToken = newRefresh;
+    final handler = _onTokensUpdated;
+    if (handler != null) await handler(newAccess, newRefresh);
+    return true;
   }
+
+  static bool _isRefreshRejected(int statusCode) =>
+      statusCode == 400 || statusCode == 401 || statusCode == 403;
 
   Future<void> _expireSession() async {
     accessToken = null;

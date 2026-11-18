@@ -430,6 +430,29 @@ fi
 new_compose="$release_dir/backend/docker-compose.prod.yml"
 compose "stroy-api:$deploy_sha" "$new_compose" config --quiet
 
+# The new API applies schema migrations on startup and an image rollback does
+# not undo them, so take a fresh encrypted backup before the release can touch
+# the database. The systemd unit runs under the dedicated backup identity; the
+# deploy user only needs a sudoers rule for exactly this command (see
+# PRODUCTION.md). Abort before replacing the running container on any failure.
+pre_deploy_backup_unit="onlineprorab-backup.service"
+command -v timeout >/dev/null 2>&1 || {
+  echo "GNU timeout is required for the bounded pre-deployment backup" >&2
+  exit 1
+}
+echo "Running the encrypted pre-deployment backup ($pre_deploy_backup_unit)."
+if ! timeout --signal=TERM --kill-after=30s 1800s \
+  sudo -n /usr/bin/systemctl start --wait "$pre_deploy_backup_unit"; then
+  echo "pre-deployment backup failed; refusing to deploy a release that may migrate the database" >&2
+  exit 1
+fi
+backup_result="$(systemctl show --property=Result --value "$pre_deploy_backup_unit")"
+backup_condition="$(systemctl show --property=ConditionResult --value "$pre_deploy_backup_unit")"
+if [[ "$backup_result" != "success" || "$backup_condition" != "yes" ]]; then
+  echo "pre-deployment backup did not complete (result=$backup_result condition=$backup_condition); refusing to deploy" >&2
+  exit 1
+fi
+
 deployment_started=1
 deployment_committed=0
 on_exit() {
