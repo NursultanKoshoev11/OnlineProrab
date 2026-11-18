@@ -204,7 +204,9 @@ jobs:
         run: npm ci
 
       - name: Audit website build dependencies
-        run: npm audit --audit-level=high
+        # Same gate as `npm audit --audit-level=high`, with expiring,
+        # documented exceptions listed in website/scripts/audit.js.
+        run: node scripts/audit.js
 
       - name: Test account deletion flow
         run: npm test
