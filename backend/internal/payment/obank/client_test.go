@@ -114,6 +114,15 @@ func TestValidatePaymentURLAllowsBankQRFragment(t *testing.T) {
 	}
 }
 
+func TestValidatePaymentURLAllowsDevelopmentOverrideHost(t *testing.T) {
+	if err := validatePaymentURLWithOverride("http://fake-obank:8091/pay/e2e-invoice-1", "http://fake-obank:8091"); err != nil {
+		t.Fatalf("development payment URL override rejected: %v", err)
+	}
+	if err := validatePaymentURLWithOverride("http://other-host:8091/pay/e2e-invoice-1", "http://fake-obank:8091"); err == nil {
+		t.Fatal("payment URL override accepted an unexpected host")
+	}
+}
+
 func TestVerifyResultUsesSignedCallbackFieldsInOrder(t *testing.T) {
 	secret := "callback-test-secret"
 	values := []string{"tx-1", "3", "merchant-1", "stroy_order-1", "300000", "KGS", "1793019000", "1"}

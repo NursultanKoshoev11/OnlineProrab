@@ -6,6 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:online_prorab/firebase_options.dart';
 import 'package:online_prorab/services/api_client.dart';
 
+const _disablePushNotificationsForE2E = bool.fromEnvironment(
+  'DISABLE_PUSH_NOTIFICATIONS',
+  defaultValue: false,
+);
+
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // The OS displays notification payloads while the app is backgrounded. We
@@ -26,7 +31,7 @@ class PushNotificationService {
   bool _initializing = false;
 
   Future<void> initializeForSession() async {
-    if (_initializing || kIsWeb) return;
+    if (_disablePushNotificationsForE2E || _initializing || kIsWeb) return;
     if (defaultTargetPlatform != TargetPlatform.android &&
         defaultTargetPlatform != TargetPlatform.iOS) {
       return;

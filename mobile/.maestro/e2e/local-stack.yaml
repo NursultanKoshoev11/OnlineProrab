@@ -1,0 +1,157 @@
+appId: kg.com.stroy.app
+
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: ".*isn't responding.*"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "(?s).*Номер телефона.*"
+    timeout: 60000
+- tapOn:
+    text: "(?s).*Номер телефона.*"
+- eraseText: 20
+- inputText: "+996700000001"
+- hideKeyboard
+- tapOn:
+    text: "(?s).*Получить код.*"
+- extendedWaitUntil:
+    visible: "(?s).*Код из SMS.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Код из SMS.*"
+- inputText: "111111"
+- hideKeyboard
+- tapOn:
+    text: "(?s).*Войти.*"
+- extendedWaitUntil:
+    visible: "(?s).*Объекты.*"
+    timeout: 120000
+- assertVisible: "(?s).*E2E owner project.*"
+
+# The seeded owner is on the standard plan, so this creates a second project.
+- tapOn:
+    text: "(?s).*Добавить объект.*"
+- extendedWaitUntil:
+    visible: "(?s).*Новый объект.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Например: Дом в Кок-Жаре.*"
+- inputText: "Maestro объект"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Например: с. Кок-Жар, ул. Центральная, 10.*"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: "(?s).*Например: с. Кок-Жар, ул. Центральная, 10.*"
+- inputText: "Локальный адрес"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Создать объект.*"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: "(?s).*Создать объект.*"
+- extendedWaitUntil:
+    visible: "(?s).*Maestro объект.*"
+    timeout: 60000
+- tapOn:
+    text: "(?s).*Maestro объект.*"
+- extendedWaitUntil:
+    visible: "(?s).*Обзор объекта.*"
+    timeout: 60000
+- assertVisible: "(?s).*Maestro объект.*"
+
+- tapOn:
+    text: "(?s).*Расходы.*"
+- extendedWaitUntil:
+    visible: "(?s).*Расходы объекта.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Добавить расход.*"
+- extendedWaitUntil:
+    visible: "(?s).*Добавить расход.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Например: Цемент М500.*"
+- inputText: "Maestro расход"
+- scrollUntilVisible:
+    element:
+      text: "0"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: "0"
+- inputText: "1250"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Сохранить расход.*"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: "(?s).*Сохранить расход.*"
+- extendedWaitUntil:
+    visible: "(?s).*Maestro расход.*"
+    timeout: 60000
+
+- tapOn:
+    text: "(?s).*Обзор.*"
+- tapOn:
+    text: "(?s).*Команда.*"
+- extendedWaitUntil:
+    visible: "(?s).*Команда объекта.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Добавить участника.*"
+- extendedWaitUntil:
+    visible: "(?s).*Номер телефона.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Номер телефона.*"
+- eraseText: 20
+- inputText: "+996700000002"
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Пригласить.*"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: "(?s).*Пригласить.*"
+- extendedWaitUntil:
+    visible: "(?s).*Доступ выдан.*"
+    timeout: 60000
+- tapOn:
+    text: "(?s).*Готово.*"
+
+- back
+- tapOn:
+    text: "(?s).*Ещё.*"
+- extendedWaitUntil:
+    visible: "(?s).*Разделы объекта.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Подписка и доступ.*"
+- extendedWaitUntil:
+    visible: "(?s).*Подписка.*"
+    timeout: 30000
+- assertVisible: "(?s).*Стандартный.*"
+- back
+- back
+
+- tapOn:
+    text: "(?s).*Профиль.*"
+- extendedWaitUntil:
+    visible: "(?s).*Выйти.*"
+    timeout: 30000
+- tapOn:
+    text: "(?s).*Выйти.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- launchApp
+- extendedWaitUntil:
+    visible: "(?s).*Получить код.*"
+    timeout: 30000
