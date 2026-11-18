@@ -117,7 +117,8 @@ appId: kg.com.stroy.app
     timeout: 30000
 - tapOn:
     text: "Выйти"
-- wait: 3000
+- waitForAnimationToEnd:
+    timeout: 5000
 - launchApp
 - extendedWaitUntil:
     visible: "Получить код"

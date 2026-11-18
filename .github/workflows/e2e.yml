@@ -36,19 +36,31 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
+      - name: Generate throwaway credentials for the fake FCM server
+        run: |
+          set -euo pipefail
+          credentials="$(bash backend/e2e/fake-fcm/credentials.sh)"
+          # The key is generated per run and only signs requests to the fake
+          # token endpoint inside the compose network.
+          {
+            echo 'E2E_FCM_SERVICE_ACCOUNT_JSON<<E2E_FCM_JSON_EOF'
+            echo "$credentials"
+            echo 'E2E_FCM_JSON_EOF'
+          } >> "$GITHUB_ENV"
+
       - name: Start local API stack
         run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
 
       - name: Seed local users and projects
         run: docker compose -f "$E2E_COMPOSE_FILE" run --rm seed
 
-      - name: Run API E2E suite
+      - name: Run API E2E suite (authorization, flows, notifications)
         working-directory: backend
-        run: go test -tags=e2e ./e2e
+        run: go test -tags=e2e -count=1 -v ./e2e
 
       - name: Save API logs on failure
         if: failure()
-        run: docker compose -f "$E2E_COMPOSE_FILE" logs --no-color api > "$RUNNER_TEMP/api-e2e.log" || true
+        run: docker compose -f "$E2E_COMPOSE_FILE" logs --no-color api fake-fcm > "$RUNNER_TEMP/api-e2e.log" || true
 
       - name: Upload API logs
         if: failure()

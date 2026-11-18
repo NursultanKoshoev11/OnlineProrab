@@ -668,6 +668,27 @@ func TestValidateRequiresDevelopmentSMSForContainerE2ETestMode(t *testing.T) {
 	}
 }
 
+func TestValidateAllowsFCMAPIOverrideOnlyInDevelopment(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.FCMAPIBaseURL = "http://fake-fcm:8090"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "FCM_API_BASE_URL") {
+		t.Fatalf("expected a production FCM API override to be rejected, got %v", err)
+	}
+
+	cfg = validStagingConfig()
+	cfg.FCMAPIBaseURL = "http://fake-fcm:8090"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "FCM_API_BASE_URL") {
+		t.Fatalf("expected a staging FCM API override to be rejected, got %v", err)
+	}
+
+	cfg = validProductionConfig()
+	cfg.Env = DevelopmentEnv
+	cfg.FCMAPIBaseURL = "http://fake-fcm:8090"
+	if err := cfg.Validate(); err != nil && strings.Contains(err.Error(), "FCM_API_BASE_URL") {
+		t.Fatalf("expected a development FCM API override to be allowed, got %v", err)
+	}
+}
+
 func validStagingConfig() Config {
 	cfg := validProductionConfig()
 	cfg.Env = StagingEnv

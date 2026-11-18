@@ -10,6 +10,7 @@ bank, AWS, or production connection.
 From the repository root:
 
 ```sh
+export E2E_FCM_SERVICE_ACCOUNT_JSON="$(bash backend/e2e/fake-fcm/credentials.sh)"
 docker compose -f backend/e2e/docker-compose.e2e.yml up -d --build postgres api
 docker compose -f backend/e2e/docker-compose.e2e.yml run --rm seed
 (cd backend && go test -tags=e2e ./e2e)
@@ -27,3 +28,15 @@ To keep the database and uploaded files for inspection, omit `-v` when running
 ```sh
 docker compose -f backend/e2e/docker-compose.e2e.yml logs --no-color api
 ```
+
+## Push notifications
+
+Push goes to `fake-fcm` (`backend/e2e/fake-fcm/server.py`), a recording stand-in
+for Google OAuth and the FCM v1 API, through the real `FirebaseSender`. The API
+reaches it via `FCM_API_BASE_URL`, which configuration validation allows only
+in development. `credentials.sh` generates a throwaway service account per run;
+without it push stays disabled and `TestProjectNotificationsReachAllMembers`
+fails. The test shares a project between an owner, a worker and a viewer, adds
+expenses as different members, and checks that every other member (and nobody
+else) receives the push and the realtime event, including after a member is
+removed. Recorded messages: `curl http://127.0.0.1:8090/messages`.

@@ -95,6 +95,7 @@ type Config struct {
 	OpenRouterFallbackModel      string
 	FCMProjectID                 string
 	FCMServiceAccountJSON        string
+	FCMAPIBaseURL                string // development-only FCM API override
 	OBank                        OBankConfig
 }
 
@@ -238,6 +239,7 @@ func Load() (Config, error) {
 	cfg.OpenRouterFallbackModel = getEnv("OPENROUTER_FALLBACK_MODEL", "nex-agi/nex-n2.5-pro:free")
 	cfg.FCMProjectID = strings.TrimSpace(os.Getenv("FCM_PROJECT_ID"))
 	cfg.FCMServiceAccountJSON = strings.TrimSpace(os.Getenv("FCM_SERVICE_ACCOUNT_JSON"))
+	cfg.FCMAPIBaseURL = strings.TrimSpace(os.Getenv("FCM_API_BASE_URL"))
 	cfg.OBank = OBankConfig{
 		Enabled:       obankEnabled,
 		SID:           strings.TrimSpace(os.Getenv("OBANK_SID")),
@@ -336,6 +338,9 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.DevSMSCodeEnabled && !cfg.IsDevelopment() {
 		problems = append(problems, "DEV_SMS_CODE_ENABLED is allowed only when APP_ENV=development")
+	}
+	if cfg.FCMAPIBaseURL != "" && !cfg.IsDevelopment() {
+		problems = append(problems, "FCM_API_BASE_URL is allowed only when APP_ENV=development")
 	}
 	if cfg.E2ETestMode && !cfg.IsDevelopment() {
 		problems = append(problems, "E2E_TEST_MODE is allowed only when APP_ENV=development")

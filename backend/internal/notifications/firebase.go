@@ -29,9 +29,21 @@ type Target struct {
 	Type string
 }
 
+// defaultFCMAPIBaseURL is the production Firebase Cloud Messaging API.
+const defaultFCMAPIBaseURL = "https://fcm.googleapis.com"
+
 type FirebaseSender struct {
-	projectID string
-	client    *http.Client
+	projectID  string
+	client     *http.Client
+	apiBaseURL string
+}
+
+// WithAPIBaseURL points the sender at another FCM-compatible API, such as the
+// recording fake used by the local E2E stack. Configuration validation only
+// allows an override in development.
+func (s *FirebaseSender) WithAPIBaseURL(baseURL string) *FirebaseSender {
+	s.apiBaseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	return s
 }
 
 func NewFirebaseSender(ctx context.Context, projectID, serviceAccountJSON string) (*FirebaseSender, error) {
@@ -120,7 +132,11 @@ func (s *FirebaseSender) sendOne(ctx context.Context, target Target, title, body
 	if err != nil {
 		return fmt.Errorf("marshal FCM request: %w", err)
 	}
-	endpoint := "https://fcm.googleapis.com/v1/projects/" + url.PathEscape(s.projectID) + "/messages:send"
+	baseURL := s.apiBaseURL
+	if baseURL == "" {
+		baseURL = defaultFCMAPIBaseURL
+	}
+	endpoint := baseURL + "/v1/projects/" + url.PathEscape(s.projectID) + "/messages:send"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(payload)))
 	if err != nil {
 		return fmt.Errorf("create FCM request: %w", err)
