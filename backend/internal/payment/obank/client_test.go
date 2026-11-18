@@ -135,3 +135,38 @@ func TestVerifyResultUsesSignedCallbackFieldsInOrder(t *testing.T) {
 		t.Errorf("unexpected verified callback fields: %+v", result)
 	}
 }
+
+func TestParseMktimeAcceptsUnixSecondsAndMilliseconds(t *testing.T) {
+	want := time.Unix(1793019000, 0).UTC()
+	if got := parseMktime("1793019000"); !got.Equal(want) {
+		t.Errorf("seconds: got %v, want %v", got, want)
+	}
+	if got := parseMktime("1793019000000"); !got.Equal(want) {
+		t.Errorf("milliseconds: got %v, want %v", got, want)
+	}
+	for _, value := range []string{"", "abc", "2026-11-18 07:00:00", "17930190", "-1793019000", "17930190000"} {
+		if got := parseMktime(value); !got.IsZero() {
+			t.Errorf("parseMktime(%q) = %v, want zero for an unknown format", value, got)
+		}
+	}
+}
+
+func TestVerifyResultExposesSignedIssueTime(t *testing.T) {
+	secret := "callback-test-secret"
+	values := []string{"tx-1", "3", "merchant-1", "stroy_order-1", "300000", "KGS", "1793019000", "1"}
+	hash := hmacMD5Hex([]byte(strings.Join(values, ":::")), secret)
+	body, err := json.Marshal(map[string]any{
+		"trans_id": values[0], "status_pay": 3, "site_id": values[2], "order_id": values[3],
+		"amount": values[4], "currency": values[5], "mktime": values[6], "test": 1, "hash": hash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := VerifyResult(body, secret)
+	if err != nil {
+		t.Fatalf("VerifyResult() error = %v", err)
+	}
+	if !result.IssuedAt.Equal(time.Unix(1793019000, 0)) || result.RawMktimeLength != 10 {
+		t.Errorf("IssuedAt = %v (len %d), want the signed mktime", result.IssuedAt, result.RawMktimeLength)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -122,6 +123,18 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusForbidden, "only the project owner can assign the manager role")
 		return
 	}
+	// Responses no longer say whether a phone is registered, but the member
+	// list still shows an immediately added account. Bound how fast one
+	// account can probe numbers through invitations.
+	if retryAfter, err := reserveProjectInviteAttempt(ctx, actorID); err != nil {
+		slog.Error("project_invite_rate_limit_failed", "error", err)
+		Error(w, http.StatusServiceUnavailable, "invitations are temporarily unavailable")
+		return
+	} else if retryAfter > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
+		Error(w, http.StatusTooManyRequests, "too many invitations, try again later")
+		return
+	}
 
 	var exists bool
 	if err := appState.DB.Pool.QueryRow(ctx, `
@@ -201,12 +214,9 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 			slog.Error("project_member_audit_log_failed", "project_id", req.ProjectID, "target_user_id", targetUserID, "error", err)
 		}
 		publishProjectEvent(req.ProjectID, "project_member", targetUserID, "added")
-		JSON(w, http.StatusOK, map[string]any{
-			"status":     "added",
-			"project_id": req.ProjectID,
-			"user_id":    targetUserID,
-			"role":       req.Role,
-		})
+		// Same status, code and shape as for an unregistered number, so the
+		// response does not reveal whether the phone has a STROY account.
+		JSON(w, http.StatusCreated, projectInviteResponse(""))
 		return
 	}
 
@@ -257,15 +267,44 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 		VALUES ($1, $2, 'invite', 'project_member', jsonb_build_object('phone', $3::text, 'role', $4::text))
 	`, actorID, req.ProjectID, req.Phone, req.Role)
 
+	publishProjectEvent(req.ProjectID, "project_member", "", "invited")
+	JSON(w, http.StatusCreated, projectInviteResponse(token))
+}
+
+const (
+	projectInviteRateWindow = time.Hour
+	projectInviteRateLimit  = 30
+)
+
+// projectInviteResponse is identical whether the phone already belongs to an
+// account (added immediately) or not (pending invitation). The raw token is
+// exposed only outside production-like environments for manual testing.
+func projectInviteResponse(token string) map[string]any {
 	response := map[string]any{
 		"status":     "invited",
 		"expires_in": int64(projectInviteTTL.Seconds()),
 	}
-	if !appState.IsProductionLike {
+	if token != "" && !appState.IsProductionLike {
 		response["invite_token"] = token
 	}
-	publishProjectEvent(req.ProjectID, "project_member", "", "invited")
-	JSON(w, http.StatusCreated, response)
+	return response
+}
+
+func reserveProjectInviteAttempt(ctx context.Context, actorID string) (time.Duration, error) {
+	_, retryAfter, err := reserveAuthAttempt(
+		ctx,
+		"project_invite",
+		"",
+		"user:"+actorID,
+		projectInviteRateWindow,
+		0,
+		projectInviteRateLimit,
+		0,
+	)
+	if err == nil && retryAfter > 0 && retryAfter < time.Second {
+		retryAfter = time.Second
+	}
+	return retryAfter, err
 }
 
 func AcceptProjectInvite(w http.ResponseWriter, r *http.Request) {

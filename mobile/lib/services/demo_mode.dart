@@ -455,11 +455,9 @@ class DemoDataState {
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
       return _json({
-        'status': 'added',
-        'project_id': projectId,
-        'user_id': members.last['user_id'],
-        'role': members.last['role'],
-      });
+        'status': 'invited',
+        'expires_in': 7 * 24 * 60 * 60,
+      }, status: 201);
     }
     if (path.startsWith('/api/v1/project-members/') && method == 'PATCH') {
       final memberId = _idAfter(path, '/api/v1/project-members/');
