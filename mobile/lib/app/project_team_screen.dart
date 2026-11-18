@@ -179,7 +179,8 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
         role: result.role,
       );
       if (!mounted) return;
-      final addedImmediately = invite.status == 'added';
+      // The server answers the same way for registered and new numbers, so
+      // the screen must not claim either case.
       final tokenMessage = invite.inviteToken.isEmpty
           ? ''
           : '\n\nТокен для тестового режима: ${invite.inviteToken}';
@@ -190,13 +191,9 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
           actionsOverflowButtonSpacing: 4,
           actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
-          title: Text(
-            addedImmediately ? 'Участник добавлен' : 'Доступ подготовлен',
-          ),
+          title: const Text('Доступ выдан'),
           content: Text(
-            addedImmediately
-                ? 'Пользователь с этим номером уже зарегистрирован. Он сразу увидит объект с ролью «${_roleLabel(result.role)}».'
-                : 'После входа по этому номеру пользователь автоматически получит доступ к объекту с ролью «${_roleLabel(result.role)}».$tokenMessage',
+            'Пользователь с этим номером получит доступ к объекту с ролью «${_roleLabel(result.role)}» при входе в STROY.$tokenMessage',
           ),
           actions: [
             FilledButton(
@@ -602,6 +599,9 @@ String _friendlyTeamError(Object? error) {
   if (text.contains('403')) return 'Недостаточно прав для управления командой.';
   if (text.contains('404')) return 'Участник или проект не найден.';
   if (text.contains('409')) return 'Пользователь уже добавлен или приглашён.';
+  if (text.contains('429')) {
+    return 'Слишком много приглашений за час. Попробуйте позже.';
+  }
   if (text.contains('Connection refused') || text.contains('ApiException(0)')) {
     return 'Не удалось подключиться к серверу.';
   }

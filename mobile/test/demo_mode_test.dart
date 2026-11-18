@@ -139,10 +139,10 @@ void main() {
         'role': 'worker',
       }),
     );
-    expect(invite.statusCode, 200);
+    expect(invite.statusCode, 201);
     expect(
       (jsonDecode(invite.body) as Map<String, dynamic>)['status'],
-      'added',
+      'invited',
     );
 
     final membersResponse = await client.get(

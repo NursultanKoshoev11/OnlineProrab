@@ -131,6 +131,12 @@ type Result struct {
 	Currency      string
 	Test          int
 	InvoiceID     string
+	// IssuedAt is the signed mktime of the notification when it is a Unix
+	// timestamp in seconds or milliseconds; zero when the format is unknown.
+	IssuedAt time.Time
+	// RawMktimeLength is the length of the signed mktime value, kept for
+	// diagnostics when IssuedAt cannot be parsed.
+	RawMktimeLength int
 }
 
 func CreateInvoice(ctx context.Context, cfg config.OBankConfig, data CreateInvoiceData) (Invoice, error) {
@@ -239,15 +245,40 @@ func VerifyResult(body []byte, secret string) (Result, error) {
 	}
 	invoiceID, _ := scalar(payload.Invoice)
 	return Result{
-		TransactionID: values[0],
-		Status:        status,
-		SiteID:        values[2],
-		OrderID:       values[3],
-		AmountKopecks: amount,
-		Currency:      values[5],
-		Test:          test,
-		InvoiceID:     invoiceID,
+		TransactionID:   values[0],
+		Status:          status,
+		SiteID:          values[2],
+		OrderID:         values[3],
+		AmountKopecks:   amount,
+		Currency:        values[5],
+		Test:            test,
+		InvoiceID:       invoiceID,
+		IssuedAt:        parseMktime(values[6]),
+		RawMktimeLength: len(values[6]),
 	}, nil
+}
+
+// parseMktime accepts the Unix timestamp formats O!Dengi uses for mktime
+// (13-digit milliseconds, as in API requests, or 10-digit seconds).
+func parseMktime(value string) time.Time {
+	value = strings.TrimSpace(value)
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return time.Time{}
+		}
+	}
+	stamp, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	switch len(value) {
+	case 13:
+		return time.UnixMilli(stamp).UTC()
+	case 10:
+		return time.Unix(stamp, 0).UTC()
+	default:
+		return time.Time{}
+	}
 }
 
 func call(ctx context.Context, cfg config.OBankConfig, command string, data any, output any) error {

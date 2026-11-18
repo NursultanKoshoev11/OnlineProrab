@@ -274,6 +274,10 @@ func OBankResult(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusUnauthorized, "O!Dengi result does not match merchant configuration")
 		return
 	}
+	if !obankResultIsFresh(result, time.Now()) {
+		Error(w, http.StatusUnauthorized, "stale O!Dengi result")
+		return
+	}
 	if err := applyOBankResult(r.Context(), result); err != nil {
 		if errors.Is(err, errPaymentMissing) {
 			Error(w, http.StatusNotFound, "payment order not found")
