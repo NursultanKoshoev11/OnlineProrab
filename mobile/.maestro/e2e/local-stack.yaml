@@ -41,11 +41,19 @@ appId: kg.com.stroy.app
 - tapOn:
     text: "(?s).*Например: Дом в Кок-Жаре.*"
 - inputText: "Maestro объект"
-- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Например: с. Кок-Жар, ул. Центральная, 10.*"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     text: "(?s).*Например: с. Кок-Жар, ул. Центральная, 10.*"
 - inputText: "Локальный адрес"
-- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Создать объект.*"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     text: "(?s).*Создать объект.*"
 - extendedWaitUntil:
@@ -71,11 +79,19 @@ appId: kg.com.stroy.app
 - tapOn:
     text: "(?s).*Например: Цемент М500.*"
 - inputText: "Maestro расход"
-- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "0"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     text: "0"
 - inputText: "1250"
-- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Сохранить расход.*"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     text: "(?s).*Сохранить расход.*"
 - extendedWaitUntil:
@@ -98,7 +114,11 @@ appId: kg.com.stroy.app
     text: "(?s).*Номер телефона.*"
 - eraseText: 20
 - inputText: "+996700000002"
-- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "(?s).*Пригласить.*"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     text: "(?s).*Пригласить.*"
 - extendedWaitUntil:
