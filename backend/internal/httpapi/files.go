@@ -127,6 +127,12 @@ func createFileMetadata(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "file name or storage path is too long")
 		return
 	}
+	// Uploads are stored under "<project_id>/..."; never let metadata point at
+	// another project's object, which a later delete would remove.
+	if !strings.HasPrefix(req.StoragePath, req.ProjectID+"/") || strings.Contains(req.StoragePath, "..") {
+		Error(w, http.StatusBadRequest, "storage_path must belong to the project")
+		return
+	}
 	if !isValidFileKind(req.Kind) {
 		Error(w, http.StatusBadRequest, "invalid file kind")
 		return

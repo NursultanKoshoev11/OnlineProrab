@@ -34,14 +34,17 @@ jobs:
           echo 'The main-branch API deploy is configured, but production storage cutover is not complete.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Provision production S3, back up PostgreSQL and uploads, migrate uploads, verify checksums and rollback, then set API_STORAGE_CUTOVER_COMPLETE=true.' >> "$GITHUB_STEP_SUMMARY"
 
-  deploy:
+  # Source checks run on a disposable GitHub-hosted runner.  The production
+  # self-hosted runner never starts a throwaway PostgreSQL service with a
+  # well-known password and never executes the Go test suite.
+  verify:
+    name: Verify backend source
     if: >-
       github.ref == 'refs/heads/main' &&
       ((github.event_name == 'push' && vars.API_STORAGE_CUTOVER_COMPLETE == 'true') ||
       (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy))
-    runs-on: [self-hosted, stroy-prod]
-    timeout-minutes: 45
-    environment: production-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16-alpine
@@ -57,12 +60,6 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DEPLOY_SHA: ${{ github.sha }}
-      DEPLOY_HOST: ${{ vars.API_DEPLOY_HOST }}
-      DEPLOY_USER: ${{ vars.API_DEPLOY_USER }}
-      DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
-      COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
-      API_STORAGE_CUTOVER_COMPLETE: ${{ vars.API_STORAGE_CUTOVER_COMPLETE }}
       TEST_DATABASE_URL: postgres://onlineprorab:onlineprorab@127.0.0.1:5432/onlineprorab_test?sslmode=disable
       APP_ENV: development
       DATABASE_URL: postgres://onlineprorab:onlineprorab@127.0.0.1:5432/onlineprorab_test?sslmode=disable
@@ -70,7 +67,6 @@ jobs:
       ACCESS_TOKEN_TTL_MINUTES: 15
       CORS_ALLOWED_ORIGINS: http://localhost:3000
       MAX_UPLOAD_MB: 10
-      FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
     defaults:
       run:
         shell: bash
@@ -81,28 +77,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-
-      - name: Verify current main and deployment settings
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          [[ "$GITHUB_REF" == "refs/heads/main" ]]
-          [[ "$API_STORAGE_CUTOVER_COMPLETE" == "true" ]]
-          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
-          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
-          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]
-          [[ "$DEPLOY_PATH" != "/" && "$DEPLOY_PATH" != */ ]]
-          [[ "$DEPLOY_PATH" != *"//"* && "$DEPLOY_PATH" != *"/./"* && "$DEPLOY_PATH" != */. ]]
-          [[ "$DEPLOY_PATH" != *"/../"* && "$DEPLOY_PATH" != */.. ]]
-          [[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]]
-          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          if [[ "$DEPLOY_SHA" != "$current_main_sha" ]]; then
-            echo "Refusing stale revision $DEPLOY_SHA; current main is $current_main_sha." >&2
-            exit 1
-          fi
-          echo "Deploying current main revision $DEPLOY_SHA." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -161,6 +135,56 @@ jobs:
           REVIEW_SMS_CODE: '987654'
         run: docker compose -f backend/docker-compose.prod.yml config --quiet
 
+  deploy:
+    needs: verify
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'push' && vars.API_STORAGE_CUTOVER_COMPLETE == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_production_deploy))
+    runs-on: [self-hosted, stroy-prod]
+    timeout-minutes: 45
+    environment: production-api
+    env:
+      DEPLOY_SHA: ${{ github.sha }}
+      DEPLOY_HOST: ${{ vars.API_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.API_DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.API_DEPLOY_PATH }}
+      COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
+      API_STORAGE_CUTOVER_COMPLETE: ${{ vars.API_STORAGE_CUTOVER_COMPLETE }}
+      FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out the selected main revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify current main and deployment settings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$API_STORAGE_CUTOVER_COMPLETE" == "true" ]]
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$DEPLOY_PATH" != "/" && "$DEPLOY_PATH" != */ ]]
+          [[ "$DEPLOY_PATH" != *"//"* && "$DEPLOY_PATH" != *"/./"* && "$DEPLOY_PATH" != */. ]]
+          [[ "$DEPLOY_PATH" != *"/../"* && "$DEPLOY_PATH" != */.. ]]
+          [[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]]
+          current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          if [[ "$DEPLOY_SHA" != "$current_main_sha" ]]; then
+            echo "Refusing stale revision $DEPLOY_SHA; current main is $current_main_sha." >&2
+            exit 1
+          fi
+          echo "Deploying current main revision $DEPLOY_SHA." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build the revision-tagged production image
         run: |
           docker build --pull \
@@ -177,16 +201,22 @@ jobs:
         run: |
           set -euo pipefail
           [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/api_deploy"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/api_known_hosts"
-          chmod 600 "$HOME/.ssh/api_deploy" "$HOME/.ssh/api_known_hosts"
+          # Per-job credentials under RUNNER_TEMP, never the persistent runner home directory.
+          ssh_dir="$RUNNER_TEMP/api-deploy-ssh"
+          rm -rf -- "$ssh_dir"
+          install -m 700 -d "$ssh_dir"
+          (
+            umask 077
+            printf '%s\n' "$DEPLOY_SSH_KEY" > "$ssh_dir/id_deploy"
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          )
+          chmod 600 "$ssh_dir/id_deploy" "$ssh_dir/known_hosts"
 
       - name: Transfer the image and matching Compose file
         run: |
           set -euo pipefail
           [[ -n "$FCM_SERVICE_ACCOUNT_JSON" ]]
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/api-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/api-deploy-ssh/id_deploy")
           compose_file="$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml"
           fcm_secret_file="$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.fcm.json"
           cp backend/docker-compose.prod.yml "$compose_file"
@@ -195,8 +225,16 @@ jobs:
           scp "${ssh_options[@]}" \
             "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.image.tar.gz" \
             "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml" \
-            "$fcm_secret_file" \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
+          # Stream the FCM credential over SSH so the remote file is created
+          # with mode 0600 (umask 077) from the first byte; noclobber refuses a
+          # file planted by another local user. deploy-remote.sh re-checks
+          # ownership and mode before using it.
+          printf -v remote_fcm_path '%q' "/tmp/stroy-api-$DEPLOY_SHA.fcm.json"
+          ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "umask 077 && rm -f -- $remote_fcm_path && set -C && cat > $remote_fcm_path && chmod 600 -- $remote_fcm_path" \
+            < "$fcm_secret_file"
+          rm -f -- "$fcm_secret_file"
           scp "${ssh_options[@]}" \
             backend/scripts/backup.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/stroy-api-$DEPLOY_SHA.backup.sh"
@@ -218,7 +256,7 @@ jobs:
         id: deploy
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/api-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/api-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q %q' deploy "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
           timeout --signal=TERM --kill-after=20s 8m \
             ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
@@ -239,7 +277,7 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/api-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/api-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q %q' rollback "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
           timeout --signal=TERM --kill-after=20s 5m \
             ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
@@ -248,11 +286,11 @@ jobs:
         if: failure() && steps.deploy.outcome == 'success'
         run: |
           set -euo pipefail
-          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/api_known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$HOME/.ssh/api_deploy")
+          ssh_options=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/api-deploy-ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i "$RUNNER_TEMP/api-deploy-ssh/id_deploy")
           printf -v remote_command 'bash -s -- %q %q %q %q' rollback "$DEPLOY_SHA" "$DEPLOY_PATH" "$COMPOSE_PROJECT"
           timeout --signal=TERM --kill-after=20s 5m \
             ssh "${ssh_options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" < backend/deploy-remote.sh
 
       - name: Remove SSH credentials
         if: always()
-        run: rm -f "$HOME/.ssh/api_deploy" "$HOME/.ssh/api_known_hosts"
+        run: rm -rf -- "$RUNNER_TEMP/api-deploy-ssh" "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.fcm.json" "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.image.tar.gz" "$RUNNER_TEMP/stroy-api-$DEPLOY_SHA.compose.yml"

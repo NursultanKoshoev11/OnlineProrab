@@ -67,3 +67,30 @@ func TestProjectMutationRBACRejectsUnsupportedMethods(t *testing.T) {
 		t.Fatal("unsupported method must not reach the wrapped handler")
 	}
 }
+
+func TestCanChangeTeamMemberKeepsManagersFromManagingManagers(t *testing.T) {
+	cases := []struct {
+		actor, current, next string
+		want                 bool
+	}{
+		{ProjectRoleOwner, "", ProjectRoleManager, true},
+		{ProjectRoleOwner, ProjectRoleManager, ProjectRoleWorker, true},
+		{ProjectRoleOwner, ProjectRoleManager, "", true},
+		{ProjectRoleOwner, ProjectRoleOwner, "", false},
+		{ProjectRoleOwner, ProjectRoleWorker, ProjectRoleOwner, false},
+		{ProjectRoleManager, "", ProjectRoleWorker, true},
+		{ProjectRoleManager, "", ProjectRoleManager, false},
+		{ProjectRoleManager, ProjectRoleWorker, ProjectRoleViewer, true},
+		{ProjectRoleManager, ProjectRoleViewer, "", true},
+		{ProjectRoleManager, ProjectRoleWorker, ProjectRoleManager, false},
+		{ProjectRoleManager, ProjectRoleManager, ProjectRoleWorker, false},
+		{ProjectRoleManager, ProjectRoleManager, "", false},
+		{ProjectRoleWorker, ProjectRoleViewer, "", false},
+		{"", ProjectRoleViewer, "", false},
+	}
+	for _, tc := range cases {
+		if got := canChangeTeamMember(tc.actor, tc.current, tc.next); got != tc.want {
+			t.Errorf("canChangeTeamMember(%q, %q, %q) = %v, want %v", tc.actor, tc.current, tc.next, got, tc.want)
+		}
+	}
+}

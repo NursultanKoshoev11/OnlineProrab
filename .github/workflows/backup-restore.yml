@@ -115,6 +115,23 @@ jobs:
             exit 1
           fi
 
+      - name: Refuse to restore while the API is running
+        run: |
+          set -eu
+          docker run --detach --name stroy-api --entrypoint sleep postgres:16-alpine 300 >/dev/null
+          trap 'docker rm --force stroy-api >/dev/null 2>&1 || true' EXIT
+          if CONFIRM_RESTORE=YES UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" sh scripts/restore.sh "$RUNNER_TEMP/missing-backup" > "$RUNNER_TEMP/running-api.log" 2>&1; then
+            echo "restore unexpectedly ran while an API container was running" >&2
+            exit 1
+          fi
+          grep -Fq 'an API container is running' "$RUNNER_TEMP/running-api.log"
+          # The explicit override skips only this check; the missing backup is still rejected.
+          if CONFIRM_RESTORE=YES UPLOAD_DIR="$RUNNER_TEMP/onlineprorab-uploads" sh scripts/restore.sh --allow-running-api "$RUNNER_TEMP/missing-backup" > "$RUNNER_TEMP/running-api-override.log" 2>&1; then
+            echo "restore unexpectedly accepted a missing backup" >&2
+            exit 1
+          fi
+          grep -Fq 'backup directory must exist' "$RUNNER_TEMP/running-api-override.log"
+
       - name: Seed database and uploads
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'

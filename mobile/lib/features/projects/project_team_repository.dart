@@ -89,8 +89,9 @@ class ProjectTeamRepository {
     required String role,
   }) async {
     await _apiClient.patchJson(
-      '/api/v1/project-members/$userId?project_id=$projectId',
+      '/api/v1/project-members/${Uri.encodeComponent(userId)}',
       {'role': role},
+      {'project_id': projectId},
     );
   }
 
@@ -99,7 +100,8 @@ class ProjectTeamRepository {
     required String userId,
   }) async {
     await _apiClient.deleteJson(
-      '/api/v1/project-members/$userId?project_id=$projectId',
+      '/api/v1/project-members/${Uri.encodeComponent(userId)}',
+      {'project_id': projectId},
     );
   }
 

@@ -69,7 +69,10 @@ unset sid password
 
 compose=(docker compose -p onlineprorab-staging -f docker-compose.staging.yml --env-file .env)
 "${compose[@]}" config --quiet
-"${compose[@]}" up -d --force-recreate api
+# --remove-orphans only touches containers labelled with this staging project;
+# it retires the pre-rename `api`/`billing` staging services whose container
+# names would otherwise block the renamed services.
+"${compose[@]}" up -d --force-recreate --remove-orphans api-staging
 
 healthy=false
 for _ in $(seq 1 45); do

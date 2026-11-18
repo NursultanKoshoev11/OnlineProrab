@@ -499,7 +499,12 @@ class DemoDataState {
   String? _idAfter(String path, String prefix) {
     if (!path.startsWith(prefix)) return null;
     final value = path.substring(prefix.length);
-    return value.isEmpty || value.contains('/') ? null : value;
+    if (value.isEmpty || value.contains('/')) return null;
+    try {
+      return Uri.decodeComponent(value);
+    } on ArgumentError {
+      return null;
+    }
   }
 
   Map<String, dynamic>? _find(List<Map<String, dynamic>> items, String id) {

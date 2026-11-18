@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -80,7 +81,7 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	stored, err := storeUploadedFile(ctx, appState.FileStore, source, projectID, maxBytes)
 	if err != nil {
-		Error(w, http.StatusBadRequest, err.Error())
+		writeUploadError(w, err)
 		return
 	}
 	cleanup := true
@@ -200,9 +201,13 @@ func storeUploadedFile(ctx context.Context, store storage.ObjectStore, source mu
 			if queueErr := queueStorageDeletion(relativePath); queueErr != nil {
 				slog.Error("partial_upload_cleanup_queue_failed", "error", queueErr)
 			}
-			return storedUpload{}, fmt.Errorf("failed to store file and clean up partial object: %w (cleanup: %v)", err, cleanupErr)
+			slog.Error("upload_store_and_cleanup_failed", "error", err, "cleanup_error", cleanupErr)
+			return storedUpload{}, errUploadStorage
 		}
-		return storedUpload{}, fmt.Errorf("failed to store file")
+		// Storage errors can contain bucket names, endpoints or paths: log them
+		// and give the client a generic message.
+		slog.Error("upload_store_failed", "error", err)
+		return storedUpload{}, errUploadStorage
 	}
 
 	return storedUpload{
@@ -210,6 +215,18 @@ func storeUploadedFile(ctx context.Context, store storage.ObjectStore, source mu
 		contentType:  contentType,
 		sizeBytes:    totalSize,
 	}, nil
+}
+
+// errUploadStorage marks a server-side storage failure, as opposed to a
+// problem with the uploaded file itself.
+var errUploadStorage = errors.New("failed to store file")
+
+func writeUploadError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errUploadStorage) {
+		Error(w, http.StatusServiceUnavailable, errUploadStorage.Error())
+		return
+	}
+	Error(w, http.StatusBadRequest, err.Error())
 }
 
 func sanitizeOriginalName(value string) string {

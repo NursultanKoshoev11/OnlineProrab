@@ -325,6 +325,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     final preferences = await SharedPreferences.getInstance();
     final consentGiven =
         preferences.getBool(_voiceProcessingConsentKey) ?? false;
+    if (!mounted) return;
 
     if (!consentGiven) {
       final mayProcessVoice = await showDialog<bool>(

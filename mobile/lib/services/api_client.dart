@@ -132,7 +132,7 @@ class ApiClient {
       );
 
   Future<Map<String, dynamic>> getProject(String projectId) async {
-    final data = await getJson('/api/v1/projects/' + projectId);
+    final data = await getJson('/api/v1/projects/${_segment(projectId)}');
     if (data is Map<String, dynamic>) return data;
     throw const ApiException(500, 'Сервер вернул некорректные данные объекта');
   }
@@ -201,17 +201,17 @@ class ApiClient {
     String? startDate,
     double? budgetAmount,
     String? currency,
-  }) => patchJson('/api/v1/projects/$projectId', {
+  }) => patchJson('/api/v1/projects/${_segment(projectId)}', {
     'name': name,
     'address': address,
     'status': status,
-    if (startDate != null) 'start_date': startDate,
-    if (budgetAmount != null) 'budget_amount': budgetAmount,
-    if (currency != null) 'currency': currency,
+    'start_date': ?startDate,
+    'budget_amount': ?budgetAmount,
+    'currency': ?currency,
   });
 
   Future<void> deleteProject(String projectId) async {
-    await deleteJson('/api/v1/projects/$projectId');
+    await deleteJson('/api/v1/projects/${_segment(projectId)}');
   }
 
   Future<List<dynamic>> listCostItems(String projectId) async =>
@@ -231,7 +231,7 @@ class ApiClient {
         body: jsonEncode({
           'project_id': projectId,
           'query': query,
-          if (searchQuery != null) 'search_query': searchQuery,
+          'search_query': ?searchQuery,
           if (fromDate != null && toDate != null) ...{
             'from_date': fromDate,
             'to_date': toDate,
@@ -262,7 +262,7 @@ class ApiClient {
     'currency': currency,
     'vendor': vendor,
     'spent_at': spentAt,
-    if (receiptFileId != null) 'receipt_file_id': receiptFileId,
+    'receipt_file_id': ?receiptFileId,
   });
 
   Future<Map<String, dynamic>> updateCostItem({
@@ -275,7 +275,7 @@ class ApiClient {
     String currency = 'KGS',
     String vendor = '',
     String? receiptFileId,
-  }) => patchJson('/api/v1/cost-items/$costItemId', {
+  }) => patchJson('/api/v1/cost-items/${_segment(costItemId)}', {
     'title': title,
     'amount': amount,
     'description': description,
@@ -283,11 +283,11 @@ class ApiClient {
     'currency': currency,
     'vendor': vendor,
     'spent_at': spentAt,
-    if (receiptFileId != null) 'receipt_file_id': receiptFileId,
+    'receipt_file_id': ?receiptFileId,
   });
 
   Future<void> deleteCostItem(String costItemId) async {
-    await deleteJson('/api/v1/cost-items/$costItemId');
+    await deleteJson('/api/v1/cost-items/${_segment(costItemId)}');
   }
 
   Future<List<dynamic>> listDailyReports(String projectId) async => _asList(
@@ -305,7 +305,7 @@ class ApiClient {
     'summary': summary,
     'workers_count': workersCount,
     'issues': issues,
-    if (reportDate != null) 'report_date': reportDate,
+    'report_date': ?reportDate,
   });
 
   Future<Map<String, dynamic>> updateDailyReport({
@@ -314,15 +314,15 @@ class ApiClient {
     required int workersCount,
     String issues = '',
     String? reportDate,
-  }) => patchJson('/api/v1/daily-reports/$reportId', {
+  }) => patchJson('/api/v1/daily-reports/${_segment(reportId)}', {
     'summary': summary,
     'workers_count': workersCount,
     'issues': issues,
-    if (reportDate != null) 'report_date': reportDate,
+    'report_date': ?reportDate,
   });
 
   Future<void> deleteDailyReport(String reportId) async {
-    await deleteJson('/api/v1/daily-reports/$reportId');
+    await deleteJson('/api/v1/daily-reports/${_segment(reportId)}');
   }
 
   Future<List<dynamic>> listTasks(String projectId) async =>
@@ -339,7 +339,7 @@ class ApiClient {
     'title': title,
     'description': description,
     'status': status,
-    if (dueDate != null) 'due_date': dueDate,
+    'due_date': ?dueDate,
   });
 
   Future<Map<String, dynamic>> updateTask({
@@ -348,15 +348,15 @@ class ApiClient {
     String description = '',
     String status = 'open',
     String? dueDate,
-  }) => patchJson('/api/v1/tasks/$taskId', {
+  }) => patchJson('/api/v1/tasks/${_segment(taskId)}', {
     'title': title,
     'description': description,
     'status': status,
-    if (dueDate != null) 'due_date': dueDate,
+    'due_date': ?dueDate,
   });
 
   Future<void> deleteTask(String taskId) async {
-    await deleteJson('/api/v1/tasks/$taskId');
+    await deleteJson('/api/v1/tasks/${_segment(taskId)}');
   }
 
   Future<List<dynamic>> listFiles(String projectId) async =>
@@ -411,7 +411,7 @@ class ApiClient {
   }
 
   Future<void> deleteFile(String fileId) async {
-    await deleteJson('/api/v1/files/$fileId');
+    await deleteJson('/api/v1/files/${_segment(fileId)}');
   }
 
   Future<List<dynamic>> listAuditLogs(String projectId) async =>
@@ -460,11 +460,12 @@ class ApiClient {
 
   Future<Map<String, dynamic>> patchJson(
     String path,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, [
+    Map<String, String>? query,
+  ]) async {
     final response = await _send(
       () => _httpClient.patch(
-        ApiConfig.endpoint(path),
+        ApiConfig.endpoint(path, query),
         headers: _headers(),
         body: jsonEncode(body),
       ),
@@ -480,9 +481,12 @@ class ApiClient {
     return _decodeAny(response);
   }
 
-  Future<dynamic> deleteJson(String path) async {
+  Future<dynamic> deleteJson(String path, [Map<String, String>? query]) async {
     final response = await _send(
-      () => _httpClient.delete(ApiConfig.endpoint(path), headers: _headers()),
+      () => _httpClient.delete(
+        ApiConfig.endpoint(path, query),
+        headers: _headers(),
+      ),
     );
     return _decodeAny(response);
   }
@@ -597,6 +601,9 @@ class ApiClient {
     if (handler != null) await handler();
   }
 
+  /// Percent-encodes a single path segment such as a resource id.
+  static String _segment(String value) => Uri.encodeComponent(value);
+
   Map<String, String> _headers({bool includeBearer = true}) => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -625,9 +632,13 @@ class ApiClient {
       final message = data is Map<String, dynamic>
           ? data['error']?.toString()
           : null;
+      final code = data is Map<String, dynamic>
+          ? data['code']?.toString()
+          : null;
       final error = ApiException(
         response.statusCode,
         message ?? 'Не удалось выполнить запрос',
+        code: code,
       );
       if (error.isSubscriptionExpired) {
         _subscriptionExpiredController.add(null);
@@ -665,16 +676,26 @@ class ApiClient {
 }
 
 class ApiException implements Exception {
-  const ApiException(this.statusCode, this.message);
+  const ApiException(this.statusCode, this.message, {this.code});
+
+  /// Machine-readable error code sent by the backend as `{"code": ...}`.
+  static const subscriptionExpiredCode = 'subscription_expired';
 
   final int statusCode;
   final String message;
+  final String? code;
 
   bool get isNetworkError => statusCode == 0 || statusCode == 408;
   bool get isUnauthorized => statusCode == 401;
-  bool get isSubscriptionExpired =>
-      statusCode == 403 &&
-      message.toLowerCase().contains('subscription is expired');
+  bool get isSubscriptionExpired {
+    if (statusCode != 403) return false;
+    final errorCode = code;
+    if (errorCode != null && errorCode.isNotEmpty) {
+      return errorCode == subscriptionExpiredCode;
+    }
+    // Fallback for backends that only send the English message text.
+    return message.toLowerCase().contains('subscription is expired');
+  }
 
   @override
   String toString() => 'ApiException($statusCode): $message';

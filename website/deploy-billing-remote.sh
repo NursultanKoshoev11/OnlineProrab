@@ -73,7 +73,17 @@ restore_previous_billing() {
   fi
   docker image tag "$rollback_image_tag" "$production_image_tag"
   docker rm --force stroy-obank-billing >/dev/null 2>&1 || true
-  docker compose -p stroy-billing -f "$compose_file" -f <(printf 'services:\n  billing:\n    healthcheck:\n      disable: true\n') up --detach --no-build --force-recreate --wait --wait-timeout 120
+  # The rollback starts the previous image with the new release's Compose file.
+  # That file's healthcheck asserts the new page title and assets, which an
+  # older image may legitimately not serve, so it is replaced (not disabled)
+  # by a version-neutral probe: the rollback still waits until nginx actually
+  # serves /billing/ instead of reporting success for a dead container.
+  docker compose -p stroy-billing -f "$compose_file" -f <(printf '%s\n' \
+    'services:' \
+    '  billing:' \
+    '    healthcheck:' \
+    '      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/billing/"]') \
+    up --detach --no-build --force-recreate --wait --wait-timeout 120
 }
 
 cleanup() {

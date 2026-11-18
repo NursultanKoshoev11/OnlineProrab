@@ -1,5 +1,7 @@
 # Local production MVP notes
 
+> **Historical document.** Archived for reference only; it does not describe the current system or release process. See [`RELEASE_CHECKLIST.md`](../../RELEASE_CHECKLIST.md) and [`backend/PRODUCTION.md`](../../backend/PRODUCTION.md) for current guidance.
+
 This document is retained as a historical checklist. The changes below are
 already part of the current repository; do not apply a second implementation.
 

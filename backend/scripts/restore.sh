@@ -45,10 +45,41 @@ script_dir="$(CDPATH= cd "$(dirname "$0")" && pwd)"
 . "$script_dir/safe-path.sh"
 UPLOAD_DIR="$(safe_directory_path "${UPLOAD_DIR:-/data/uploads}" UPLOAD_DIR)"
 
+allow_running_api="${ALLOW_RUNNING_API:-NO}"
+if [ "${1:-}" = "--allow-running-api" ]; then
+  allow_running_api=YES
+  shift
+fi
 backup_dir="${1:-}"
 if [ -z "$backup_dir" ]; then
-  echo "usage: restore.sh /path/to/backup-directory or s3://backup-bucket/snapshots/TIMESTAMP/" >&2
+  echo "usage: restore.sh [--allow-running-api] /path/to/backup-directory or s3://backup-bucket/snapshots/TIMESTAMP/" >&2
   exit 2
+fi
+
+# A restore drops and recreates every table and swaps the uploads.  A running
+# API would keep writing into the half-restored database, so refuse unless the
+# operator explicitly confirms that DATABASE_URL and the storage target are a
+# dedicated recovery copy (ALLOW_RUNNING_API=YES or --allow-running-api).
+if [ "$allow_running_api" != "YES" ]; then
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "cannot verify that the API is stopped (docker CLI not found); stop every API instance and rerun with ALLOW_RUNNING_API=YES" >&2
+    exit 2
+  fi
+  if ! running_api="$(docker ps --quiet --filter 'name=^stroy-api$')"; then
+    echo "cannot query Docker to verify that the API is stopped; stop every API instance and rerun with ALLOW_RUNNING_API=YES" >&2
+    exit 2
+  fi
+  if [ -n "${COMPOSE_PROJECT:-}" ]; then
+    if ! project_api="$(docker ps --quiet --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" --filter 'label=com.docker.compose.service=api')"; then
+      echo "cannot query Docker to verify that the API is stopped" >&2
+      exit 2
+    fi
+    running_api="$running_api$project_api"
+  fi
+  if [ -n "$running_api" ]; then
+    echo "an API container is running; stop it before restoring, or set ALLOW_RUNNING_API=YES only when restoring into a dedicated recovery database and bucket" >&2
+    exit 2
+  fi
 fi
 
 command -v pg_restore >/dev/null 2>&1 || { echo "pg_restore is required" >&2; exit 127; }
@@ -225,19 +256,46 @@ if [ -L "$UPLOAD_DIR" ]; then
   exit 2
 fi
 
+# --single-transaction makes the drop-and-recreate all-or-nothing: any error
+# rolls the database back to its pre-restore state instead of leaving it
+# half-cleaned.
 pg_restore \
   --clean \
   --if-exists \
   --no-owner \
   --no-privileges \
   --exit-on-error \
+  --single-transaction \
   --dbname="$DATABASE_URL" \
   "$restore_database_dump"
 
 case "$STORAGE_DRIVER" in
   local)
-    find "$UPLOAD_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-    cp -a "$staging_dir"/. "$UPLOAD_DIR"/
+    # The extracted uploads already live in a sibling directory on the same
+    # filesystem, so swap the directories with renames instead of deleting the
+    # live files and copying over them.
+    previous_uploads="$staging_parent/.onlineprorab-previous-uploads.$$"
+    if [ -e "$previous_uploads" ] || [ -L "$previous_uploads" ]; then
+      echo "previous uploads staging path already exists" >&2
+      exit 2
+    fi
+    chmod "$(stat -c '%a' "$UPLOAD_DIR")" "$staging_dir"
+    chown "$(stat -c '%u:%g' "$UPLOAD_DIR")" "$staging_dir" 2>/dev/null || true
+    if mv "$UPLOAD_DIR" "$previous_uploads" 2>/dev/null; then
+      if ! mv "$staging_dir" "$UPLOAD_DIR"; then
+        mv "$previous_uploads" "$UPLOAD_DIR"
+        echo "could not move restored uploads into place; original uploads were kept" >&2
+        exit 5
+      fi
+      staging_created=0
+      rm -rf "$previous_uploads"
+    else
+      # UPLOAD_DIR is a mount point (e.g. a Docker volume) and cannot be
+      # renamed: fall back to replacing its contents in place.
+      echo "UPLOAD_DIR cannot be renamed (mount point?); replacing its contents in place" >&2
+      find "$UPLOAD_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+      cp -a "$staging_dir"/. "$UPLOAD_DIR"/
+    fi
     ;;
   s3)
     aws --region "$S3_REGION" s3 sync "$staging_dir" "s3://$S3_BUCKET" --delete --only-show-errors

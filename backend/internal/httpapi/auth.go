@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/phone"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -323,12 +324,10 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusInternalServerError, "failed to complete project invitation")
 			return
 		}
-		if _, auditErr := tx.Exec(ctx, `
+		bestEffortTxExec(ctx, tx, "sms_invitation_audit_log", `
 			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
 			VALUES ($1, $2, 'accept_invite', 'project_member', $1, jsonb_build_object('role', $3::text, 'source', 'sms_login'))
-		`, userID, invite.projectID, invite.role); auditErr != nil {
-			slog.Error("sms_invitation_audit_log_failed", "error", auditErr)
-		}
+		`, userID, invite.projectID, invite.role)
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE sms_login_codes SET consumed_at = now() WHERE id = $1`, codeID); err != nil {
@@ -595,6 +594,6 @@ func hashLoginCode(phone, code string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func normalizePhone(phone string) string {
-	return strings.ReplaceAll(strings.TrimSpace(phone), " ", "")
+func normalizePhone(value string) string {
+	return phone.Normalize(value)
 }

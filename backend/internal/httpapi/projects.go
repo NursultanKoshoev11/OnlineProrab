@@ -101,6 +101,7 @@ func listProjects(w http.ResponseWriter, r *http.Request) {
 		WHERE pm.user_id = $1
 		  AND p.deleted_at IS NULL
 		  AND ($2 OR p.status = 'active')
+		  AND `+ownerSubscriptionCurrentSQL+`
 		ORDER BY p.created_at DESC
 	`, userID, includeArchived)
 	if err != nil {
@@ -153,6 +154,7 @@ func getProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		FROM projects p
 		JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
 		WHERE p.id = $1 AND p.deleted_at IS NULL
+		  AND `+ownerSubscriptionCurrentSQL+`
 	`, projectID, userID).Scan(&item.ID, &item.Name, &item.Address, &item.BudgetAmount, &item.Currency, &item.Status, &item.Role, &item.CoverFileID, &item.StartDate, &item.CreatedAt)
 	if err != nil {
 		Error(w, http.StatusNotFound, "project not found")
@@ -228,7 +230,7 @@ func createProject(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "failed to create project membership")
 		return
 	}
-	_, _ = tx.Exec(ctx, `
+	bestEffortTxExec(ctx, tx, "audit_log", `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
 		VALUES ($1, $2, 'create', 'project', $2)
 	`, userID, item.ID)
@@ -340,14 +342,14 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "failed to create project membership")
 		return
 	}
-	_, _ = tx.Exec(ctx, `
+	bestEffortTxExec(ctx, tx, "audit_log", `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
 		VALUES ($1, $2, 'create', 'project', $2)
 	`, userID, item.ID)
 
 	stored, err := storeUploadedFile(ctx, appState.FileStore, source, item.ID, maxBytes)
 	if err != nil {
-		Error(w, http.StatusBadRequest, err.Error())
+		writeUploadError(w, err)
 		return
 	}
 	cleanup := true
@@ -373,7 +375,7 @@ func CreateProjectWithCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = tx.Exec(ctx, `
+	bestEffortTxExec(ctx, tx, "audit_log", `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
 		VALUES ($1, $2, 'upload', 'file', $3, jsonb_build_object('kind', 'project_cover'))
 	`, userID, item.ID, item.CoverFileID)
@@ -507,7 +509,7 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 		), '')
 	`, projectID).Scan(&item.CoverFileID)
 
-	_, _ = tx.Exec(ctx, `
+	bestEffortTxExec(ctx, tx, "audit_log", `
 		INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id)
 		VALUES ($1, $2, 'update', 'project', $2)
 	`, userID, projectID)

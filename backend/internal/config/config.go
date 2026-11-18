@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/NursultanKoshoev11/OnlineProrab/backend/internal/phone"
 	"math"
 	"net"
 	"net/netip"
@@ -756,7 +757,7 @@ func isUnsafeProductionOrigin(origin string) bool {
 }
 
 func normalizePhone(value string) string {
-	return strings.ReplaceAll(strings.TrimSpace(value), " ", "")
+	return phone.Normalize(value)
 }
 
 func normalizePhoneList(value string) []string {

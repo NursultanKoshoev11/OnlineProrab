@@ -1,9 +1,15 @@
+# Staging shares the production Docker network (stroy_default) with the
+# production API (service `api`, container `stroy-api`) and billing page
+# (alias `billing`, container `stroy-obank-billing`).  Every staging service
+# and container name therefore carries a -staging suffix: Compose registers the
+# service name as a DNS alias on each network, and a reused container_name
+# would let a staging `up` collide with (or replace) the production container.
 services:
-  billing:
+  billing-staging:
     build:
       context: ../website
       dockerfile: Dockerfile.billing
-    container_name: stroy-obank-billing
+    container_name: stroy-obank-billing-staging
     restart: unless-stopped
     networks:
       - staging_proxy
@@ -48,7 +54,7 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  api:
+  api-staging:
     build:
       context: ../backend
       dockerfile: Dockerfile

@@ -2,9 +2,24 @@ name: Backend Production Rescue
 
 on:
   workflow_dispatch:
+    inputs:
+      allow_privileged_docker_restart:
+        description: >-
+          Break-glass only: if the deploy user's Docker cannot recover, start a
+          privileged host-PID container through the rootful Docker socket to
+          restart docker.service on the host (see backend/PRODUCTION.md).
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+# Share the deploy workflow's queue so a rescue never interleaves with an
+# in-flight deployment or recovery. Cancel a stuck deploy run first if needed.
+concurrency:
+  group: production-api
+  cancel-in-progress: false
 
 jobs:
   rescue:
@@ -18,12 +33,18 @@ jobs:
       COMPOSE_PROJECT: ${{ vars.API_DEPLOY_COMPOSE_PROJECT }}
       DEPLOY_SSH_KEY: ${{ secrets.API_DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.API_DEPLOY_KNOWN_HOSTS }}
+      ALLOW_PRIVILEGED_DOCKER_RESTART: ${{ inputs.allow_privileged_docker_restart && 'true' || 'false' }}
     steps:
       - name: Stop the stuck recovery and restore the API
         shell: bash
         run: |
           set -Eeuo pipefail
           [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]]
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ && "$DEPLOY_PATH" != "/" && "$DEPLOY_PATH" != */ ]]
+          [[ "$DEPLOY_PATH" != *"//"* && "$DEPLOY_PATH" != *"/../"* && "$DEPLOY_PATH" != */.. ]]
+          [[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ ]]
           install -m 700 -d "$RUNNER_TEMP/ssh"
           trap 'rm -f "$RUNNER_TEMP/ssh/id_ed25519" "$RUNNER_TEMP/ssh/known_hosts"' EXIT
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/ssh/id_ed25519"
@@ -34,8 +55,11 @@ jobs:
 
           rescue_remote() {
             local skip_cleanup="$1"
+            local remote_command
+            printf -v remote_command 'DEPLOY_PATH=%q COMPOSE_PROJECT=%q SKIP_CLEANUP=%q bash -s' \
+              "$DEPLOY_PATH" "$COMPOSE_PROJECT" "$skip_cleanup"
             timeout --signal=TERM --kill-after=15s 6m \
-              ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH=$DEPLOY_PATH COMPOSE_PROJECT=$COMPOSE_PROJECT SKIP_CLEANUP=$skip_cleanup bash -s" <<'REMOTE'
+              ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" "$remote_command" <<'REMOTE'
           set -Eeuo pipefail
           deploy_path="${DEPLOY_PATH:-/opt/stroy-api}"
           compose_project="${COMPOSE_PROJECT:-backend}"
@@ -108,7 +132,7 @@ jobs:
             latest_release="$(find "$deploy_path/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2- || true)"
             [[ -n "$latest_release" ]]
             previous_ref="$(cat -- "$latest_release/previous-release" 2>/dev/null || true)"
-            if [[ -n "$previous_ref" && -d "$deploy_path/$previous_ref" ]]; then
+            if [[ "$previous_ref" =~ ^releases/(baseline|[0-9a-f]{40})$ && -d "$deploy_path/$previous_ref" ]]; then
               current_release="$deploy_path/$previous_ref"
             else
               current_release="$latest_release"
@@ -145,6 +169,10 @@ jobs:
           remote_status=$?
           set -e
           if [[ "$remote_status" -eq 42 ]]; then
+            if [[ "$ALLOW_PRIVILEGED_DOCKER_RESTART" != "true" ]]; then
+              echo "The deploy user's Docker daemon did not recover. Re-run this workflow with allow_privileged_docker_restart=true (break-glass, see backend/PRODUCTION.md) or restart docker.service on the host manually." >&2
+              exit 1
+            fi
             rootful_socket="/var/run/docker.sock"
             if [[ ! -S "$rootful_socket" ]] || ! DOCKER_HOST="unix://$rootful_socket" timeout --signal=TERM --kill-after=10s 30s docker info >/dev/null 2>&1; then
               echo "The production Docker daemon requires a host-level restart outside the available runner permissions." >&2

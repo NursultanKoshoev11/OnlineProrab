@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -177,6 +179,135 @@ void main() {
       fallbackContentType: 'application/pdf',
     );
 
-    expect(file.fileName, 'receipt_may.pdf');
+    expect(file.fileName, 'receipt may.pdf');
+  });
+
+  test('keeps Cyrillic file names from RFC 5987 headers', () async {
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async => http.Response('{}', 200)),
+    );
+    final service = ProjectFileDownloadService(
+      apiClient: apiClient,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(
+          <int>[1],
+          200,
+          headers: {
+            'content-disposition':
+                "attachment; filename*=UTF-8''${Uri.encodeComponent('Смета №2.pdf')}",
+          },
+        );
+      }),
+    );
+
+    final file = await service.download(
+      fileId: 'file-6',
+      fallbackFileName: 'fallback.pdf',
+      fallbackContentType: 'application/pdf',
+    );
+
+    expect(file.fileName, 'Смета №2.pdf');
+  });
+
+  test('safeLocalFileName strips only unsafe characters', () {
+    expect(safeLocalFileName('Отчёт: этап 1?.pdf'), 'Отчёт_ этап 1_.pdf');
+    expect(safeLocalFileName('../..секрет.jpg'), 'секрет.jpg');
+    expect(safeLocalFileName('a\u0000b\nc.txt'), 'a_b_c.txt');
+    expect(safeLocalFileName('..'), 'download');
+    expect(safeLocalFileName('   '), 'download');
+    expect(safeLocalFileName('.hidden'), 'hidden');
+    final long = safeLocalFileName('${'я' * 300}.pdf');
+    expect(utf8.encode(long).length, lessThanOrEqualTo(200));
+    expect(long, endsWith('.pdf'));
+  });
+
+  test('streams downloads to a per-file directory', () async {
+    final temp = await Directory.systemTemp.createTemp('download_test');
+    addTearDown(() => temp.delete(recursive: true));
+    var downloadCalls = 0;
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async {
+        return http.Response(
+          jsonEncode({'access_token': 'a2', 'refresh_token': 'r2'}),
+          200,
+        );
+      }),
+    )..setTokens(accessToken: 'a1', refreshToken: 'r1');
+    final service = ProjectFileDownloadService(
+      apiClient: apiClient,
+      httpClient: MockClient.streaming((request, _) async {
+        downloadCalls++;
+        if (downloadCalls == 1) {
+          return http.StreamedResponse(Stream.value(utf8.encode('{}')), 401);
+        }
+        expect(request.headers['Authorization'], 'Bearer a2');
+        return http.StreamedResponse(
+          Stream.fromIterable([
+            <int>[1, 2],
+            <int>[3],
+          ]),
+          200,
+          headers: {
+            'content-type': 'application/pdf',
+            'content-disposition':
+                "attachment; filename*=utf-8''${Uri.encodeComponent('Акт.pdf')}",
+          },
+        );
+      }),
+    );
+
+    final first = await service.downloadToFile(
+      fileId: 'id/1',
+      fallbackFileName: 'x.pdf',
+      fallbackContentType: 'application/octet-stream',
+      directory: temp,
+    );
+    final second = await service.downloadToFile(
+      fileId: 'id-2',
+      fallbackFileName: 'x.pdf',
+      fallbackContentType: 'application/octet-stream',
+      directory: temp,
+    );
+
+    expect(first.fileName, 'Акт.pdf');
+    expect(first.contentType, 'application/pdf');
+    expect(await first.file.readAsBytes(), <int>[1, 2, 3]);
+    expect(first.file.parent.parent.path, temp.path);
+    expect(second.file.path, isNot(first.file.path));
+    expect(await second.file.exists(), isTrue);
+    expect(downloadCalls, 3);
+  });
+
+  test('removes partial file when the stream fails', () async {
+    final temp = await Directory.systemTemp.createTemp('download_test');
+    addTearDown(() => temp.delete(recursive: true));
+    final apiClient = ApiClient(
+      httpClient: MockClient((request) async => http.Response('{}', 200)),
+    );
+    final service = ProjectFileDownloadService(
+      apiClient: apiClient,
+      httpClient: MockClient.streaming((request, _) async {
+        final body = StreamController<List<int>>();
+        body.add(<int>[1]);
+        body.addError(http.ClientException('connection reset'));
+        body.close();
+        return http.StreamedResponse(body.stream, 200);
+      }),
+    );
+
+    await expectLater(
+      service.downloadToFile(
+        fileId: 'f',
+        fallbackFileName: 'a.bin',
+        fallbackContentType: 'application/octet-stream',
+        directory: temp,
+      ),
+      throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 0)),
+    );
+    final leftovers = await temp
+        .list(recursive: true)
+        .where((entity) => entity is File)
+        .toList();
+    expect(leftovers, isEmpty);
   });
 }

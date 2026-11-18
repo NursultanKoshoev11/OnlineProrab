@@ -9,10 +9,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// DeleteAccount permanently removes the authenticated user's account and the
-// data owned by that account. Shared project records are removed or
-// anonymised according to their foreign-key policy; stored-file removals are
-// recorded transactionally and processed by the storage deletion worker.
+// DeleteAccount permanently removes the authenticated user's account.
+// Projects the user owns that still have other members are handed over to a
+// successor (the longest-standing manager, else worker, else viewer) so the
+// team keeps its data; projects without other members are deleted with the
+// account. Records the user created in shared projects stay and lose their
+// author (ON DELETE SET NULL). Stored-file removals are recorded
+// transactionally and processed by the storage deletion worker.
 func DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -53,11 +56,9 @@ func DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// uploaded_by uses ON DELETE SET NULL because a shared project may outlive
-	// its uploader. Delete those file records explicitly for a complete account
-	// deletion; owned-project records are removed by the user cascade below.
-	if _, err := tx.Exec(ctx, `DELETE FROM files WHERE uploaded_by = $1`, userID); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to delete account files")
+	transferred, err := transferOwnedSharedProjects(ctx, tx, userID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to hand over shared projects")
 		return
 	}
 
@@ -82,6 +83,69 @@ func DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "failed to complete account deletion")
 		return
 	}
+	for _, handover := range transferred {
+		publishProjectEvent(handover.projectID, "project_member", handover.newOwnerID, "owner_transferred")
+	}
 
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+type projectHandover struct {
+	projectID  string
+	newOwnerID string
+}
+
+// transferOwnedSharedProjects makes another member the owner of every live
+// project the leaving user owns, preferring managers, then workers, then
+// viewers, and the earliest member within a role.
+func transferOwnedSharedProjects(ctx context.Context, tx pgx.Tx, userID string) ([]projectHandover, error) {
+	rows, err := tx.Query(ctx, `
+		WITH successors AS (
+			SELECT DISTINCT ON (pm.project_id) pm.project_id, pm.user_id
+			FROM project_members pm
+			JOIN projects p ON p.id = pm.project_id
+			WHERE p.owner_id = $1
+			  AND p.deleted_at IS NULL
+			  AND pm.user_id <> $1
+			ORDER BY pm.project_id,
+			         CASE pm.role WHEN 'manager' THEN 0 WHEN 'worker' THEN 1 ELSE 2 END,
+			         pm.created_at,
+			         pm.user_id
+		),
+		moved AS (
+			UPDATE projects p
+			SET owner_id = s.user_id, updated_at = now()
+			FROM successors s
+			WHERE p.id = s.project_id
+			RETURNING p.id AS project_id, s.user_id
+		)
+		UPDATE project_members pm
+		SET role = 'owner'
+		FROM moved m
+		WHERE pm.project_id = m.project_id AND pm.user_id = m.user_id
+		RETURNING pm.project_id::text, pm.user_id::text
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	var handovers []projectHandover
+	for rows.Next() {
+		var item projectHandover
+		if err := rows.Scan(&item.projectID, &item.newOwnerID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		handovers = append(handovers, item)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, item := range handovers {
+		bestEffortTxExec(ctx, tx, "owner_transfer_audit_log", `
+			INSERT INTO audit_logs (project_id, action, entity_type, entity_id, metadata)
+			VALUES ($1, 'transfer_owner', 'project', $1, jsonb_build_object('new_owner_id', $2::text, 'reason', 'account_deleted'))
+		`, item.projectID, item.newOwnerID)
+	}
+	return handovers, nil
 }

@@ -1,5 +1,7 @@
 # Next Production Tasks
 
+> **Historical document.** Archived for reference only; it does not describe the current system or release process. See [`RELEASE_CHECKLIST.md`](../../RELEASE_CHECKLIST.md) and [`backend/PRODUCTION.md`](../../backend/PRODUCTION.md) for current guidance.
+
 ## Implemented in the current PR stack
 
 - Staging SMS fails closed without a real provider; provider URLs, database TLS, proxy trust, and SMS abuse limits are validated.
@@ -23,4 +25,4 @@
 - Build the signed Android App Bundle and signed iOS IPA with release credentials; test the full auth-to-project flow on real Android and iOS devices.
 - Configure the GitHub Actions SSH deployment secrets and verify website deployment, including the public account-deletion page.
 
-Do not treat passing CI or these prepared workflows as a production deployment. Use [`docs/RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) and [`backend/PRODUCTION.md`](../backend/PRODUCTION.md) for release verification.
+Do not treat passing CI or these prepared workflows as a production deployment. Use [`docs/RELEASE_CHECKLIST.md`](../RELEASE_CHECKLIST.md) and [`backend/PRODUCTION.md`](../../backend/PRODUCTION.md) for release verification.

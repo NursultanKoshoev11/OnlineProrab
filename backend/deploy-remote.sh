@@ -309,6 +309,13 @@ cleanup_transferred_files() {
 }
 trap cleanup_transferred_files EXIT
 
+# The FCM credential arrives in the shared /tmp. Tighten it immediately and
+# refuse a file that another local user created or could have modified.
+if [[ "$(stat -c '%u' -- "$fcm_secret_file")" != "$(id -u)" ]]; then
+  echo "transferred FCM credential must be owned by the deploy user" >&2
+  exit 1
+fi
+chmod 600 -- "$fcm_secret_file"
 install -m 0600 -- "$fcm_secret_file" "$deploy_path/.fcm_service_account.json"
 
 if [[ "$release_ref" == "releases/$deploy_sha" ]]; then
@@ -488,3 +495,61 @@ compose_bounded 240 "stroy-api:$deploy_sha" "$new_compose" up --detach --no-buil
 set_current "releases/$deploy_sha"
 deployment_committed=1
 echo "API release $deploy_sha is healthy and active."
+
+# Keep the release history bounded.  Retained: the active release, the release
+# it would roll back to (its previous-release), the adopted baseline, and the
+# most recent releases.  Every other revision directory is removed together
+# with its stroy-api:<sha> image unless some container still references that
+# image.  Pruning is best effort: the new release is already committed, so a
+# pruning problem must never fail the deployment (which would trigger an
+# automatic rollback in the workflow).
+release_retention_count=5
+prune_old_releases() {
+  local keep_previous="$release_ref"
+  local -A keep=()
+  keep["$deploy_sha"]=1
+  if [[ "$keep_previous" =~ ^releases/([0-9a-f]{40})$ ]]; then
+    keep["${BASH_REMATCH[1]}"]=1
+  fi
+  local name
+  local recent=0
+  local -a candidates=()
+  while IFS= read -r name; do
+    [[ "$name" =~ ^[0-9a-f]{40}$ ]] || continue
+    if (( recent < release_retention_count )); then
+      keep["$name"]=1
+      recent=$((recent + 1))
+      continue
+    fi
+    [[ -n "${keep[$name]:-}" ]] && continue
+    candidates+=("$name")
+  done < <(find "$releases_dir" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' | sort -k1,1nr -k2,2 | cut -d' ' -f2-)
+
+  local release_path users
+  for name in "${candidates[@]}"; do
+    [[ -n "${keep[$name]:-}" ]] && continue
+    release_path="$releases_dir/$name"
+    if [[ -L "$release_path" || ! -d "$release_path" || "$(realpath -e -- "$release_path")" != "$release_path" ]]; then
+      echo "skipping unexpected release path $name during pruning" >&2
+      continue
+    fi
+    rm -rf -- "$release_path"
+    echo "Pruned API release $name."
+    if ! docker image inspect "stroy-api:$name" >/dev/null 2>&1; then
+      continue
+    fi
+    if ! users="$(docker ps --all --quiet --filter "ancestor=stroy-api:$name")"; then
+      echo "could not check containers using stroy-api:$name; keeping the image" >&2
+      continue
+    fi
+    if [[ -n "$users" ]]; then
+      echo "Keeping image stroy-api:$name because a container still uses it."
+      continue
+    fi
+    docker image rm "stroy-api:$name" >/dev/null || echo "could not remove image stroy-api:$name" >&2
+  done
+  return 0
+}
+if ! prune_old_releases; then
+  echo "release pruning did not complete; the new release remains active" >&2
+fi

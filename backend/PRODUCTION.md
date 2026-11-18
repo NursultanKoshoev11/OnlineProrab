@@ -52,16 +52,32 @@ Malformed boolean/integer settings and values that overflow duration or upload-s
 
 For local development, the fixed `dev_code` response is disabled by default. To opt in, set `DEV_SMS_CODE_ENABLED=true` and bind `HTTP_ADDR` to `127.0.0.1` or `localhost`.
 
-## Current production blockers
+## Production readiness status
 
-The private AWS storage stack, EC2 IAM policies, S3 upload migration, and verified PostgreSQL TLS are provisioned. The production Compose configuration connects through the existing `stroy_default` network and mounts the PostgreSQL CA from `/etc/onlineprorab/postgres-ca.crt`. Keep the original upload volume until the restore drill is complete.
+### Done
 
-1. Verify CloudWatch receives JSON logs from the production API. The log group retains events for 30 days. Confirm the SNS subscription so error and missed-backup alerts reach the operator; monitor `/health` and `/ready` externally because CloudWatch Logs cannot detect a host outage.
+- The private AWS storage stack, EC2 IAM policies, S3 upload migration, and verified PostgreSQL TLS are provisioned. The production Compose configuration connects through the existing `stroy_default` network and mounts the PostgreSQL CA from `/etc/onlineprorab/postgres-ca.crt`. Keep the original upload volume until the restore drill is complete.
+- Repository-side deployment hardening: every API deploy is gated on an encrypted pre-deployment backup (`onlineprorab-backup.service`); Go formatting, vet and race tests run on a GitHub-hosted runner instead of the production runner; deploy, recovery and rescue workflows keep SSH keys in a per-job `$RUNNER_TEMP` directory and share the `production-api` concurrency group; old releases and unused `stroy-api:<sha>` images are pruned after a successful deploy; `restore.sh` restores PostgreSQL in a single transaction, refuses to run while an API container is up, and swaps local uploads with renames; staging containers and services use `-staging` names so they cannot replace production containers on `stroy_default`.
+
+### Pending
+
+1. Verify CloudWatch receives JSON logs from the production API. The log group retains events for 30 days. Confirm the SNS subscription so error and missed-backup alerts reach the operator.
 2. Install and enable the daily encrypted S3 backup timer on the production runner, confirm its missed-backup alarm, and complete a PostgreSQL + S3 restore drill in staging with a dedicated recovery uploads bucket and database. Keep the age identity in the separate recovery secret store and use encrypted local backup storage.
 3. Complete an auth-to-project smoke test with the configured production SMS provider.
 4. Run mobile release builds and test the full flow on real Android and iOS devices.
 5. Keep deletion-ledger read access restricted to recovery operators, then run the S3 restore drill below to verify tombstones remove accounts, file metadata, and queued upload objects before traffic resumes.
 6. Before live O!Dengi payments, obtain merchant credentials and the confirmed live API URL, complete staging payment/callback reconciliation, and approve refund terms and the store-billing approach.
+
+### External setup still required
+
+These items live outside the repository and cannot be verified by CI:
+
+- External uptime monitoring for `https://api.stroy.com.kg/health` and `/ready` (CloudWatch Logs cannot detect a host outage).
+- The Caddy configuration is not in the repository. Caddy must join both `stroy_default` (API `stroy-api:8080`, billing `stroy-obank-billing`) and `stroy-website_default` (website `stroy-website:80`), and must preserve the API's HSTS header. Keep a reviewed copy of the Caddyfile with the server runbook.
+- The sudoers rule that lets the deploy user run exactly `/usr/bin/systemctl start --wait onlineprorab-backup.service` (see the pre-deployment backup section); without it every deploy fails closed.
+- Restrict the Firebase API keys (Android/iOS app and API restrictions) and enable Firebase App Check.
+- Review S3 Block Public Access at the account level and audit the IAM roles/users attached to the API, backup and recovery identities against the least-privilege policies from the storage stack.
+- `REVIEW_ONLY_MODE` must be `false` (and a real `SMS_PROVIDER` configured) before the public launch.
 
 ## Application logs
 
@@ -114,7 +130,7 @@ UPLOAD_DIR=/tmp/onlineprorab-unused-uploads \
 sh backend/scripts/backup.sh
 ```
 
-Replace the example bucket names with the CloudFormation stack outputs. Restore with `CONFIRM_RESTORE=YES`, `CONFIRM_S3_TARGET_BUCKET` set to the exact `S3_BUCKET` target name, `S3_BACKUP_BUCKET`, both target bucket settings, `BACKUP_AGE_IDENTITY_FILE`, and the archive URI printed by the backup command. The typed bucket confirmation helps catch a restore pointed at the wrong uploads bucket. The restore host needs AWS CLI, age, Python 3, `psql`, and PostgreSQL client tools. It downloads and decrypts the snapshot into private staging directories, validates every tombstone from the separate ledger, restores the database and objects, deletes tombstoned S3 keys in batches, then replays account and file deletions before the API can serve traffic. Use encrypted scratch storage for temporary decrypted files. Stop every API instance and storage worker first, and use a dedicated recovery uploads bucket/database when validating a restore. Attach `BackupArchiveReadPolicyArn`, `StorageRecoveryPolicyArn`, and `DeletionJournalReadPolicyArn` to the recovery identity. Keep the API stopped while validating, then point its `S3_BUCKET` setting at the restored bucket before starting it. Existing unencrypted S3 backups require an explicit `ALLOW_UNENCRYPTED_RESTORE=YES` override and should be used only for an approved legacy recovery.
+Replace the example bucket names with the CloudFormation stack outputs. Restore with `CONFIRM_RESTORE=YES`, `CONFIRM_S3_TARGET_BUCKET` set to the exact `S3_BUCKET` target name, `S3_BACKUP_BUCKET`, both target bucket settings, `BACKUP_AGE_IDENTITY_FILE`, and the archive URI printed by the backup command. The typed bucket confirmation helps catch a restore pointed at the wrong uploads bucket. The restore host needs AWS CLI, age, Python 3, `psql`, and PostgreSQL client tools. It downloads and decrypts the snapshot into private staging directories, validates every tombstone from the separate ledger, restores the database and objects, deletes tombstoned S3 keys in batches, then replays account and file deletions before the API can serve traffic. Use encrypted scratch storage for temporary decrypted files. `pg_restore` runs with `--clean --if-exists --single-transaction --exit-on-error`, so a failed restore leaves the database unchanged. Stop every API instance and storage worker first: the script refuses to run while a `stroy-api` container (or, if `COMPOSE_PROJECT` is set, an `api` service of that Compose project) is running. Set `ALLOW_RUNNING_API=YES` (or pass `--allow-running-api` before the backup path) only when `DATABASE_URL` and the storage target are a dedicated recovery copy, or when Docker is not available on the restore host after you have verified manually that the API is stopped. For local storage the restored uploads are extracted into a sibling directory and swapped into `UPLOAD_DIR` with renames; if `UPLOAD_DIR` is a mount point the script falls back to replacing its contents in place. and use a dedicated recovery uploads bucket/database when validating a restore. Attach `BackupArchiveReadPolicyArn`, `StorageRecoveryPolicyArn`, and `DeletionJournalReadPolicyArn` to the recovery identity. Keep the API stopped while validating, then point its `S3_BUCKET` setting at the restored bucket before starting it. Existing unencrypted S3 backups require an explicit `ALLOW_UNENCRYPTED_RESTORE=YES` override and should be used only for an approved legacy recovery.
 
 ```bash
 CONFIRM_RESTORE=YES \
@@ -217,7 +233,7 @@ The placeholder above is not a usable code. Keep the actual review phone(s) and 
 
 ## GitHub Actions API deployment
 
-Backend Production Deploy runs automatically for backend changes merged to main after the production storage cutover is complete. It performs backend vet/race checks, production Compose validation, and a revision-tagged image build. SSH uses a pinned known_hosts file. The deployment waits for the API container readiness check, probes the public account-deletion endpoint, and restores the prior managed release if either check fails. A push before cutover reports that the deploy is waiting and leaves the active API unchanged. A confirmed manual dispatch remains available for recovery.
+Backend Production Deploy runs automatically for backend changes merged to main after the production storage cutover is complete. A `verify` job on a GitHub-hosted runner performs gofmt, vet and race tests against a throwaway PostgreSQL service and validates the production Compose configuration; only after it passes does the `deploy` job on the self-hosted `stroy-prod` runner build the revision-tagged image. The production runner never runs the test suite or a test database. SSH uses a pinned known_hosts file written, together with the deploy key, to a per-job directory under `$RUNNER_TEMP` that is deleted at the end of the job; nothing is written to the runner account's `~/.ssh`. The FCM service-account JSON is streamed over SSH into a mode-0600 file in `/tmp`, which `deploy-remote.sh` checks for ownership, installs as `.fcm_service_account.json` (0600) and deletes. The deployment waits for the API container readiness check, probes the public account-deletion endpoint, and restores the prior managed release if either check fails. A push before cutover reports that the deploy is waiting and leaves the active API unchanged. A confirmed manual dispatch remains available for recovery.
 
 Create the production-api GitHub Environment, restrict it to main, and add these variables:
 
@@ -230,8 +246,18 @@ Add Environment secrets API_DEPLOY_SSH_KEY and API_DEPLOY_KNOWN_HOSTS. Never add
 
 Configure the repository Actions variable `API_STORAGE_CUTOVER_COMPLETE=false`. Set it to `true` only after production S3 is provisioned, PostgreSQL and uploads are backed up, uploads are migrated and checksum-verified, and rollback has been rehearsed.
 
-The deployment account needs Docker Engine, Docker Compose v2 with support for --wait and --pull never, and Python 3 for private configuration comparison. Set API_DEPLOY_COMPOSE_PROJECT to the current API service project so Compose replaces only that service. Keep the API port bound to 127.0.0.1 behind the HTTPS reverse proxy.
+The deployment account needs Docker Engine, Docker Compose v2 with support for --wait and --pull never, and Python 3 for private configuration comparison. Set API_DEPLOY_COMPOSE_PROJECT to the current API service project so Compose replaces only that service. The production Compose file publishes no host port: the API only exposes 8080 on the `stroy_default` Docker network, where the HTTPS reverse proxy reaches it as `stroy-api:8080`.
 
 Set the repository Actions variable API_STORAGE_CUTOVER_COMPLETE only after the storage deployment instructions above are complete, including database/upload backups, S3 migration, checksum verification, and a rollback procedure rehearsed in staging. After it is set, backend changes merged to main deploy automatically and signed mobile store builds can run. Use the confirmed manual dispatch only for a recovery deployment.
 
 For an existing S3-ready API container that predates the workflow, the first deployment adopts its running image as the rollback baseline. The running container must be the sole api service in the configured Compose project, and its STORAGE_DRIVER, S3_REGION, S3_BUCKET, and S3_DELETION_LEDGER_BUCKET must match the host .env settings. The deploy directory is managed by the workflow under releases/<revision> with a current symlink. Do not set the cutover variable while the active API still uses local storage.
+
+After a successful deploy, `deploy-remote.sh` prunes the release history: it keeps the active release, the release recorded in its `previous-release` file (the rollback target), `releases/baseline`, and the five most recent releases, removes every other `releases/<sha>` directory, and deletes the matching `stroy-api:<sha>` image only when no container (running or stopped) still uses it. Pruning is best effort and never fails or rolls back a deploy that already succeeded.
+
+### Recovery and rescue workflows
+
+Backend Production Recovery and Backend Production Rescue share the `production-api` concurrency group with the deploy workflow, so they queue behind a running deploy instead of racing it. If a deploy run is stuck, cancel it in GitHub Actions first; otherwise the recovery waits until the deploy job times out (45 minutes). A newly queued run in the group replaces any older *pending* run in the same group.
+
+Recovery restores the release that `current` points to (or, if the pointer is missing, the validated `previous-release` of the newest release). Rescue additionally terminates stuck `docker compose` clients and can restart the deploy user's rootless Docker daemon.
+
+**Break-glass privileged Docker restart (risk).** If the rootless daemon cannot recover, Rescue can restart the host's `docker.service` by starting a container through the rootful socket `/var/run/docker.sock` with `--privileged --pid=host --volume /:/host:rw` and running `chroot /host systemctl restart docker.service`. That container has full root control of the host. It works only because the runner account can reach the rootful Docker socket, which is itself equivalent to root on the host: anyone who can push a workflow that runs on the `stroy-prod` runner, or who compromises that runner account, can do the same. This step now runs only when the workflow is dispatched with `allow_privileged_docker_restart=true` (default `false`); without it, Rescue stops and asks for a manual host-level restart. Prefer restarting Docker manually over SSH as an administrator. Long term, remove the runner account's access to the rootful socket and replace this path with a narrowly scoped sudoers rule (for example only `systemctl restart docker.service`).

@@ -253,4 +253,86 @@ void main() {
       );
     },
   );
+
+  test('encodes resource ids as single path segments', () async {
+    final paths = <String>[];
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        paths.add(request.url.toString());
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await client.deleteFile('a/b?c');
+    await client.getProject('проект 1');
+
+    expect(paths[0], endsWith('/api/v1/files/a%2Fb%3Fc'));
+    expect(
+      paths[1],
+      endsWith('/api/v1/projects/%D0%BF%D1%80%D0%BE%D0%B5%D0%BA%D1%82%201'),
+    );
+  });
+
+  test('patch and delete pass query parameters separately', () async {
+    final urls = <Uri>[];
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        urls.add(request.url);
+        return http.Response('{}', 200);
+      }),
+    );
+
+    await client.patchJson(
+      '/api/v1/project-members/u1',
+      {'role': 'viewer'},
+      {'project_id': 'p1'},
+    );
+    await client.deleteJson('/api/v1/project-members/u1', {'project_id': 'p1'});
+
+    for (final url in urls) {
+      expect(url.path, '/api/v1/project-members/u1');
+      expect(url.queryParameters['project_id'], 'p1');
+    }
+  });
+
+  group('subscription expiry detection', () {
+    Future<bool> expires(Map<String, dynamic> body) async {
+      final client = ApiClient(
+        httpClient: MockClient(
+          (request) async => http.Response(jsonEncode(body), 403),
+        ),
+      );
+      var signalled = false;
+      client.subscriptionExpired.listen((_) => signalled = true);
+      try {
+        await client.listProjects();
+      } on ApiException catch (error) {
+        await Future<void>.delayed(Duration.zero);
+        expect(error.isSubscriptionExpired, signalled);
+      }
+      return signalled;
+    }
+
+    test('prefers the machine-readable code', () async {
+      expect(
+        await expires({'error': 'expired', 'code': 'subscription_expired'}),
+        isTrue,
+      );
+      expect(
+        await expires({
+          'error': 'subscription is expired; choose a paid plan',
+          'code': 'plan_limit',
+        }),
+        isFalse,
+      );
+    });
+
+    test('falls back to the legacy English message', () async {
+      expect(
+        await expires({'error': 'subscription is expired; choose a paid plan'}),
+        isTrue,
+      );
+      expect(await expires({'error': 'forbidden'}), isFalse);
+    });
+  });
 }

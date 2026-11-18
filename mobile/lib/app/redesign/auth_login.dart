@@ -187,7 +187,9 @@ class _LoginScreenState extends State<_LoginScreen> {
         if (!mounted) return;
         setState(() {
           _requested = true;
-          _devCode = devCode;
+          // Never surface a server-provided SMS code in release builds; the
+          // offline demo uses a fixed, non-secret code.
+          _devCode = !kReleaseMode || widget.deps.offlineDemo ? devCode : null;
         });
         return;
       }

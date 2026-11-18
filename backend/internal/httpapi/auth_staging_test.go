@@ -173,6 +173,7 @@ func openSMSAuthTestDB(t *testing.T) *database.DB {
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			token_hash TEXT NOT NULL UNIQUE,
+			previous_token_hash TEXT,
 			device_name TEXT,
 			expires_at TIMESTAMPTZ NOT NULL,
 			revoked_at TIMESTAMPTZ,
