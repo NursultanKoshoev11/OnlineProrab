@@ -1,0 +1,124 @@
+appId: kg.com.stroy.app
+
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Номер телефона"
+    timeout: 60000
+- tapOn:
+    text: "Номер телефона"
+- eraseText: 20
+- inputText: "+996700000001"
+- tapOn:
+    text: "Получить код"
+- extendedWaitUntil:
+    visible: "Код из SMS"
+    timeout: 30000
+- tapOn:
+    text: "Код из SMS"
+- inputText: "111111"
+- tapOn:
+    text: "Войти"
+- extendedWaitUntil:
+    visible: "Объекты"
+    timeout: 120000
+- assertVisible: "E2E owner project"
+
+# The seeded owner is on the standard plan, so this creates a second project.
+- tapOn:
+    text: "Добавить объект"
+- extendedWaitUntil:
+    visible: "Новый объект"
+    timeout: 30000
+- tapOn:
+    text: "Например: Дом в Кок-Жаре"
+- inputText: "Maestro объект"
+- tapOn:
+    text: "Например: с. Кок-Жар, ул. Центральная, 10"
+- inputText: "Локальный адрес"
+- tapOn:
+    text: "Создать объект"
+- extendedWaitUntil:
+    visible: "Maestro объект"
+    timeout: 60000
+- tapOn:
+    text: "Maestro объект"
+- extendedWaitUntil:
+    visible: "Обзор объекта"
+    timeout: 60000
+- assertVisible: "Maestro объект"
+
+- tapOn:
+    text: "Расходы"
+- extendedWaitUntil:
+    visible: "Расходы объекта"
+    timeout: 30000
+- tapOn:
+    text: "Добавить расход"
+- extendedWaitUntil:
+    visible: "Добавить расход"
+    timeout: 30000
+- tapOn:
+    text: "Например: Цемент М500"
+- inputText: "Maestro расход"
+- tapOn:
+    text: "0"
+- inputText: "1250"
+- tapOn:
+    text: "Сохранить расход"
+- extendedWaitUntil:
+    visible: "Maestro расход"
+    timeout: 60000
+
+- tapOn:
+    text: "Обзор"
+- tapOn:
+    text: "Команда"
+- extendedWaitUntil:
+    visible: "Команда объекта"
+    timeout: 30000
+- tapOn:
+    text: "Добавить участника"
+- extendedWaitUntil:
+    visible: "Номер телефона"
+    timeout: 30000
+- tapOn:
+    text: "Номер телефона"
+- eraseText: 20
+- inputText: "+996700000002"
+- tapOn:
+    text: "Пригласить"
+- extendedWaitUntil:
+    visible: "Доступ выдан"
+    timeout: 60000
+- tapOn:
+    text: "Готово"
+
+- back
+- tapOn:
+    text: "Ещё"
+- extendedWaitUntil:
+    visible: "Разделы объекта"
+    timeout: 30000
+- tapOn:
+    text: "Подписка и доступ"
+- extendedWaitUntil:
+    visible: "Подписка"
+    timeout: 30000
+- assertVisible: "Стандартный"
+- back
+- back
+
+- tapOn:
+    text: "Профиль"
+- extendedWaitUntil:
+    visible: "Выйти"
+    timeout: 30000
+- tapOn:
+    text: "Выйти"
+- wait: 3000
+- launchApp
+- extendedWaitUntil:
+    visible: "Получить код"
+    timeout: 30000

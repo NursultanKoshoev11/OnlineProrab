@@ -43,6 +43,7 @@ type Config struct {
 	JWTSecret                  string
 	AccessTokenTTL             time.Duration
 	DevSMSCodeEnabled          bool
+	E2ETestMode                bool
 	CORSAllowedOrigins         []string
 	StorageDriver              string
 	TrustedProxyCIDRs          []string
@@ -128,6 +129,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	e2eTestMode, err := getEnvBool("E2E_TEST_MODE", false)
+	if err != nil {
+		return Config{}, err
+	}
 	maxUploadBytes, err := getMegabytes("MAX_UPLOAD_MB", 10)
 	if err != nil {
 		return Config{}, err
@@ -177,6 +182,7 @@ func Load() (Config, error) {
 	cfg.JWTSecret = os.Getenv("JWT_SECRET")
 	cfg.AccessTokenTTL = accessTokenTTL
 	cfg.DevSMSCodeEnabled = devSMSCodeEnabled
+	cfg.E2ETestMode = e2eTestMode
 	cfg.CORSAllowedOrigins = splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173"))
 	cfg.StorageDriver = strings.ToLower(getEnv("STORAGE_DRIVER", "local"))
 	cfg.TrustedProxyCIDRs = splitCSV(os.Getenv("TRUSTED_PROXY_CIDRS"))
@@ -331,7 +337,13 @@ func (cfg Config) Validate() error {
 	if cfg.DevSMSCodeEnabled && !cfg.IsDevelopment() {
 		problems = append(problems, "DEV_SMS_CODE_ENABLED is allowed only when APP_ENV=development")
 	}
-	if cfg.DevSMSCodeEnabled && !isLoopbackHTTPAddr(cfg.HTTPAddr) {
+	if cfg.E2ETestMode && !cfg.IsDevelopment() {
+		problems = append(problems, "E2E_TEST_MODE is allowed only when APP_ENV=development")
+	}
+	if cfg.E2ETestMode && !cfg.DevSMSCodeEnabled {
+		problems = append(problems, "E2E_TEST_MODE requires DEV_SMS_CODE_ENABLED=true")
+	}
+	if cfg.DevSMSCodeEnabled && !isLoopbackHTTPAddr(cfg.HTTPAddr) && !cfg.E2ETestMode {
 		problems = append(problems, "DEV_SMS_CODE_ENABLED requires HTTP_ADDR to use a loopback address")
 	}
 	if cfg.NikitaTestMode && !cfg.IsDevelopment() {

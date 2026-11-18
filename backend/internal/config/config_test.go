@@ -640,6 +640,34 @@ func TestValidateAllowsDevelopmentSMSCodeOnlyOnLoopback(t *testing.T) {
 	}
 }
 
+func TestValidateAllowsContainerE2ETestModeOnlyInDevelopment(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = DevelopmentEnv
+	cfg.DevSMSCodeEnabled = true
+	cfg.E2ETestMode = true
+	cfg.HTTPAddr = ":8080"
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected development container E2E mode to be valid, got %v", err)
+	}
+
+	cfg.Env = ProductionEnv
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "E2E_TEST_MODE") {
+		t.Fatalf("expected production E2E mode to be rejected, got %v", err)
+	}
+}
+
+func TestValidateRequiresDevelopmentSMSForContainerE2ETestMode(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = DevelopmentEnv
+	cfg.E2ETestMode = true
+	cfg.HTTPAddr = ":8080"
+
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "DEV_SMS_CODE_ENABLED") {
+		t.Fatalf("expected E2E mode without the development SMS fallback to be rejected, got %v", err)
+	}
+}
+
 func validStagingConfig() Config {
 	cfg := validProductionConfig()
 	cfg.Env = StagingEnv

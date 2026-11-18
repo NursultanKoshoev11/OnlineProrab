@@ -1,0 +1,172 @@
+name: Local stack E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'mobile/**'
+      - 'website/**'
+      - '.github/workflows/e2e.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-stack-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  E2E_COMPOSE_FILE: backend/e2e/docker-compose.e2e.yml
+
+jobs:
+  api-e2e:
+    name: API E2E on ephemeral local stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Start local API stack
+        run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
+
+      - name: Seed local users and projects
+        run: docker compose -f "$E2E_COMPOSE_FILE" run --rm seed
+
+      - name: Run API E2E suite
+        working-directory: backend
+        run: go test -tags=e2e ./e2e
+
+      - name: Save API logs on failure
+        if: failure()
+        run: docker compose -f "$E2E_COMPOSE_FILE" logs --no-color api > "$RUNNER_TEMP/api-e2e.log" || true
+
+      - name: Upload API logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-api-e2e-logs-${{ github.run_number }}
+          path: ${{ runner.temp }}/api-e2e.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop local API stack
+        if: always()
+        run: docker compose -f "$E2E_COMPOSE_FILE" down -v
+
+  mobile-maestro-e2e:
+    name: Android Maestro against local stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start local API stack
+        run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
+
+      - name: Seed local users and projects
+        run: docker compose -f "$E2E_COMPOSE_FILE" run --rm seed
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.44.4'
+          cache: true
+
+      - name: Prepare Android platform
+        working-directory: mobile
+        run: python3 tool/prepare_android.py
+
+      - name: Install and verify Android NDK
+        working-directory: mobile
+        run: python3 tool/install_android_ndk.py
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build debug APK for local emulator API
+        working-directory: mobile
+        run: >-
+          flutter build apk --debug
+          --dart-define=API_BASE_URL=http://10.0.2.2:8080
+          --dart-define=OFFLINE_DEMO=false
+          --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+
+      - name: Install pinned Maestro CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          maestro_version='2.12.0'
+          maestro_sha256='a6044a84542f522f434c5dc3d609e60c7446d423f3ed1b2ae513f5c48663ec5e'
+          archive="$RUNNER_TEMP/maestro.zip"
+          curl --fail --silent --show-error --location \
+            "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-${maestro_version}/maestro.zip" \
+            --output "$archive"
+          printf '%s  %s\n' "$maestro_sha256" "$archive" | sha256sum --check --status
+          mkdir -p "$RUNNER_TEMP/maestro"
+          unzip -q "$archive" -d "$RUNNER_TEMP/maestro"
+          find "$RUNNER_TEMP/maestro" -type f -name maestro -exec chmod +x {} +
+          maestro_bin="$(find "$RUNNER_TEMP/maestro" -type f -name maestro -perm -111 -print -quit)"
+          test -n "$maestro_bin"
+          echo "$(dirname "$maestro_bin")" >> "$GITHUB_PATH"
+          "$maestro_bin" --version
+
+      - name: Run Maestro on Android emulator
+        uses: ReactiveCircus/android-emulator-runner@324029e2f414c084d8b15ba075288885e74aef9c # v2.34.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -memory 4096
+          disable-animations: true
+          emulator-boot-timeout: 1200
+          cores: 4
+          script: |
+            bash mobile/tool/run_maestro_e2e.sh
+
+      - name: Upload Maestro screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-maestro-e2e-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/maestro-results.xml
+            ${{ runner.temp }}/maestro-cli.log
+            ${{ runner.temp }}/maestro-startup.png
+            ${{ runner.temp }}/maestro-failure.png
+            ${{ runner.temp }}/maestro-ui.xml
+            ${{ runner.temp }}/maestro-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Save API logs on failure
+        if: failure()
+        run: docker compose -f "$E2E_COMPOSE_FILE" logs --no-color api > "$RUNNER_TEMP/api-e2e.log" || true
+
+      - name: Upload API logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stroy-mobile-api-e2e-logs-${{ github.run_number }}
+          path: ${{ runner.temp }}/api-e2e.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop local API stack
+        if: always()
+        run: docker compose -f "$E2E_COMPOSE_FILE" down -v
