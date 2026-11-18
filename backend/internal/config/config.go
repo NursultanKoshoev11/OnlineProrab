@@ -102,16 +102,19 @@ type Config struct {
 // OBankConfig contains O!Dengi merchant credentials and fixed return URLs.
 // The API password must only be configured on the server.
 type OBankConfig struct {
-	Enabled       bool
-	SID           string
-	Password      string
-	APIURL        string
-	APIVersion    int
-	Test          bool
-	TestOnlyPhone string
-	TestPriceKGS  int
-	ResultURL     string
-	ReturnURL     string
+	Enabled  bool
+	SID      string
+	Password string
+	APIURL   string
+	// PaymentURLBaseURL is a development-only host override for local E2E
+	// payment links. Production still accepts only official O!Dengi hosts.
+	PaymentURLBaseURL string
+	APIVersion        int
+	Test              bool
+	TestOnlyPhone     string
+	TestPriceKGS      int
+	ResultURL         string
+	ReturnURL         string
 }
 
 func Load() (Config, error) {
@@ -241,16 +244,17 @@ func Load() (Config, error) {
 	cfg.FCMServiceAccountJSON = strings.TrimSpace(os.Getenv("FCM_SERVICE_ACCOUNT_JSON"))
 	cfg.FCMAPIBaseURL = strings.TrimSpace(os.Getenv("FCM_API_BASE_URL"))
 	cfg.OBank = OBankConfig{
-		Enabled:       obankEnabled,
-		SID:           strings.TrimSpace(os.Getenv("OBANK_SID")),
-		Password:      strings.TrimSpace(os.Getenv("OBANK_PASSWORD")),
-		APIURL:        obankAPIURL,
-		APIVersion:    obankVersion,
-		Test:          obankTest,
-		TestOnlyPhone: normalizePhone(os.Getenv("OBANK_TEST_ONLY_PHONE")),
-		TestPriceKGS:  obankTestPriceKGS,
-		ResultURL:     strings.TrimSpace(os.Getenv("OBANK_RESULT_URL")),
-		ReturnURL:     strings.TrimSpace(os.Getenv("OBANK_RETURN_URL")),
+		Enabled:           obankEnabled,
+		SID:               strings.TrimSpace(os.Getenv("OBANK_SID")),
+		Password:          strings.TrimSpace(os.Getenv("OBANK_PASSWORD")),
+		APIURL:            obankAPIURL,
+		PaymentURLBaseURL: strings.TrimSpace(os.Getenv("OBANK_PAYMENT_URL_BASE_URL")),
+		APIVersion:        obankVersion,
+		Test:              obankTest,
+		TestOnlyPhone:     normalizePhone(os.Getenv("OBANK_TEST_ONLY_PHONE")),
+		TestPriceKGS:      obankTestPriceKGS,
+		ResultURL:         strings.TrimSpace(os.Getenv("OBANK_RESULT_URL")),
+		ReturnURL:         strings.TrimSpace(os.Getenv("OBANK_RETURN_URL")),
 	}
 	return cfg, nil
 }
@@ -341,6 +345,13 @@ func (cfg Config) Validate() error {
 	}
 	if cfg.FCMAPIBaseURL != "" && !cfg.IsDevelopment() {
 		problems = append(problems, "FCM_API_BASE_URL is allowed only when APP_ENV=development")
+	}
+	if cfg.OBank.PaymentURLBaseURL != "" {
+		if !cfg.IsDevelopment() {
+			problems = append(problems, "OBANK_PAYMENT_URL_BASE_URL is allowed only when APP_ENV=development")
+		} else if err := validateOBankPaymentURLBase(cfg.OBank.PaymentURLBaseURL); err != nil {
+			problems = append(problems, "OBANK_PAYMENT_URL_BASE_URL must be a valid local HTTP URL")
+		}
 	}
 	if cfg.E2ETestMode && !cfg.IsDevelopment() {
 		problems = append(problems, "E2E_TEST_MODE is allowed only when APP_ENV=development")
@@ -526,10 +537,22 @@ func validateOBankURL(value string, allowLocalHTTP bool) error {
 	if parsed.Scheme == "https" {
 		return nil
 	}
-	if allowLocalHTTP && parsed.Scheme == "http" && isLoopbackHostname(parsed.Hostname()) {
+	if allowLocalHTTP && parsed.Scheme == "http" && (isLoopbackHostname(parsed.Hostname()) || isDevelopmentServiceHostname(parsed.Hostname())) {
 		return nil
 	}
 	return errors.New("HTTPS is required")
+}
+
+func validateOBankPaymentURLBase(value string) error {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Scheme != "http" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("invalid local payment URL base")
+	}
+	return nil
+}
+
+func isDevelopmentServiceHostname(host string) bool {
+	return strings.EqualFold(strings.TrimSpace(host), "fake-obank")
 }
 
 func isLoopbackHostname(host string) bool {

@@ -164,7 +164,7 @@ func CreateInvoice(ctx context.Context, cfg config.OBankConfig, data CreateInvoi
 		return Invoice{}, errors.New("O!Dengi did not return a usable payment link")
 	}
 	if paymentURL != "" {
-		if err := validatePaymentURL(paymentURL); err != nil {
+		if err := validatePaymentURLWithOverride(paymentURL, cfg.PaymentURLBaseURL); err != nil {
 			return Invoice{}, errors.New("O!Dengi returned an invalid payment link")
 		}
 	}
@@ -344,12 +344,23 @@ func marshalAPIJSON(value any) ([]byte, error) {
 }
 
 func validatePaymentURL(value string) error {
+	return validatePaymentURLWithOverride(value, "")
+}
+
+func validatePaymentURLWithOverride(value, overrideBase string) error {
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+	if err != nil || parsed.Host == "" || parsed.User != nil {
 		return errors.New("invalid payment link")
 	}
 	host := strings.ToLower(parsed.Hostname())
-	if host != "dengi.kg" && !strings.HasSuffix(host, ".dengi.kg") {
+	if parsed.Scheme == "https" && (host == "dengi.kg" || strings.HasSuffix(host, ".dengi.kg")) {
+		return nil
+	}
+	base, err := url.Parse(strings.TrimSpace(overrideBase))
+	if err != nil || base.Scheme != "http" || base.Host == "" || base.User != nil || base.Path != "" || base.RawQuery != "" || base.Fragment != "" {
+		return errors.New("unexpected payment host")
+	}
+	if parsed.Scheme != base.Scheme || !strings.EqualFold(parsed.Hostname(), base.Hostname()) || parsed.Port() != base.Port() {
 		return errors.New("unexpected payment host")
 	}
 	return nil

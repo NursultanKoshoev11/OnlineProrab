@@ -36,6 +36,29 @@ SET plan_code = EXCLUDED.plan_code, status = EXCLUDED.status,
     current_period_end = EXCLUDED.current_period_end,
     billing_period = EXCLUDED.billing_period, updated_at = now();
 
+-- Payment E2E users. They remain trialing so each payment test starts from a
+-- known subscription state. Their phones are separate from the other suites;
+-- the development SMS fallback still enforces its per-phone cooldown.
+INSERT INTO users (id, phone, name, role)
+VALUES
+  ('00000000-0000-0000-0000-000000000021', '+996700000021', 'E2E payment A', 'owner'),
+  ('00000000-0000-0000-0000-000000000022', '+996700000022', 'E2E payment B', 'owner'),
+  ('00000000-0000-0000-0000-000000000023', '+996700000023', 'E2E payment C', 'owner')
+ON CONFLICT (id) DO UPDATE
+SET phone = EXCLUDED.phone, name = EXCLUDED.name, role = EXCLUDED.role, updated_at = now();
+
+INSERT INTO account_subscriptions
+  (user_id, plan_code, status, started_at, trial_ends_at, current_period_end, billing_period)
+VALUES
+  ('00000000-0000-0000-0000-000000000021', 'trial', 'trialing', now(), now() + interval '30 days', NULL, 'month'),
+  ('00000000-0000-0000-0000-000000000022', 'trial', 'trialing', now(), now() + interval '30 days', NULL, 'month'),
+  ('00000000-0000-0000-0000-000000000023', 'trial', 'trialing', now(), now() + interval '30 days', NULL, 'month')
+ON CONFLICT (user_id) DO UPDATE
+SET plan_code = EXCLUDED.plan_code, status = EXCLUDED.status,
+    started_at = EXCLUDED.started_at, trial_ends_at = EXCLUDED.trial_ends_at,
+    current_period_end = EXCLUDED.current_period_end,
+    billing_period = EXCLUDED.billing_period, updated_at = now();
+
 -- Notification scenario: a standard-plan foreman whose project the test
 -- shares with a worker and a viewer. Their phones (+996700000006/7) and the
 -- outsider (+996700000008) are created by the test through normal SMS login.

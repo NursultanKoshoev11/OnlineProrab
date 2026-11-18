@@ -689,6 +689,35 @@ func TestValidateAllowsFCMAPIOverrideOnlyInDevelopment(t *testing.T) {
 	}
 }
 
+func TestValidateAllowsFakeOBankEndpointsOnlyInDevelopment(t *testing.T) {
+	cfg := validProductionConfig()
+	cfg.Env = DevelopmentEnv
+	cfg.OBank = OBankConfig{
+		Enabled:           true,
+		SID:               "e2e-only-sid",
+		Password:          "e2e-only-password",
+		APIURL:            "http://fake-obank:8091/api/json/json.php",
+		PaymentURLBaseURL: "http://fake-obank:8091",
+		APIVersion:        1005,
+		Test:              true,
+		ResultURL:         "http://127.0.0.1:8080/api/v1/payments/obank/result",
+		ReturnURL:         "http://127.0.0.1:8080/billing/",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected development fake O!Bank endpoints to be valid, got %v", err)
+	}
+
+	production := cfg
+	production.Env = ProductionEnv
+	if err := production.Validate(); err == nil || !strings.Contains(err.Error(), "OBANK_PAYMENT_URL_BASE_URL") {
+		t.Fatalf("expected production fake payment URL override to be rejected, got %v", err)
+	}
+	production.OBank.PaymentURLBaseURL = ""
+	if err := production.Validate(); err == nil || !strings.Contains(err.Error(), "OBANK_API_URL") {
+		t.Fatalf("expected production fake O!Bank API URL to be rejected, got %v", err)
+	}
+}
+
 func validStagingConfig() Config {
 	cfg := validProductionConfig()
 	cfg.Env = StagingEnv

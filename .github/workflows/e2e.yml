@@ -54,13 +54,13 @@ jobs:
       - name: Seed local users and projects
         run: docker compose -f "$E2E_COMPOSE_FILE" run --rm seed
 
-      - name: Run API E2E suite (authorization, flows, notifications)
+      - name: Run API E2E suite (authorization, flows, notifications, payments)
         working-directory: backend
         run: go test -tags=e2e -count=1 -v ./e2e
 
       - name: Save API logs on failure
         if: failure()
-        run: docker compose -f "$E2E_COMPOSE_FILE" logs --no-color api fake-fcm > "$RUNNER_TEMP/api-e2e.log" || true
+        run: docker compose -f "$E2E_COMPOSE_FILE" logs --no-color api fake-fcm fake-obank > "$RUNNER_TEMP/api-e2e.log" || true
 
       - name: Upload API logs
         if: failure()

@@ -29,6 +29,9 @@ var (
 	errCheckoutState  = errors.New("checkout is no longer payable")
 	errPaymentMissing = errors.New("payment order not found")
 	errPaymentInvalid = errors.New("payment result does not match order")
+	// errOBankInvoiceCreate marks a failure of the bank call itself, as opposed
+	// to a failure to persist or lock the order.
+	errOBankInvoiceCreate = errors.New("O!Dengi invoice creation failed")
 )
 
 type subscriptionCheckoutRequest struct {
@@ -124,7 +127,10 @@ func SubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
 		priceKGS = appState.OBank.TestPriceKGS
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	// A concurrent checkout of the same user may hold the open order's row lock
+	// while it waits for the bank to create an invoice (up to the 12-second
+	// O!Dengi client timeout), so allow the reservation to wait that long.
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	order, err := reserveSubscriptionCheckout(ctx, userID, request, priceKGS)
 	if err != nil {
@@ -148,23 +154,20 @@ func SubscriptionCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if order.PaymentURL == "" {
-		invoice, err := createOBankInvoice(r.Context(), order)
+		order, err = ensureOBankInvoice(r.Context(), order)
 		if err != nil {
-			log.Printf("O!Dengi invoice creation failed order_id=%s: %v", order.OrderID, err)
-			Error(w, http.StatusBadGateway, "the bank could not create a payment invoice; retry this checkout")
+			switch {
+			case errors.Is(err, errOBankInvoiceCreate):
+				log.Printf("O!Dengi invoice creation failed order_id=%s: %v", order.OrderID, err)
+				Error(w, http.StatusBadGateway, "the bank could not create a payment invoice; retry this checkout")
+			case errors.Is(err, errCheckoutState):
+				Error(w, http.StatusConflict, "this checkout is no longer payable; start a new checkout")
+			default:
+				log.Printf("O!Dengi invoice save failed order_id=%s: %v", order.OrderID, err)
+				Error(w, http.StatusServiceUnavailable, "the payment invoice could not be saved")
+			}
 			return
 		}
-		ctx, cancel = context.WithTimeout(r.Context(), 3*time.Second)
-		err = saveOBankInvoice(ctx, order.OrderID, invoice)
-		cancel()
-		if err != nil {
-			log.Printf("O!Dengi invoice save failed order_id=%s: %v", order.OrderID, err)
-			Error(w, http.StatusServiceUnavailable, "the payment invoice could not be saved")
-			return
-		}
-		order.InvoiceID = invoice.ID
-		order.PaymentURL = invoice.PaymentURL
-		order.BankAppLink = invoice.AppLink
 	}
 	writeCheckoutResponse(w, http.StatusCreated, order)
 }
@@ -460,19 +463,65 @@ func createOBankInvoice(ctx context.Context, order subscriptionPaymentOrder) (ob
 	})
 }
 
-func saveOBankInvoice(ctx context.Context, orderID string, invoice obank.Invoice) error {
-	commandTag, err := appState.DB.Pool.Exec(ctx, `
+// createOBankInvoiceFunc is the bank call used by ensureOBankInvoice; tests
+// replace it to observe how many invoices are created.
+var createOBankInvoiceFunc = createOBankInvoice
+
+// ensureOBankInvoice creates the bank invoice for an order at most once.
+// Concurrent checkout requests for the same order (a double click, two tabs
+// or a client retry) serialize on the order row: the first creates and saves
+// the invoice, and every later request reuses it. Without the lock two
+// requests could each create an invoice, only the last one would be saved,
+// and paying the other would not activate the subscription.
+func ensureOBankInvoice(ctx context.Context, order subscriptionPaymentOrder) (subscriptionPaymentOrder, error) {
+	tx, err := appState.DB.Pool.Begin(ctx)
+	if err != nil {
+		return order, err
+	}
+	defer tx.Rollback(ctx)
+
+	var status, invoiceID, paymentURL, appLink string
+	lockCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	err = tx.QueryRow(lockCtx, `
+		SELECT status, COALESCE(provider_invoice_id, ''), COALESCE(payment_url, ''), COALESCE(bank_app_link, '')
+		FROM subscription_payment_orders
+		WHERE order_id = $1
+		FOR UPDATE
+	`, order.OrderID).Scan(&status, &invoiceID, &paymentURL, &appLink)
+	cancel()
+	if err != nil {
+		return order, err
+	}
+	if paymentURL != "" {
+		order.InvoiceID = invoiceID
+		order.PaymentURL = paymentURL
+		order.BankAppLink = appLink
+		return order, tx.Commit(ctx)
+	}
+	if status != "pending" && status != "processing" {
+		return order, errCheckoutState
+	}
+
+	invoice, err := createOBankInvoiceFunc(ctx, order)
+	if err != nil {
+		return order, fmt.Errorf("%w: %v", errOBankInvoiceCreate, err)
+	}
+	saveCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if _, err := tx.Exec(saveCtx, `
 		UPDATE subscription_payment_orders
 		SET provider_invoice_id = $2, payment_url = $3, bank_app_link = $4, updated_at = now()
-		WHERE order_id = $1 AND status IN ('pending', 'processing')
-	`, orderID, invoice.ID, invoice.PaymentURL, invoice.AppLink)
-	if err != nil {
-		return err
+		WHERE order_id = $1
+	`, order.OrderID, invoice.ID, invoice.PaymentURL, invoice.AppLink); err != nil {
+		return order, err
 	}
-	if commandTag.RowsAffected() != 1 {
-		return errCheckoutState
+	if err := tx.Commit(saveCtx); err != nil {
+		return order, err
 	}
-	return nil
+	order.InvoiceID = invoice.ID
+	order.PaymentURL = invoice.PaymentURL
+	order.BankAppLink = invoice.AppLink
+	return order, nil
 }
 
 func applyOBankResult(ctx context.Context, result obank.Result) error {
