@@ -1,9 +1,11 @@
 [Unit]
-Description=Daily encrypted OnlineProrab backup
+Description=Encrypted OnlineProrab backup every six hours
 
 [Timer]
-OnCalendar=*-*-* 02:00:00 UTC
-RandomizedDelaySec=30m
+# Every six hours: a lost host loses at most ~6 hours of data until WAL
+# archiving (point-in-time recovery) is in place.
+OnCalendar=*-*-* 02/6:00:00 UTC
+RandomizedDelaySec=15m
 Persistent=true
 Unit=onlineprorab-backup.service
 
