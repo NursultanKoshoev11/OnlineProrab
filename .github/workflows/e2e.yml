@@ -77,7 +77,7 @@ jobs:
 
   mobile-maestro-e2e:
     name: Android Maestro against local stack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # emulator jobs are killed on the ubuntu-26.04 image
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -200,7 +200,7 @@ jobs:
 
   mobile-monkey-e2e:
     name: Android monkey (random input) against local stack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # emulator jobs are killed on the ubuntu-26.04 image
     timeout-minutes: 90
     steps:
       - name: Checkout
