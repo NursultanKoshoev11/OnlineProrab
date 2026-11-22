@@ -127,6 +127,14 @@ jobs:
           --dart-define=OFFLINE_DEMO=false
           --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
 
+      - name: Release build memory before the emulator starts
+        # The Gradle and Kotlin daemons keep several GB after the APK build;
+        # with the 4 GB emulator the runner was shut down mid-test.
+        run: |
+          pkill -f GradleDaemon || true
+          pkill -f KotlinCompileDaemon || true
+          free -h
+
       - name: Install pinned Maestro CLI
         shell: bash
         run: |
@@ -249,6 +257,14 @@ jobs:
           --dart-define=API_BASE_URL=http://10.0.2.2:8080
           --dart-define=OFFLINE_DEMO=false
           --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+
+      - name: Release build memory before the emulator starts
+        # The Gradle and Kotlin daemons keep several GB after the APK build;
+        # with the 4 GB emulator the runner was shut down mid-test.
+        run: |
+          pkill -f GradleDaemon || true
+          pkill -f KotlinCompileDaemon || true
+          free -h
 
       - name: Install pinned Maestro CLI
         shell: bash
