@@ -26,6 +26,7 @@ This checklist tracks the minimum work required before a real public release.
 
 O!Dengi payments remain disabled unless `OBANK_ENABLED=true`. Never put merchant credentials in the mobile app or website JavaScript. Live customer payments require live merchant credentials, the bank-confirmed production API URL, and `OBANK_TEST=false`. The documented, account-restricted sandbox verification mode may temporarily run on the production API; follow [`OBANK.md`](OBANK.md) and disable it immediately after testing.
 - `SMS_PROVIDER=twilio` or `nikita`; supply that provider's credentials below.
+- `SMS_DAILY_LIMIT` (default 300) caps login SMS delivered through the provider in any 24 hours; reaching it logs `sms_daily_limit_reached` (ERROR) and returns 503. Login SMS go only to `+996` numbers. Provider failures log `sms_delivery_failed`.
 - For Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, and exactly one of `TWILIO_FROM` or `TWILIO_MESSAGING_SERVICE_SID`.
 - For Nikita: `NIKITA_LOGIN`, `NIKITA_PASSWORD`, and `NIKITA_SENDER`; `NIKITA_API_URL` must be `https://smspro.nikita.kg/api/message` in staging/production.
 

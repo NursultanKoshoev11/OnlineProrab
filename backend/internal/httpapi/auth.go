@@ -106,6 +106,23 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 
 	reviewPhone := isReviewPhone(req.Phone)
 	stagingTestPhone := isStagingTestPhone(req.Phone)
+	providerDelivery := appState.SMSSender != nil && !reviewPhone && !stagingTestPhone
+	if providerDelivery && !strings.HasPrefix(req.Phone, smsSupportedCountryPrefix) {
+		Error(w, http.StatusBadRequest, "Вход доступен только по номерам Кыргызстана (+996)")
+		return
+	}
+	if providerDelivery {
+		exhausted, err := smsDailyBudgetExhausted(r.Context())
+		if err != nil {
+			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
+			return
+		}
+		if exhausted {
+			slog.Error("sms_daily_limit_reached", "limit", smsDailyLimit())
+			Error(w, http.StatusServiceUnavailable, "Вход временно недоступен. Попробуйте позже.")
+			return
+		}
+	}
 	code, err := issueSMSCodeForPhone(req.Phone)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to generate code")
@@ -127,11 +144,13 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if appState.SMSSender != nil && !reviewPhone && !stagingTestPhone {
+	if providerDelivery {
 		sendCtx, sendCancel := context.WithTimeout(r.Context(), 12*time.Second)
 		err = appState.SMSSender.SendLoginCode(sendCtx, req.Phone, code)
 		sendCancel()
 		if err != nil {
+			// The provider error never contains the phone number or the code.
+			slog.Error("sms_delivery_failed", "error", err)
 			cleanupSMSCode(codeID)
 			Error(w, http.StatusBadGateway, "failed to deliver login code")
 			return
