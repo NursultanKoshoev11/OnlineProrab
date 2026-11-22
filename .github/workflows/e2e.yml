@@ -85,6 +85,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Free runner disk space
+        # The hosted runner image no longer leaves room for the Android SDK,
+        # emulator image and Gradle build; drop toolchains these jobs never use.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \n            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \n            /usr/local/lib/heroku /opt/microsoft /opt/google/chrome /usr/lib/jvm/temurin-8-jdk-amd64
+          docker image prune --all --force >/dev/null
+          df -h /
+
       - name: Start local API stack
         run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
 
@@ -198,6 +207,15 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Free runner disk space
+        # The hosted runner image no longer leaves room for the Android SDK,
+        # emulator image and Gradle build; drop toolchains these jobs never use.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \n            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \n            /usr/local/lib/heroku /opt/microsoft /opt/google/chrome /usr/lib/jvm/temurin-8-jdk-amd64
+          docker image prune --all --force >/dev/null
+          df -h /
 
       - name: Start local API stack
         run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
