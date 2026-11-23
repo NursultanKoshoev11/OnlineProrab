@@ -14,7 +14,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleDisplayName</key>
-	<string>STROY</string>
+	<string>Строй</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,7 +22,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>STROY</string>
+	<string>Строй</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<!-- Enable Firebase Installation ID registration for FCM on Apple platforms. -->
