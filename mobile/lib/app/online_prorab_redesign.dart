@@ -117,7 +117,7 @@ class _OnlineProrabRedesignAppState extends State<OnlineProrabRedesignApp> {
     );
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'STROY',
+      title: 'Строй',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: scheme.copyWith(
