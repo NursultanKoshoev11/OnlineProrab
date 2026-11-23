@@ -1,5 +1,5 @@
 class AppConfig {
-  static const appName = 'STROY';
+  static const appName = 'Строй';
   static const privacyPolicyUrl = 'https://stroy.com.kg/privacy/';
   static const accountDeletionUrl = 'https://stroy.com.kg/account-deletion/';
   static const apiBaseUrl = String.fromEnvironment(

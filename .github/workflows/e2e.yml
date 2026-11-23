@@ -77,13 +77,22 @@ jobs:
 
   mobile-maestro-e2e:
     name: Android Maestro against local stack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # emulator jobs are killed on the ubuntu-26.04 image
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Free runner disk space
+        # The hosted runner image no longer leaves room for the Android SDK,
+        # emulator image and Gradle build; drop toolchains these jobs never use.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \n            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \n            /usr/local/lib/heroku /opt/microsoft /opt/google/chrome /usr/lib/jvm/temurin-8-jdk-amd64
+          docker image prune --all --force >/dev/null
+          df -h /
 
       - name: Start local API stack
         run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
@@ -117,6 +126,14 @@ jobs:
           --dart-define=API_BASE_URL=http://10.0.2.2:8080
           --dart-define=OFFLINE_DEMO=false
           --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+
+      - name: Release build memory before the emulator starts
+        # The Gradle and Kotlin daemons keep several GB after the APK build;
+        # with the 4 GB emulator the runner was shut down mid-test.
+        run: |
+          pkill -f GradleDaemon || true
+          pkill -f KotlinCompileDaemon || true
+          free -h
 
       - name: Install pinned Maestro CLI
         shell: bash
@@ -191,13 +208,22 @@ jobs:
 
   mobile-monkey-e2e:
     name: Android monkey (random input) against local stack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # emulator jobs are killed on the ubuntu-26.04 image
     timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Free runner disk space
+        # The hosted runner image no longer leaves room for the Android SDK,
+        # emulator image and Gradle build; drop toolchains these jobs never use.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \n            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \n            /usr/local/lib/heroku /opt/microsoft /opt/google/chrome /usr/lib/jvm/temurin-8-jdk-amd64
+          docker image prune --all --force >/dev/null
+          df -h /
 
       - name: Start local API stack
         run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
@@ -231,6 +257,14 @@ jobs:
           --dart-define=API_BASE_URL=http://10.0.2.2:8080
           --dart-define=OFFLINE_DEMO=false
           --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+
+      - name: Release build memory before the emulator starts
+        # The Gradle and Kotlin daemons keep several GB after the APK build;
+        # with the 4 GB emulator the runner was shut down mid-test.
+        run: |
+          pkill -f GradleDaemon || true
+          pkill -f KotlinCompileDaemon || true
+          free -h
 
       - name: Install pinned Maestro CLI
         shell: bash

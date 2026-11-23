@@ -19,7 +19,7 @@
         android:usesCleartextTraffic="false"
         android:fullBackupContent="false"
         android:allowBackup="false"
-        android:label="STROY"
+        android:label="Строй"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
