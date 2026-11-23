@@ -45,6 +45,11 @@ Parameters:
     Default: 30
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
     Description: Number of days to retain centralized API container logs.
+  ApiInstanceId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^i-[0-9a-f]{8,17}$"
+    Description: EC2 instance that runs the API; enables status-check alarms with automatic recovery. Leave empty to skip.
 
 Rules:
   UploadsAndLedgerMustBeSeparate:
@@ -65,6 +70,7 @@ Rules:
 
 Conditions:
   BackupAlertEmailProvided: !Not [!Equals [!Ref BackupAlertEmail, ""]]
+  ApiInstanceProvided: !Not [!Equals [!Ref ApiInstanceId, ""]]
 
 Resources:
   UploadsBucket:
@@ -369,6 +375,8 @@ Resources:
                 aws:SourceArn:
                   - !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-BackupMissing"
                   - !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-ApiErrors"
+                  - !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-Host*"
+                  - !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-Instance*"
 
   BackupAlertSubscription:
     Type: AWS::SNS::Subscription
@@ -422,6 +430,137 @@ Resources:
       Threshold: 0
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
+
+  HostMetricsWriterPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allow the API host to publish disk and memory metrics (deploy/host-metrics).
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublishHostMetrics
+            Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: "*"
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: !Sub "OnlineProrab/Host/${Environment}"
+
+  HostDiskAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-HostDiskFull"
+      AlarmDescription: !Sub "The ${Environment} API host root filesystem is more than 85% full."
+      ActionsEnabled: true
+      AlarmActions: [!Ref BackupAlertTopic]
+      OKActions: [!Ref BackupAlertTopic]
+      Namespace: !Sub "OnlineProrab/Host/${Environment}"
+      MetricName: DiskUsedPercent
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  HostMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-HostMemoryLow"
+      AlarmDescription: !Sub "The ${Environment} API host has had less than 10% memory available for 15 minutes."
+      ActionsEnabled: true
+      AlarmActions: [!Ref BackupAlertTopic]
+      OKActions: [!Ref BackupAlertTopic]
+      Namespace: !Sub "OnlineProrab/Host/${Environment}"
+      MetricName: MemoryAvailablePercent
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 3
+      Threshold: 10
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+
+  HostMetricsMissingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-HostMetricsMissing"
+      AlarmDescription: !Sub "The ${Environment} API host stopped reporting metrics for 15 minutes: the host is down, frozen, or the reporter broke."
+      ActionsEnabled: true
+      AlarmActions: [!Ref BackupAlertTopic]
+      OKActions: [!Ref BackupAlertTopic]
+      Namespace: !Sub "OnlineProrab/Host/${Environment}"
+      MetricName: DiskUsedPercent
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: SampleCount
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 3
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+
+  InstanceSystemCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: ApiInstanceProvided
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-InstanceSystemCheckFailed"
+      AlarmDescription: AWS system status check failed; EC2 recovers the instance onto healthy hardware.
+      ActionsEnabled: true
+      AlarmActions:
+        - !Sub "arn:${AWS::Partition}:automate:${AWS::Region}:ec2:recover"
+        - !Ref BackupAlertTopic
+      OKActions: [!Ref BackupAlertTopic]
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_System
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref ApiInstanceId
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: missing
+
+  InstanceCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: ApiInstanceProvided
+    DependsOn: BackupAlertTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-InstanceCheckFailed"
+      AlarmDescription: Instance status check failed for 3 minutes (frozen kernel, exhausted memory); EC2 reboots the instance.
+      ActionsEnabled: true
+      AlarmActions:
+        - !Sub "arn:${AWS::Partition}:automate:${AWS::Region}:ec2:reboot"
+        - !Ref BackupAlertTopic
+      OKActions: [!Ref BackupAlertTopic]
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_Instance
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref ApiInstanceId
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: missing
 
   BackupArchiveReadPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -502,6 +641,9 @@ Outputs:
   ApiLogWriterPolicyArn:
     Description: Attach to the API host identity used by the Docker daemon's awslogs driver.
     Value: !Ref ApiLogWriterPolicy
+  HostMetricsWriterPolicyArn:
+    Description: Attach to the API host's instance role so deploy/host-metrics can publish disk and memory metrics.
+    Value: !Ref HostMetricsWriterPolicy
   BackupArchiveReadPolicyArn:
     Description: Attach to a recovery identity that downloads encrypted snapshots.
     Value: !Ref BackupArchiveReadPolicy
