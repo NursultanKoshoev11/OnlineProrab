@@ -41,6 +41,7 @@ type State struct {
 	StagingTestPaymentPriceKGS   int
 	SubscriptionPriceOverrideKGS int
 	SMSSender                    SMSSender
+	SMSDailyLimit                int
 	SupportTelegramBotToken      string
 	SupportTelegramChatID        string
 	SupportTelegramURL           string
@@ -83,6 +84,7 @@ func SetState(cfg config.Config, db *database.DB, smsSender SMSSender, fileStore
 		ReviewSMSPhones:              append([]string(nil), cfg.ReviewSMSPhones...),
 		ReviewSMSCode:                cfg.ReviewSMSCode,
 		SMSSender:                    smsSender,
+		SMSDailyLimit:                cfg.SMSDailyLimit,
 		SupportTelegramBotToken:      cfg.SupportTelegramBotToken,
 		SupportTelegramChatID:        cfg.SupportTelegramChatID,
 		SupportTelegramURL:           cfg.SupportTelegramURL,

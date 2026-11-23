@@ -314,7 +314,7 @@ func requestRemoteKey(r *http.Request) (string, error) {
 		return "", err
 	}
 	if !isTrustedProxy(remoteAddr) {
-		return remoteAddr.String(), nil
+		return remoteClientKey(remoteAddr), nil
 	}
 
 	var forwarded []netip.Addr
@@ -334,7 +334,7 @@ func requestRemoteKey(r *http.Request) (string, error) {
 	forwarded = append(forwarded, remoteAddr)
 	for i := len(forwarded) - 1; i >= 0; i-- {
 		if !isTrustedProxy(forwarded[i]) {
-			return forwarded[i].String(), nil
+			return remoteClientKey(forwarded[i]), nil
 		}
 	}
 	return "", errInvalidClientAddress
@@ -366,4 +366,15 @@ func isTrustedProxy(addr netip.Addr) bool {
 		}
 	}
 	return false
+}
+
+// remoteClientKey groups IPv6 clients by their /64 network: one subscriber
+// usually controls a whole /64 and could otherwise rotate through addresses to
+// escape per-client limits. IPv4 addresses stay individual.
+func remoteClientKey(addr netip.Addr) string {
+	addr = addr.Unmap()
+	if addr.Is6() {
+		return netip.PrefixFrom(addr, 64).Masked().String()
+	}
+	return addr.String()
 }
