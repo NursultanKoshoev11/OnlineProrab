@@ -402,6 +402,7 @@ class _AuthGateState extends State<_AuthGate> {
       Navigator.of(context).popUntil((route) => route.isFirst);
       setState(() {
         _sessionFuture = Future<SessionData?>.value(null);
+        _subscriptionExpired = false;
       });
     });
     _subscriptionExpiredSubscription = widget.apiClient.subscriptionExpired
@@ -447,6 +448,8 @@ class _AuthGateState extends State<_AuthGate> {
             return _SubscriptionScreen(
               apiClient: widget.apiClient,
               requiredRenewal: true,
+              onSignOut: widget.authRepository.signOut,
+              onDeleteAccount: widget.authRepository.deleteAccount,
               onSubscriptionRenewed: () {
                 if (mounted) setState(() => _subscriptionExpired = false);
               },
