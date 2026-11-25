@@ -192,7 +192,33 @@ func notifyProjectMembers(ctx context.Context, projectID string, userIDs map[str
 		"cost_item_id": entityID,
 		"click_action": "OPEN_PROJECT_EXPENSES",
 	}); err != nil {
+		var sendErr *notifications.SendError
+		if errors.As(err, &sendErr) {
+			forgetUnregisteredPushTargets(sendErr.Unregistered)
+			if len(sendErr.Errors) == len(sendErr.Unregistered) {
+				// Only stale installations failed; every live device was reached.
+				slog.Info("push_unregistered_targets_removed", "project_id", projectID, "count", len(sendErr.Unregistered))
+				return
+			}
+		}
 		slog.Error("firebase_push_notification_failed", "project_id", projectID, "error", err)
+	}
+}
+
+// forgetUnregisteredPushTargets deletes installations FCM reported as gone so
+// later notifications do not keep retrying them.
+func forgetUnregisteredPushTargets(targets []notifications.Target) {
+	if len(targets) == 0 || appState.DB == nil || appState.DB.Pool == nil {
+		return
+	}
+	ids := make([]string, 0, len(targets))
+	for _, target := range targets {
+		ids = append(ids, target.ID)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if _, err := appState.DB.Pool.Exec(ctx, `DELETE FROM push_tokens WHERE token = ANY($1::text[])`, ids); err != nil {
+		slog.Error("push_unregistered_cleanup_failed", "count", len(ids), "error", err)
 	}
 }
 
