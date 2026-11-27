@@ -13,6 +13,10 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/project-members/", requireSubscribed(ProjectMember))
 	mux.HandleFunc(api+"/project-invites", requireSubscribed(CreateProjectInvite))
 	mux.HandleFunc(api+"/project-invites/accept", requireSubscribed(AcceptProjectInvite))
+	// The invitee may have no plan of their own: joining a paid project is allowed.
+	mux.HandleFunc(api+"/project-invites/incoming", requireAuth(IncomingProjectInvites))
+	mux.HandleFunc(api+"/project-invites/incoming/accept", requireAuth(AcceptIncomingProjectInvite))
+	mux.HandleFunc(api+"/project-invites/incoming/decline", requireAuth(DeclineIncomingProjectInvite))
 	mux.HandleFunc(api+"/cost-items", requireSubscribed(withProjectMutationRBAC(CostItems, "", nil)))
 	mux.HandleFunc(api+"/cost-items/", requireSubscribed(withProjectMutationRBAC(CostItems, api+"/cost-items/", costItemProjectID)))
 	mux.HandleFunc(api+"/expense-ai/search", requireSubscribed(ExpenseAISearch))

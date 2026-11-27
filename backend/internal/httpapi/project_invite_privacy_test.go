@@ -62,9 +62,47 @@ func TestProjectInviteDoesNotRevealWhetherPhoneIsRegistered(t *testing.T) {
 			t.Fatalf("production invite response leaks %q: %s", leaked, registeredBody)
 		}
 	}
-	var isMember bool
-	if err := db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2)`, projectID, registered).Scan(&isMember); err != nil || !isMember {
-		t.Fatalf("registered user was not added to the project (err=%v)", err)
+	isMember := func() bool {
+		t.Helper()
+		var member bool
+		if err := db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2)`, projectID, registered).Scan(&member); err != nil {
+			t.Fatalf("check membership: %v", err)
+		}
+		return member
+	}
+	if isMember() {
+		t.Fatal("a registered account must not join a project before accepting the invitation")
+	}
+
+	// The invitee sees the invitation and joins only by accepting it.
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/project-invites/incoming", nil)
+	listRequest = listRequest.WithContext(withUserID(listRequest.Context(), registered))
+	listRecorder := httptest.NewRecorder()
+	IncomingProjectInvites(listRecorder, listRequest)
+	var incoming struct {
+		Items []incomingProjectInvite `json:"items"`
+	}
+	if err := json.Unmarshal(listRecorder.Body.Bytes(), &incoming); err != nil || listRecorder.Code != http.StatusOK || len(incoming.Items) != 1 || incoming.Items[0].ProjectID != projectID || incoming.Items[0].ProjectName != "Объект" {
+		t.Fatalf("incoming invitations = %d %s (%v)", listRecorder.Code, listRecorder.Body.String(), err)
+	}
+	decide := func(handler http.HandlerFunc, userID, inviteID string) int {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/project-invites/incoming/accept", strings.NewReader(`{"invite_id":"`+inviteID+`"}`))
+		request = request.WithContext(withUserID(request.Context(), userID))
+		recorder := httptest.NewRecorder()
+		handler(recorder, request)
+		return recorder.Code
+	}
+	if code := decide(AcceptIncomingProjectInvite, owner, incoming.Items[0].ID); code != http.StatusNotFound {
+		t.Fatalf("another account accepting the invitation = %d, want 404", code)
+	}
+	if code := decide(AcceptIncomingProjectInvite, registered, incoming.Items[0].ID); code != http.StatusOK {
+		t.Fatalf("accept invitation = %d, want 200", code)
+	}
+	if !isMember() {
+		t.Fatal("accepting the invitation must add the account to the project")
+	}
+	if code := decide(DeclineIncomingProjectInvite, registered, incoming.Items[0].ID); code != http.StatusNotFound {
+		t.Fatalf("declining an accepted invitation = %d, want 404", code)
 	}
 
 	// Fill the hourly allowance, then the next invitation must be refused.

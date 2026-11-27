@@ -46,6 +46,33 @@ class ProjectInviteResult {
   }
 }
 
+/// A pending invitation addressed to the signed-in user's phone number.
+class IncomingProjectInvite {
+  const IncomingProjectInvite({
+    required this.id,
+    required this.projectId,
+    required this.projectName,
+    required this.role,
+    required this.invitedByName,
+  });
+
+  final String id;
+  final String projectId;
+  final String projectName;
+  final String role;
+  final String invitedByName;
+
+  factory IncomingProjectInvite.fromJson(Map<String, dynamic> json) {
+    return IncomingProjectInvite(
+      id: json['id']?.toString() ?? '',
+      projectId: json['project_id']?.toString() ?? '',
+      projectName: json['project_name']?.toString() ?? '',
+      role: json['role']?.toString() ?? 'viewer',
+      invitedByName: json['invited_by_name']?.toString() ?? '',
+    );
+  }
+}
+
 class ProjectTeamRepository {
   const ProjectTeamRepository({required ApiClient apiClient})
     : _apiClient = apiClient;
@@ -80,6 +107,27 @@ class ProjectTeamRepository {
   Future<void> acceptInvite(String inviteToken) async {
     await _apiClient.postJson('/api/v1/project-invites/accept', {
       'invite_token': inviteToken,
+    });
+  }
+
+  Future<List<IncomingProjectInvite>> listIncomingInvites() async {
+    final data = await _apiClient.getJson('/api/v1/project-invites/incoming');
+    return _asList(data)
+        .whereType<Map<String, dynamic>>()
+        .map(IncomingProjectInvite.fromJson)
+        .where((invite) => invite.id.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> acceptIncomingInvite(String inviteId) async {
+    await _apiClient.postJson('/api/v1/project-invites/incoming/accept', {
+      'invite_id': inviteId,
+    });
+  }
+
+  Future<void> declineIncomingInvite(String inviteId) async {
+    await _apiClient.postJson('/api/v1/project-invites/incoming/decline', {
+      'invite_id': inviteId,
     });
   }
 

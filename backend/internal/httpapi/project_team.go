@@ -123,9 +123,9 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusForbidden, "only the project owner can assign the manager role")
 		return
 	}
-	// Responses no longer say whether a phone is registered, but the member
-	// list still shows an immediately added account. Bound how fast one
-	// account can probe numbers through invitations.
+	// Every invitation is pending until the invitee accepts it, and the
+	// response never says whether a phone is registered. Still bound how many
+	// invitations (and invitation pushes) one account can send.
 	if retryAfter, err := reserveProjectInviteAttempt(ctx, actorID); err != nil {
 		slog.Error("project_invite_rate_limit_failed", "error", err)
 		Error(w, http.StatusServiceUnavailable, "invitations are temporarily unavailable")
@@ -150,73 +150,6 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if exists {
 		Error(w, http.StatusConflict, "user is already a project member")
-		return
-	}
-
-	// If the phone already belongs to an account, grant access immediately.
-	// The invite table remains the fallback for people who have not logged in yet.
-	var targetUserID string
-	if err := appState.DB.Pool.QueryRow(ctx, `
-		SELECT COALESCE((SELECT id::text FROM users WHERE phone = $1), '')
-	`, req.Phone).Scan(&targetUserID); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to find invited user")
-		return
-	}
-	if targetUserID != "" {
-		tx, err := appState.DB.Pool.Begin(ctx)
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to start member assignment")
-			return
-		}
-		defer tx.Rollback(ctx)
-
-		if err := ensureProjectMemberCapacity(ctx, tx, req.ProjectID, req.Phone); err != nil {
-			if status, message, ok := subscriptionHTTPError(err); ok {
-				Error(w, status, message)
-				return
-			}
-			Error(w, http.StatusInternalServerError, "failed to enforce subscription limits")
-			return
-		}
-
-		result, err := tx.Exec(ctx, `
-			INSERT INTO project_members (project_id, user_id, role)
-			VALUES ($1, $2, $3)
-			ON CONFLICT (project_id, user_id) DO NOTHING
-		`, req.ProjectID, targetUserID, req.Role)
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to add project member")
-			return
-		}
-		if result.RowsAffected() == 0 {
-			Error(w, http.StatusConflict, "user is already a project member")
-			return
-		}
-		if _, err := tx.Exec(ctx, `
-			UPDATE project_invites
-			SET revoked_at = now()
-			WHERE project_id = $1 AND phone = $2 AND accepted_at IS NULL AND revoked_at IS NULL
-		`, req.ProjectID, req.Phone); err != nil {
-			Error(w, http.StatusInternalServerError, "failed to close previous invitation")
-			return
-		}
-		if err := tx.Commit(ctx); err != nil {
-			Error(w, http.StatusInternalServerError, "failed to commit project member")
-			return
-		}
-		// Audit logging must not roll back a successful membership assignment.
-		// Keep it outside the membership transaction so an audit/schema issue
-		// cannot turn a valid add-member request into a 500 response.
-		if _, err := appState.DB.Pool.Exec(ctx, `
-			INSERT INTO audit_logs (actor_id, project_id, action, entity_type, entity_id, metadata)
-			VALUES ($1, $2, 'add_member', 'project_member', $3, jsonb_build_object('phone', $4::text, 'role', $5::text, 'source', 'phone'))
-		`, actorID, req.ProjectID, targetUserID, req.Phone, req.Role); err != nil {
-			slog.Error("project_member_audit_log_failed", "project_id", req.ProjectID, "target_user_id", targetUserID, "error", err)
-		}
-		publishProjectEvent(req.ProjectID, "project_member", targetUserID, "added")
-		// Same status, code and shape as for an unregistered number, so the
-		// response does not reveal whether the phone has a STROY account.
-		JSON(w, http.StatusCreated, projectInviteResponse(""))
 		return
 	}
 
@@ -268,6 +201,9 @@ func CreateProjectInvite(w http.ResponseWriter, r *http.Request) {
 	`, actorID, req.ProjectID, req.Phone, req.Role)
 
 	publishProjectEvent(req.ProjectID, "project_member", "", "invited")
+	// An existing account joins only after accepting in the app; tell it.
+	notifyInvitedAccount(req.Phone, req.ProjectID, actorID)
+	// Same response whether or not the phone has a STROY account.
 	JSON(w, http.StatusCreated, projectInviteResponse(token))
 }
 

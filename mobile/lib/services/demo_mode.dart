@@ -430,6 +430,9 @@ class DemoDataState {
       );
     }
 
+    if (path == '/api/v1/project-invites/incoming' && method == 'GET') {
+      return _json({'items': <Object>[]});
+    }
     if (path == '/api/v1/project-members' && method == 'GET') {
       final projectId = request.url.queryParameters['project_id'];
       return _json(

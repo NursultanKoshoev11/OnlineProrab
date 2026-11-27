@@ -60,6 +60,8 @@ func TestProjectNotificationsReachAllMembers(t *testing.T) {
 		})
 		assertStatus(t, status, body, http.StatusCreated)
 	}
+	acceptIncomingInvite(t, client, worker, notifyProject)
+	acceptIncomingInvite(t, client, viewer, notifyProject)
 
 	for token, user := range map[string]session{
 		"e2e-push-owner":    owner,

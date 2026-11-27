@@ -271,20 +271,21 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var userID string
+	var newAccount bool
 	err = tx.QueryRow(ctx, `
 		INSERT INTO users (phone)
 		VALUES ($1)
 		ON CONFLICT (phone) DO UPDATE SET updated_at = now()
-		RETURNING id::text
-	`, req.Phone).Scan(&userID)
+		RETURNING id::text, (xmax = 0)
+	`, req.Phone).Scan(&userID, &newAccount)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create user")
 		return
 	}
 
-	// A phone invitation is intentionally completed during SMS verification.
-	// This keeps the normal flow to: manager enters a phone, partner logs in,
-	// and the object appears without exposing an invitation token in production.
+	// A person signing up because they were invited joins those projects on
+	// their first login. Existing accounts decide in the app instead
+	// (IncomingProjectInvites), so logging in never joins a project silently.
 	rows, err := tx.Query(ctx, `
 		SELECT id::text, project_id::text, phone, role
 		FROM project_invites
@@ -321,6 +322,9 @@ func VerifySMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows.Close()
+	if !newAccount {
+		pendingInvites = nil
+	}
 
 	for _, invite := range pendingInvites {
 		if err := ensureProjectMemberCapacity(ctx, tx, invite.projectID, invite.phone); err != nil {

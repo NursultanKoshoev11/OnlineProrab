@@ -14,6 +14,8 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
   final _search = TextEditingController();
   bool _showArchived = false;
   late Future<List<RemoteProject>> _future;
+  List<IncomingProjectInvite> _invites = const [];
+  final Set<String> _inviteActions = {};
   StreamSubscription<RealtimeEvent>? _realtimeSubscription;
   Timer? _realtimeReloadDebounce;
 
@@ -23,6 +25,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
     _future = widget.deps.projectRepository.listProjects(
       includeArchived: _showArchived,
     );
+    _loadInvites();
     _realtimeSubscription = widget.deps.realtimeService.events.listen((_) {
       _scheduleRealtimeReload();
     });
@@ -43,7 +46,87 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
     });
   }
 
+  Future<void> _loadInvites() async {
+    try {
+      final invites = await widget.deps.teamRepository.listIncomingInvites();
+      if (mounted) setState(() => _invites = invites);
+    } catch (_) {
+      // Invitations are optional on this screen; the project list still works.
+    }
+  }
+
+  Future<void> _decideInvite(IncomingProjectInvite invite, bool accept) async {
+    setState(() => _inviteActions.add(invite.id));
+    try {
+      if (accept) {
+        await widget.deps.teamRepository.acceptIncomingInvite(invite.id);
+      } else {
+        await widget.deps.teamRepository.declineIncomingInvite(invite.id);
+      }
+      if (!mounted) return;
+      setState(() {
+        _invites = _invites.where((item) => item.id != invite.id).toList();
+      });
+      _toast(
+        context,
+        accept
+            ? 'Вы присоединились к объекту «${invite.projectName}»'
+            : 'Приглашение отклонено',
+      );
+      if (accept) await _reload();
+    } catch (error) {
+      if (mounted) _toast(context, _errorText(error));
+      await _loadInvites();
+    } finally {
+      if (mounted) setState(() => _inviteActions.remove(invite.id));
+    }
+  }
+
+  Widget _inviteCard(IncomingProjectInvite invite) {
+    final busy = _inviteActions.contains(invite.id);
+    final from = invite.invitedByName.trim().isEmpty
+        ? ''
+        : '${invite.invitedByName.trim()} приглашает вас. ';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: _brandSoft,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Приглашение в объект «${invite.projectName}»',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text('$fromРоль: ${_roleLabel(invite.role)}'),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: busy ? null : () => _decideInvite(invite, false),
+                  child: const Text('Отклонить'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: _brand),
+                  onPressed: busy ? null : () => _decideInvite(invite, true),
+                  child: const Text('Принять'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _reload() async {
+    unawaited(_loadInvites());
     final future = widget.deps.projectRepository.listProjects(
       includeArchived: _showArchived,
     );
@@ -135,6 +218,7 @@ class _ProjectsScreenState extends State<_ProjectsScreen> {
                               : null,
                         ),
                         const SizedBox(height: 16),
+                        if (!_showArchived) ..._invites.map(_inviteCard),
                         TextField(
                           controller: _search,
                           onChanged: (_) => setState(() {}),
