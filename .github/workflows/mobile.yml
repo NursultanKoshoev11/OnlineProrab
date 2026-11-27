@@ -104,6 +104,12 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      - name: Use Google's Maven Central mirror for Gradle
+        # Maven Central answers GitHub-hosted runners with 429 Too Many Requests.
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cp "$GITHUB_WORKSPACE/mobile/tool/ci-maven-mirror.init.gradle" ~/.gradle/init.d/
+
       - name: Build debug APK
         env:
           API_BASE_URL: ${{ matrix.build.api_base_url }}
