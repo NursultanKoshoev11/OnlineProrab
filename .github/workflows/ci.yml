@@ -196,7 +196,7 @@ jobs:
     needs: changes
     if: >-
       !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.mobile == 'true') &&
-      (github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-'))
+      (github.event_name != 'pull_request' || !(startsWith(github.event.pull_request.head.ref, 'codex/production-api-') && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     defaults:
       run:

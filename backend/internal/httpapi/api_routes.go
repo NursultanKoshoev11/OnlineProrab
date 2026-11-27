@@ -19,14 +19,14 @@ func registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(api+"/daily-reports", requireSubscribed(withProjectMutationRBAC(DailyReports, "", nil)))
 	mux.HandleFunc(api+"/daily-reports/", requireSubscribed(withProjectMutationRBAC(DailyReports, api+"/daily-reports/", dailyReportProjectID)))
 	mux.HandleFunc(api+"/files", requireSubscribed(withProjectMutationRBAC(Files, "", nil)))
-	mux.HandleFunc(api+"/files/upload", requireSubscribed(UploadFile))
+	mux.HandleFunc(api+"/files/upload", requireSubscribed(withUserRateLimit("file_upload", fileUploadWindow, fileUploadLimit, UploadFile)))
 	mux.HandleFunc(api+"/files/download", requireSubscribed(DownloadFile))
 	mux.HandleFunc(api+"/files/", requireSubscribed(withProjectMutationRBAC(Files, api+"/files/", fileProjectID)))
 	mux.HandleFunc(api+"/tasks", requireSubscribed(withProjectMutationRBAC(Tasks, "", nil)))
 	mux.HandleFunc(api+"/tasks/", requireSubscribed(withProjectMutationRBAC(Tasks, api+"/tasks/", taskProjectID)))
 	mux.HandleFunc(api+"/audit-logs", requireSubscribed(AuditLogs))
 	mux.HandleFunc(api+"/support/channels", requireSubscribed(SupportChannels))
-	mux.HandleFunc(api+"/support/tickets", requireSubscribed(SupportTickets))
+	mux.HandleFunc(api+"/support/tickets", requireSubscribed(withUserRateLimit("support_ticket", supportTicketWindow, supportTicketLimit, SupportTickets)))
 	mux.HandleFunc(
 		api+"/support/public-tickets",
 		withPublicSupportRateLimit(PublicSupportTickets),

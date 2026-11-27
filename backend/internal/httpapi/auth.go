@@ -112,7 +112,7 @@ func RequestSMSCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if providerDelivery {
-		exhausted, err := smsDailyBudgetExhausted(r.Context())
+		exhausted, err := smsDailyBudgetExhausted(r.Context(), req.Phone)
 		if err != nil {
 			Error(w, http.StatusServiceUnavailable, "login service is temporarily unavailable")
 			return

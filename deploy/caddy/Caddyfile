@@ -1,10 +1,12 @@
+# Plain HTTP on the bare IP carried login codes and bearer tokens in clear
+# text. Send any such client to HTTPS; 308 keeps the method and body.
 http://16.171.171.191 {
     handle_path /stroy-site/* {
-        reverse_proxy stroy-website:80
+        redir https://stroy.com.kg{uri} permanent
     }
 
     handle {
-        reverse_proxy stroy-api:8080
+        redir https://api.stroy.com.kg{uri} 308
     }
 }
 
@@ -38,12 +40,6 @@ stroy.com.kg {
     @stroy_billing path /billing /billing/*
     handle @stroy_billing {
         reverse_proxy stroy-obank-billing:80
-    }
-
-    @stroy_staging_api path /staging-api /staging-api/*
-    handle @stroy_staging_api {
-        uri strip_prefix /staging-api
-        reverse_proxy stroy-obank-staging-api:8080
     }
 
     @stroy_api path /api/v1/* /health /ready

@@ -345,10 +345,19 @@ func RealtimeEvents(w http.ResponseWriter, r *http.Request) {
 
 	keepAlive := time.NewTicker(realtimeKeepAliveInterval)
 	defer keepAlive.Stop()
+	// A stream outlives the access token that opened it; close it once the
+	// session is revoked (logout, account deletion) or project access is lost.
+	recheck := time.NewTicker(realtimeSessionRecheckInterval)
+	defer recheck.Stop()
+	sessionID := sessionIDFromContext(r.Context())
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-recheck.C:
+			if !realtimeAccessStillValid(r.Context(), userID, sessionID, projectID) {
+				return
+			}
 		case payload, ok := <-events:
 			if !ok {
 				return
@@ -364,8 +373,34 @@ func RealtimeEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// realtimeAccessStillValid reports whether an open stream may keep running.
+// Database errors keep the stream: a brief outage must not drop every client.
+func realtimeAccessStillValid(parent context.Context, userID, sessionID, projectID string) bool {
+	if appState.DB == nil || appState.DB.Pool == nil || sessionID == "" {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	var active bool
+	err := appState.DB.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM refresh_sessions
+			WHERE id = $1::uuid AND user_id = $2::uuid
+			  AND revoked_at IS NULL AND expires_at > now()
+		)
+	`, sessionID, userID).Scan(&active)
+	if err != nil {
+		return true
+	}
+	if !active {
+		return false
+	}
+	return projectID == "" || canAccessProject(ctx, userID, projectID)
+}
+
 // Variables so tests can shorten them.
 var (
-	realtimeKeepAliveInterval = 20 * time.Second
-	realtimeWriteTimeout      = 30 * time.Second
+	realtimeSessionRecheckInterval = 5 * time.Minute
+	realtimeKeepAliveInterval      = 20 * time.Second
+	realtimeWriteTimeout           = 30 * time.Second
 )

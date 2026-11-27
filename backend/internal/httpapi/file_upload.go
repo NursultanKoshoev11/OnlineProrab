@@ -20,6 +20,10 @@ import (
 
 const uploadMultipartOverhead int64 = 1 * 1024 * 1024
 
+// projectStorageQuotaBytes caps the files one project may keep, so a single
+// account cannot run up unbounded object-storage cost.
+const projectStorageQuotaBytes int64 = 5 * 1024 * 1024 * 1024
+
 func UploadFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -72,6 +76,16 @@ func UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer source.Close()
+
+	var usedBytes int64
+	if err := appState.DB.Pool.QueryRow(ctx, `SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE project_id = $1`, projectID).Scan(&usedBytes); err != nil {
+		Error(w, http.StatusServiceUnavailable, "file storage is temporarily unavailable")
+		return
+	}
+	if usedBytes+header.Size > projectStorageQuotaBytes {
+		Error(w, http.StatusRequestEntityTooLarge, "Хранилище проекта заполнено (5 ГБ). Удалите ненужные файлы.")
+		return
+	}
 
 	originalName := sanitizeOriginalName(header.Filename)
 	if originalName == "" {
