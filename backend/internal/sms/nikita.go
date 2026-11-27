@@ -66,7 +66,9 @@ func newNikitaSender(cfg NikitaConfig, client *http.Client) (*NikitaSender, erro
 }
 
 func (s *NikitaSender) SendLoginCode(ctx context.Context, phone, code string) error {
-	phone = strings.TrimSpace(phone)
+	// Nikita expects international numbers without the leading "+"
+	// (996XXXXXXXXX).
+	phone = strings.TrimPrefix(strings.TrimSpace(phone), "+")
 	code = strings.TrimSpace(code)
 	if phone == "" || code == "" {
 		return errors.New("phone and code are required")

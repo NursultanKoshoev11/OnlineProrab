@@ -27,6 +27,8 @@ const (
 const (
 	SMSProviderTwilio = "twilio"
 	SMSProviderNikita = "nikita"
+
+	DefaultSMSDailyLimit = 300
 )
 
 const (
@@ -37,25 +39,28 @@ const (
 )
 
 type Config struct {
-	Env                        string
-	HTTPAddr                   string
-	DatabaseURL                string
-	JWTSecret                  string
-	AccessTokenTTL             time.Duration
-	DevSMSCodeEnabled          bool
-	E2ETestMode                bool
-	CORSAllowedOrigins         []string
-	StorageDriver              string
-	TrustedProxyCIDRs          []string
-	UploadDir                  string
-	MaxUploadBytes             int64
-	S3Region                   string
-	S3Bucket                   string
-	S3DeletionLedgerBucket     string
-	AWSAccessKeyID             string
-	AWSSecretAccessKey         string
-	AWSSessionToken            string
-	SMSProvider                string
+	Env                    string
+	HTTPAddr               string
+	DatabaseURL            string
+	JWTSecret              string
+	AccessTokenTTL         time.Duration
+	DevSMSCodeEnabled      bool
+	E2ETestMode            bool
+	CORSAllowedOrigins     []string
+	StorageDriver          string
+	TrustedProxyCIDRs      []string
+	UploadDir              string
+	MaxUploadBytes         int64
+	S3Region               string
+	S3Bucket               string
+	S3DeletionLedgerBucket string
+	AWSAccessKeyID         string
+	AWSSecretAccessKey     string
+	AWSSessionToken        string
+	SMSProvider            string
+	// SMSDailyLimit caps login SMS actually sent through the provider in any
+	// rolling 24 hours, so SMS pumping cannot drain the provider balance.
+	SMSDailyLimit              int
 	StagingTestSMSPhone        string
 	StagingTestSMSCode         string
 	StagingTestPaymentPriceKGS int
@@ -149,6 +154,13 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	smsDailyLimit, err := getEnvInt("SMS_DAILY_LIMIT", DefaultSMSDailyLimit)
+	if err != nil {
+		return Config{}, err
+	}
+	if smsDailyLimit < 1 {
+		return Config{}, errors.New("SMS_DAILY_LIMIT must be a positive integer")
+	}
 	obankTestPriceKGS, err := getEnvInt("OBANK_TEST_PRICE_KGS", 0)
 	if err != nil {
 		return Config{}, err
@@ -199,6 +211,7 @@ func Load() (Config, error) {
 	cfg.AWSSecretAccessKey = strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY"))
 	cfg.AWSSessionToken = strings.TrimSpace(os.Getenv("AWS_SESSION_TOKEN"))
 	cfg.SMSProvider = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_PROVIDER")))
+	cfg.SMSDailyLimit = smsDailyLimit
 	cfg.StagingTestSMSPhone = normalizePhone(os.Getenv("STAGING_TEST_SMS_PHONE"))
 	cfg.StagingTestSMSCode = strings.TrimSpace(os.Getenv("STAGING_TEST_SMS_CODE"))
 	cfg.StagingTestPaymentPriceKGS = stagingTestPaymentPriceKGS

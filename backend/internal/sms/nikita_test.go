@@ -46,7 +46,7 @@ func TestNikitaSenderSendsLoginCode(t *testing.T) {
 	if got.Login != "test-login" || got.Password != "test-password" {
 		t.Fatalf("unexpected credentials in request: %#v", got)
 	}
-	if got.Sender != "SMSPRO.KG" || len(got.Phones) != 1 || got.Phones[0] != "+996700000001" {
+	if got.Sender != "SMSPRO.KG" || len(got.Phones) != 1 || got.Phones[0] != "996700000001" {
 		t.Fatalf("unexpected recipient/sender: %#v", got)
 	}
 	if !strings.Contains(got.Text, "123456") {

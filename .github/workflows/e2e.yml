@@ -20,8 +20,52 @@ env:
   E2E_COMPOSE_FILE: backend/e2e/docker-compose.e2e.yml
 
 jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      api: ${{ steps.areas.outputs.api }}
+      android: ${{ steps.areas.outputs.android }}
+    steps:
+      - name: List changed files
+        id: areas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE_SHA: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Any doubt (manual run, new branch, API error, huge diff) runs everything.
+          files=""
+          run_all=true
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            files="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')" && run_all=false
+          elif [[ "$GITHUB_EVENT_NAME" == push && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+            compare="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE_SHA...$GITHUB_SHA")" &&
+              [[ "$(jq '.files | length' <<<"$compare")" -lt 300 ]] &&
+              files="$(jq -r '.files[].filename' <<<"$compare")" && run_all=false
+          fi
+          echo "$files"
+          area() {
+            if [[ "$run_all" == true ]] || grep -Eq "$2" <<<"$files"; then
+              echo "$1=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$1=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          area api '^(backend/|website/|\.github/workflows/e2e\.yml$)'
+          # Emulator jobs are the most expensive; run them only for app changes.
+          area android '^(mobile/|backend/e2e/|\.github/workflows/e2e\.yml$)'
+
   api-e2e:
     name: API E2E on ephemeral local stack
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.api == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -69,7 +113,7 @@ jobs:
           name: stroy-api-e2e-logs-${{ github.run_number }}
           path: ${{ runner.temp }}/api-e2e.log
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       - name: Stop local API stack
         if: always()
@@ -77,13 +121,24 @@ jobs:
 
   mobile-maestro-e2e:
     name: Android Maestro against local stack
-    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.android == 'true') }}
+    runs-on: ubuntu-24.04  # emulator jobs are killed on the ubuntu-26.04 image
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Free runner disk space
+        # The hosted runner image no longer leaves room for the Android SDK,
+        # emulator image and Gradle build; drop toolchains these jobs never use.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \n            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \n            /usr/local/lib/heroku /opt/microsoft /opt/google/chrome /usr/lib/jvm/temurin-8-jdk-amd64
+          docker image prune --all --force >/dev/null
+          df -h /
 
       - name: Start local API stack
         run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
@@ -117,6 +172,14 @@ jobs:
           --dart-define=API_BASE_URL=http://10.0.2.2:8080
           --dart-define=OFFLINE_DEMO=false
           --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+
+      - name: Release build memory before the emulator starts
+        # The Gradle and Kotlin daemons keep several GB after the APK build;
+        # with the 4 GB emulator the runner was shut down mid-test.
+        run: |
+          pkill -f GradleDaemon || true
+          pkill -f KotlinCompileDaemon || true
+          free -h
 
       - name: Install pinned Maestro CLI
         shell: bash
@@ -170,7 +233,7 @@ jobs:
             ${{ runner.temp }}/maestro-ui.xml
             ${{ runner.temp }}/maestro-logcat.txt
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       - name: Save API logs on failure
         if: failure()
@@ -183,7 +246,7 @@ jobs:
           name: stroy-mobile-api-e2e-logs-${{ github.run_number }}
           path: ${{ runner.temp }}/api-e2e.log
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       - name: Stop local API stack
         if: always()
@@ -191,13 +254,24 @@ jobs:
 
   mobile-monkey-e2e:
     name: Android monkey (random input) against local stack
-    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.android == 'true') }}
+    runs-on: ubuntu-24.04  # emulator jobs are killed on the ubuntu-26.04 image
     timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Free runner disk space
+        # The hosted runner image no longer leaves room for the Android SDK,
+        # emulator image and Gradle build; drop toolchains these jobs never use.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \n            /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/share/powershell \n            /usr/local/lib/heroku /opt/microsoft /opt/google/chrome /usr/lib/jvm/temurin-8-jdk-amd64
+          docker image prune --all --force >/dev/null
+          df -h /
 
       - name: Start local API stack
         run: docker compose -f "$E2E_COMPOSE_FILE" up -d --build postgres api
@@ -231,6 +305,14 @@ jobs:
           --dart-define=API_BASE_URL=http://10.0.2.2:8080
           --dart-define=OFFLINE_DEMO=false
           --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+
+      - name: Release build memory before the emulator starts
+        # The Gradle and Kotlin daemons keep several GB after the APK build;
+        # with the 4 GB emulator the runner was shut down mid-test.
+        run: |
+          pkill -f GradleDaemon || true
+          pkill -f KotlinCompileDaemon || true
+          free -h
 
       - name: Install pinned Maestro CLI
         shell: bash
@@ -293,7 +375,7 @@ jobs:
           name: stroy-monkey-e2e-${{ github.run_number }}
           path: ${{ runner.temp }}/monkey
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       - name: Stop local API stack
         if: always()

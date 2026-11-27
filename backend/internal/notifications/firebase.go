@@ -3,6 +3,7 @@ package notifications
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,11 +89,34 @@ type fcmAPNSConfig struct {
 	Headers map[string]string `json:"headers"`
 }
 
+// SendError reports per-target failures after every target was attempted.
+// Unregistered lists targets FCM no longer recognizes (the app was removed,
+// reinstalled, or its data cleared); callers should forget them.
+type SendError struct {
+	Unregistered []Target
+	Errors       []error
+}
+
+func (e *SendError) Error() string {
+	return fmt.Sprintf("FCM delivery failed for %d target(s): %v", len(e.Errors), errors.Join(e.Errors...))
+}
+
+func (e *SendError) Unwrap() []error {
+	return e.Errors
+}
+
+// errUnregistered marks an FCM response saying the target no longer exists.
+var errUnregistered = errors.New("FCM target is unregistered")
+
+// Send delivers the notification to every target. One stale or failing
+// device must never prevent delivery to the user's other devices, so failures
+// are collected and returned together as a *SendError.
 func (s *FirebaseSender) Send(ctx context.Context, targets []Target, title, body string, data map[string]string) error {
 	if s == nil || s.client == nil {
 		return fmt.Errorf("Firebase sender is not configured")
 	}
 	seen := make(map[Target]struct{}, len(targets))
+	var failures SendError
 	for _, target := range targets {
 		target.ID = strings.TrimSpace(target.ID)
 		target.Type = strings.TrimSpace(target.Type)
@@ -103,15 +127,22 @@ func (s *FirebaseSender) Send(ctx context.Context, targets []Target, title, body
 			target.Type = "token"
 		}
 		if target.Type != "token" && target.Type != "fid" {
-			return fmt.Errorf("unsupported Firebase target type %q", target.Type)
+			failures.Errors = append(failures.Errors, fmt.Errorf("unsupported Firebase target type %q", target.Type))
+			continue
 		}
 		if _, ok := seen[target]; ok {
 			continue
 		}
 		seen[target] = struct{}{}
 		if err := s.sendOne(ctx, target, title, body, data); err != nil {
-			return err
+			if errors.Is(err, errUnregistered) {
+				failures.Unregistered = append(failures.Unregistered, target)
+			}
+			failures.Errors = append(failures.Errors, err)
 		}
+	}
+	if len(failures.Errors) > 0 {
+		return &failures
 	}
 	return nil
 }
@@ -149,7 +180,32 @@ func (s *FirebaseSender) sendOne(ctx context.Context, target Target, title, body
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		message, _ := io.ReadAll(io.LimitReader(response.Body, 8<<10))
+		if fcmErrorCode(message) == "UNREGISTERED" {
+			return fmt.Errorf("FCM returned %s: %w", response.Status, errUnregistered)
+		}
 		return fmt.Errorf("FCM returned %s: %s", response.Status, strings.TrimSpace(string(message)))
 	}
 	return nil
+}
+
+// fcmErrorCode extracts the FCM-specific error code from an HTTP v1 error
+// response, for example UNREGISTERED for a removed app installation.
+func fcmErrorCode(body []byte) string {
+	var response struct {
+		Error struct {
+			Details []struct {
+				Type      string `json:"@type"`
+				ErrorCode string `json:"errorCode"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &response) != nil {
+		return ""
+	}
+	for _, detail := range response.Error.Details {
+		if detail.Type == "type.googleapis.com/google.firebase.fcm.v1.FcmError" {
+			return detail.ErrorCode
+		}
+	}
+	return ""
 }

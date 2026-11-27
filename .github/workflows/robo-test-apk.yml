@@ -1,10 +1,9 @@
 name: Firebase Test Lab Robo demo APK
 
+# Manual only: the APK goes to Firebase Test Lab by hand, and CI already
+# builds the app on every mobile change.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'mobile/**'
 
 permissions:
   contents: read

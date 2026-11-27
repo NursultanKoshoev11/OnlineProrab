@@ -431,9 +431,12 @@ func updateProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	canUpdate := false
-	if req.Status == "active" {
+	var storedStatus string
+	_ = appState.DB.Pool.QueryRow(ctx, `SELECT status FROM projects WHERE id = $1 AND deleted_at IS NULL`, projectID).Scan(&storedStatus)
+	if req.Status == "active" && storedStatus == "archived" {
 		// Restoring an archived project is the one lifecycle mutation allowed
-		// while the project is inactive.
+		// while the project is inactive. Sending "active" for a project that
+		// is already active must not skip the owner-subscription check.
 		canUpdate = canManageProjectLifecycle(ctx, userID, projectID)
 	} else {
 		canUpdate = canManageProject(ctx, userID, projectID)

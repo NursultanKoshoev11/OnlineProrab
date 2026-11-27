@@ -57,7 +57,13 @@ jobs:
         run: |
           set -euo pipefail
           current_main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          if [[ "$DEPLOY_SHA" == "$current_main_sha" ]]; then
+          # CI skips the Website job when website/ did not change; there is
+          # then no tested image to deploy and the live site is already current.
+          website_job="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}/jobs"             --jq '.jobs[] | select(.name == "Website") | .conclusion')"
+          if [[ "$website_job" != "success" ]]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Skipped: CI did not build the website for $DEPLOY_SHA (website unchanged)." >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$DEPLOY_SHA" == "$current_main_sha" ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"

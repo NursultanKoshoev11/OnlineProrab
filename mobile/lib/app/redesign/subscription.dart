@@ -6,6 +6,8 @@ class _SubscriptionScreen extends StatefulWidget {
     this.members = const [],
     this.requiredRenewal = false,
     this.onSubscriptionRenewed,
+    this.onSignOut,
+    this.onDeleteAccount,
     required this.apiClient,
   });
 
@@ -13,6 +15,12 @@ class _SubscriptionScreen extends StatefulWidget {
   final List<RemoteProjectMember> members;
   final bool requiredRenewal;
   final VoidCallback? onSubscriptionRenewed;
+
+  /// Account exits shown on the lockout screen: an expired account must still
+  /// be able to sign out and delete itself (App Store 5.1.1(v), Google Play
+  /// account deletion policy).
+  final Future<void> Function()? onSignOut;
+  final Future<void> Function()? onDeleteAccount;
   final ApiClient apiClient;
 
   @override
@@ -143,9 +151,100 @@ class _SubscriptionScreenState extends State<_SubscriptionScreen>
           ),
           const SizedBox(height: 18),
           _buildCurrentSubscriptionCard(),
+          if (widget.requiredRenewal &&
+              (widget.onSignOut != null || widget.onDeleteAccount != null)) ...[
+            const SizedBox(height: 18),
+            _buildAccountExits(),
+          ],
         ],
       ),
     );
+  }
+
+  bool _accountActionInProgress = false;
+
+  Widget _buildAccountExits() {
+    return OverflowBar(
+      alignment: MainAxisAlignment.end,
+      spacing: 8,
+      overflowAlignment: OverflowBarAlignment.end,
+      overflowSpacing: 4,
+      children: [
+        if (widget.onSignOut != null)
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: _muted,
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            onPressed: _accountActionInProgress ? null : _signOut,
+            icon: const Icon(Icons.logout_rounded, size: 18),
+            label: const Text('Выйти'),
+          ),
+        if (widget.onDeleteAccount != null)
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.redAccent,
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            onPressed: _accountActionInProgress ? null : _deleteAccount,
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: const Text('Удалить аккаунт'),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _signOut() async {
+    final signOut = widget.onSignOut;
+    if (signOut == null) return;
+    setState(() => _accountActionInProgress = true);
+    try {
+      await signOut();
+    } catch (error) {
+      if (mounted) _toast(context, _errorText(error));
+    } finally {
+      if (mounted) setState(() => _accountActionInProgress = false);
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final deleteAccount = widget.onDeleteAccount;
+    if (deleteAccount == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowButtonSpacing: 4,
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
+        title: const Text('Удалить аккаунт?'),
+        content: const Text(
+          'Будут удалены профиль, ваши объекты, расходы, отчёты, сессии и загруженные файлы. Это действие нельзя отменить.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _accountActionInProgress = true);
+    try {
+      await deleteAccount();
+    } catch (error) {
+      if (mounted) _toast(context, _errorText(error));
+    } finally {
+      if (mounted) setState(() => _accountActionInProgress = false);
+    }
   }
 
   Widget _buildCurrentSubscriptionCard() {
