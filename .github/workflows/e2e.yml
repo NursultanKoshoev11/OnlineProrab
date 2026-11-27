@@ -177,6 +177,11 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('mobile/pubspec.lock', 'mobile/tool/prepare_android.py', 'mobile/android/**/*.gradle*', 'mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      - name: Use Google's Maven Central mirror for Gradle
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cp mobile/tool/ci-maven-mirror.init.gradle ~/.gradle/init.d/
+
       - name: Build debug APK for local emulator API
         working-directory: mobile
         shell: bash
@@ -329,6 +334,11 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('mobile/pubspec.lock', 'mobile/tool/prepare_android.py', 'mobile/android/**/*.gradle*', 'mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
+
+      - name: Use Google's Maven Central mirror for Gradle
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cp mobile/tool/ci-maven-mirror.init.gradle ~/.gradle/init.d/
 
       - name: Build debug APK for local emulator API
         working-directory: mobile
