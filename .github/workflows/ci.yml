@@ -10,8 +10,55 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.areas.outputs.backend }}
+      mobile: ${{ steps.areas.outputs.mobile }}
+      website: ${{ steps.areas.outputs.website }}
+    steps:
+      - name: List changed files
+        id: areas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE_SHA: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Any doubt (manual run, new branch, API error, huge diff) runs everything.
+          files=""
+          run_all=true
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            files="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')" && run_all=false
+          elif [[ "$GITHUB_EVENT_NAME" == push && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+            compare="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE_SHA...$GITHUB_SHA")" &&
+              [[ "$(jq '.files | length' <<<"$compare")" -lt 300 ]] &&
+              files="$(jq -r '.files[].filename' <<<"$compare")" && run_all=false
+          fi
+          echo "$files"
+          area() {
+            if [[ "$run_all" == true ]] || grep -Eq "$2" <<<"$files"; then
+              echo "$1=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$1=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          area backend '^(backend/|\.github/workflows/ci\.yml$)'
+          area mobile '^(mobile/|\.github/workflows/ci\.yml$)'
+          area website '^(website/|\.github/workflows/ci\.yml$)'
+
+  # Required checks (Backend, Mobile) still report: a job skipped by its
+  # condition counts as passed, and a failed detection runs every job.
   backend:
     name: Backend
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -146,7 +193,10 @@ jobs:
     name: Mobile
     # This emergency API recovery PR does not change mobile code; avoid
     # coupling production server recovery to a redundant Flutter APK build.
-    if: github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-')
+    needs: changes
+    if: >-
+      !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.mobile == 'true') &&
+      (github.event_name != 'pull_request' || !startsWith(github.event.pull_request.head.ref, 'codex/production-api-'))
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -190,6 +240,8 @@ jobs:
 
   website:
     name: Website
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.website == 'true') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -388,5 +440,6 @@ jobs:
           name: stroy-website-image-${{ github.sha }}
           path: ${{ runner.temp }}/stroy-website-${{ github.sha }}.image.tar.gz
           if-no-files-found: error
-          retention-days: 30
+          # Consumed by Website Production Deploy right after CI finishes.
+          retention-days: 3
           compression-level: 0
