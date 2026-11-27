@@ -1,11 +1,12 @@
 name: Production Uptime
 
 # External availability check for the public API and website. A failed run
-# makes GitHub email the repository owner. Scheduled runs can start a few
-# minutes late, so this complements (not replaces) a dedicated uptime service.
+# makes GitHub email the repository owner. The CloudWatch canary (every 5
+# minutes) is the primary monitor; this is a cheap independent backstop.
+# Every run bills at least one runner minute, so it runs every 3 hours.
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '17 */3 * * *'
   workflow_dispatch:
 
 permissions: {}
