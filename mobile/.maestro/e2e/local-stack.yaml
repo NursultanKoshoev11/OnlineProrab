@@ -122,7 +122,7 @@ appId: kg.com.stroy.app
 - tapOn:
     text: "(?s).*Пригласить.*"
 - extendedWaitUntil:
-    visible: "(?s).*Доступ выдан.*"
+    visible: "(?s).*Приглашение отправлено.*"
     timeout: 60000
 - tapOn:
     text: "(?s).*Готово.*"

@@ -187,6 +187,13 @@ func TestAPIEndToEnd(t *testing.T) {
 		})
 		assertStatus(t, status, body, http.StatusCreated)
 
+		// An existing account joins only after accepting the invitation.
+		status, body, _ = client.request(t, http.MethodGet, "/api/v1/projects/"+e2eProjectA, other.accessToken, nil, "")
+		if status != http.StatusForbidden && status != http.StatusNotFound {
+			t.Fatalf("invitee reached the project before accepting: %d %s", status, body)
+		}
+		acceptIncomingInvite(t, client, other, e2eProjectA)
+
 		status, body, _ = client.request(t, http.MethodGet, "/api/v1/projects/"+e2eProjectA, other.accessToken, nil, "")
 		assertStatus(t, status, body, http.StatusOK)
 
@@ -280,6 +287,28 @@ func login(t *testing.T, client *apiClient, phone string) session {
 		accessToken:  stringField(t, sessionResponse, "access_token"),
 		refreshToken: stringField(t, sessionResponse, "refresh_token"),
 	}
+}
+
+// acceptIncomingInvite accepts the invitee's pending invitation to projectID.
+func acceptIncomingInvite(t *testing.T, client *apiClient, invitee session, projectID string) {
+	t.Helper()
+	status, body, _ := client.request(t, http.MethodGet, "/api/v1/project-invites/incoming", invitee.accessToken, nil, "")
+	assertStatus(t, status, body, http.StatusOK)
+	var incoming struct {
+		Items []struct {
+			ID        string `json:"id"`
+			ProjectID string `json:"project_id"`
+		} `json:"items"`
+	}
+	decodeJSON(t, body, &incoming)
+	for _, invite := range incoming.Items {
+		if invite.ProjectID == projectID {
+			status, body, _ = client.requestJSON(t, http.MethodPost, "/api/v1/project-invites/incoming/accept", invitee.accessToken, map[string]string{"invite_id": invite.ID})
+			assertStatus(t, status, body, http.StatusOK)
+			return
+		}
+	}
+	t.Fatalf("no pending invitation to %s for the invitee: %s", projectID, body)
 }
 
 func createCostItem(t *testing.T, client *apiClient, owner session, projectID string) string {

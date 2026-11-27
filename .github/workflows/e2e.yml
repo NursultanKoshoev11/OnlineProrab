@@ -165,13 +165,38 @@ jobs:
         working-directory: mobile
         run: flutter pub get --enforce-lockfile
 
+      - name: Cache Gradle dependencies
+        # Without a cache every run downloads the whole Gradle and Kotlin
+        # toolchain from Maven Central, which answers parallel CI jobs with
+        # 429 Too Many Requests and fails the APK build.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/pubspec.lock', 'mobile/tool/prepare_android.py', 'mobile/android/**/*.gradle*', 'mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Use Google's Maven Central mirror for Gradle
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cp mobile/tool/ci-maven-mirror.init.gradle ~/.gradle/init.d/
+
       - name: Build debug APK for local emulator API
         working-directory: mobile
-        run: >-
-          flutter build apk --debug
-          --dart-define=API_BASE_URL=http://10.0.2.2:8080
-          --dart-define=OFFLINE_DEMO=false
-          --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+        shell: bash
+        run: |
+          # Retry once more after a pause: Maven Central rate-limits CI
+          # runners and a short wait usually clears it.
+          for attempt in 1 2 3; do
+            flutter build apk --debug \
+              --dart-define=API_BASE_URL=http://10.0.2.2:8080 \
+              --dart-define=OFFLINE_DEMO=false \
+              --dart-define=DISABLE_PUSH_NOTIFICATIONS=true && exit 0
+            echo "APK build attempt $attempt failed; retrying in 60s"
+            sleep 60
+          done
+          exit 1
 
       - name: Release build memory before the emulator starts
         # The Gradle and Kotlin daemons keep several GB after the APK build;
@@ -298,13 +323,38 @@ jobs:
         working-directory: mobile
         run: flutter pub get --enforce-lockfile
 
+      - name: Cache Gradle dependencies
+        # Without a cache every run downloads the whole Gradle and Kotlin
+        # toolchain from Maven Central, which answers parallel CI jobs with
+        # 429 Too Many Requests and fails the APK build.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/pubspec.lock', 'mobile/tool/prepare_android.py', 'mobile/android/**/*.gradle*', 'mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Use Google's Maven Central mirror for Gradle
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cp mobile/tool/ci-maven-mirror.init.gradle ~/.gradle/init.d/
+
       - name: Build debug APK for local emulator API
         working-directory: mobile
-        run: >-
-          flutter build apk --debug
-          --dart-define=API_BASE_URL=http://10.0.2.2:8080
-          --dart-define=OFFLINE_DEMO=false
-          --dart-define=DISABLE_PUSH_NOTIFICATIONS=true
+        shell: bash
+        run: |
+          # Retry once more after a pause: Maven Central rate-limits CI
+          # runners and a short wait usually clears it.
+          for attempt in 1 2 3; do
+            flutter build apk --debug \
+              --dart-define=API_BASE_URL=http://10.0.2.2:8080 \
+              --dart-define=OFFLINE_DEMO=false \
+              --dart-define=DISABLE_PUSH_NOTIFICATIONS=true && exit 0
+            echo "APK build attempt $attempt failed; retrying in 60s"
+            sleep 60
+          done
+          exit 1
 
       - name: Release build memory before the emulator starts
         # The Gradle and Kotlin daemons keep several GB after the APK build;

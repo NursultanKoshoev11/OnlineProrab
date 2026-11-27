@@ -1,0 +1,30 @@
+// CI only: Maven Central answers GitHub-hosted runners with 429 Too Many
+// Requests, failing the APK build. Resolve Maven Central artifacts from
+// Google's official mirror of it first, in every build (including Flutter's
+// own included Gradle build) and every repository list.
+def mirrorUrl = 'https://maven-central.storage-download.googleapis.com/maven2/'
+
+def preferMirror = { RepositoryHandler repos ->
+    def mirror = repos.maven {
+        name = 'MavenCentralGoogleMirror'
+        url = mirrorUrl
+    }
+    repos.remove(mirror)
+    repos.addFirst(mirror)
+}
+
+beforeSettings { settings ->
+    preferMirror(settings.pluginManagement.repositories)
+    // Adding any repository drops Gradle's implicit Plugin Portal default.
+    settings.pluginManagement.repositories.gradlePluginPortal()
+    preferMirror(settings.buildscript.repositories)
+}
+
+allprojects {
+    buildscript { preferMirror(repositories) }
+    repositories.all { repo ->
+        if (repo instanceof MavenArtifactRepository && repo.url.toString().startsWith('https://repo.maven.apache.org')) {
+            repo.url = mirrorUrl
+        }
+    }
+}

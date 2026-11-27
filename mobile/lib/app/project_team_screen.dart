@@ -191,9 +191,9 @@ class _ProjectTeamScreenState extends State<ProjectTeamScreen> {
           actionsOverflowButtonSpacing: 4,
           actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           buttonPadding: const EdgeInsets.symmetric(horizontal: 4),
-          title: const Text('Доступ выдан'),
+          title: const Text('Приглашение отправлено'),
           content: Text(
-            'Пользователь с этим номером получит доступ к объекту с ролью «${_roleLabel(result.role)}» при входе в STROY.$tokenMessage',
+            'Пользователь с этим номером увидит приглашение в STROY и получит доступ к объекту с ролью «${_roleLabel(result.role)}», когда примет его.$tokenMessage',
           ),
           actions: [
             FilledButton(
