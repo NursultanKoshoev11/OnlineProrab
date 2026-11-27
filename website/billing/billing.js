@@ -1,8 +1,8 @@
 (() => {
   const returnParams = new URLSearchParams(window.location.search);
-  const apiBase = returnParams.get("stage") === "1"
-    ? `${window.location.origin}/staging-api`
-    : "https://api.stroy.com.kg";
+  // Always the production API: a same-origin staging route let production
+  // tokens reach a less-hardened backend.
+  const apiBase = "https://api.stroy.com.kg";
   const tokenKey = "stroy.billing.session";
   const elements = {
     notice: document.querySelector("#notice"),

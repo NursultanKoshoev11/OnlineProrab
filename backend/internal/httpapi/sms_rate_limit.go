@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,6 +21,11 @@ const (
 	// foreign or premium-rate destinations are the usual SMS-pumping target.
 	smsSupportedCountryPrefix = "+996"
 	fallbackSMSDailyLimit     = 300
+	// Numbers without an account (new sign-ups, and anything an attacker
+	// sprays) may use only this share of the daily budget. The rest stays
+	// available to existing users, so a flood of fake sign-ups cannot lock
+	// every customer out of login for a day.
+	smsNewNumberBudgetPercent = 70
 )
 
 func smsDailyLimit() int {
@@ -30,20 +36,30 @@ func smsDailyLimit() int {
 }
 
 // smsDailyBudgetExhausted reports whether the provider already delivered the
-// configured number of login codes in the last 24 hours.
-func smsDailyBudgetExhausted(parent context.Context) (bool, error) {
+// share of the daily login-code budget available to this phone number.
+func smsDailyBudgetExhausted(parent context.Context, phone string) (bool, error) {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
 	var sent int
+	var registered bool
 	if err := appState.DB.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM auth_attempts
-		WHERE action = 'sms_request'
-		  AND succeeded
-		  AND created_at > now() - make_interval(secs => $1)
-	`, int(smsDailyBudgetWindow.Seconds())).Scan(&sent); err != nil {
+		SELECT
+			(SELECT COUNT(*) FROM auth_attempts
+			 WHERE action = 'sms_request'
+			   AND succeeded
+			   AND created_at > now() - make_interval(secs => $1)),
+			EXISTS (SELECT 1 FROM users WHERE phone = $2)
+	`, int(smsDailyBudgetWindow.Seconds()), phone).Scan(&sent, &registered); err != nil {
 		return false, err
 	}
-	return sent >= smsDailyLimit(), nil
+	limit := smsDailyLimit()
+	if sent == limit/2 {
+		slog.Warn("sms_daily_budget_half_used", "sent", sent, "limit", limit)
+	}
+	if !registered {
+		limit = limit * smsNewNumberBudgetPercent / 100
+	}
+	return sent >= limit, nil
 }
 
 func withSMSRequestRateLimit(next http.HandlerFunc) http.HandlerFunc {

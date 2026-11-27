@@ -58,17 +58,20 @@ func withSMSVerifyRateLimit(next http.HandlerFunc) http.HandlerFunc {
 			Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		phone := normalizePhone(payload.Phone)
-		if !phoneRe.MatchString(phone) {
-			phone = ""
-		} else {
-			phone = smsRateLimitPhone(phone)
-		}
-
 		remoteKey, err := requestRemoteKey(r)
 		if err != nil {
 			Error(w, http.StatusBadRequest, "invalid client address")
 			return
+		}
+		phone := normalizePhone(payload.Phone)
+		if !phoneRe.MatchString(phone) {
+			phone = ""
+		} else {
+			// The per-phone limit is counted per client: wrong guesses from
+			// someone else must not lock the owner out. Brute force stays
+			// bounded by the 5 attempts allowed per code and the hourly
+			// limit on issuing codes for a phone.
+			phone = smsRateLimitPhone(phone) + "@" + remoteKey
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)

@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
   recover:
+    # Production break-glass: only the reviewed main branch may run here.
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, stroy-prod]
     timeout-minutes: 10
     environment: production-api

@@ -27,7 +27,7 @@ docker exec stroy-caddy caddy reload --config /etc/caddy/Caddyfile --adapter cad
 
 ## Known follow-ups
 
-- The `http://<elastic IP>` site serves the API and website over plain HTTP
-  on the bare IP address. Remove it once nothing depends on it.
-- `stroy.com.kg/staging-api/*` routes production-domain traffic to the
-  staging API (used by `/billing/?stage=1`). Move staging to its own host.
+- The `http://<elastic IP>` site now only redirects to HTTPS (2026-11-27);
+  delete it once the address is retired.
+- The `/staging-api` route on the production domain was removed
+  (2026-11-27). If staging returns, give it its own host and Docker network.
