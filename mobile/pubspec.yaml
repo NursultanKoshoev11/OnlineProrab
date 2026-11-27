@@ -1,7 +1,7 @@
 name: online_prorab
 description: Mobile app for construction project control.
 publish_to: none
-version: 1.0.5+493
+version: 1.0.6+508
 
 environment:
   sdk: ^3.10.0
