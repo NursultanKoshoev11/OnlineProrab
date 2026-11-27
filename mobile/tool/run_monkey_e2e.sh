@@ -57,6 +57,9 @@ for phone in "${phones[@]}"; do
   if ! timeout --signal=TERM --kill-after=30s 600s maestro test \
       -e PHONE="$phone" mobile/.maestro/e2e/login.yaml >"$prefix-login.log" 2>&1; then
     echo "::error title=Monkey round $round::login before random input failed; see $prefix-login.log"
+    # Surface the failing Maestro step in the check annotations, which stay
+    # readable even when artifact uploads or raw logs are unavailable.
+    echo "::error title=Monkey round $round login log tail::$(tail -n 12 "$prefix-login.log" | tr -d '\r' | tr '\n' ' ' | cut -c1-900)"
     adb exec-out screencap -p >"$prefix-login-failure.png" 2>/dev/null || true
     problems=$((problems + 1))
     echo "::endgroup::"
