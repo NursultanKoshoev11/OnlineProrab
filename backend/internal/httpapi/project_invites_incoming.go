@@ -216,7 +216,11 @@ func notifyInvitedAccount(phone, projectID, inviterID string) {
 			SELECT t.token, t.target_type
 			FROM push_tokens t JOIN users u ON u.id = t.user_id
 			WHERE u.phone = $1
-		`, phone)
+			  AND NOT EXISTS (
+			      SELECT 1 FROM project_members pm
+			      WHERE pm.project_id = $2 AND pm.user_id = u.id
+			  )
+		`, phone, projectID)
 		if err != nil {
 			slog.Error("push_token_lookup_failed", "project_id", projectID, "error", err)
 			return
